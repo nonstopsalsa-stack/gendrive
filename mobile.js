@@ -15,24 +15,41 @@ const STORAGE_KEYS = {
 
 const SECTIONS = [
   { id: 'all', name: '今日全体' },
-  { id: 'sec_early', name: '早朝', match: ['第1セッション', '早朝'] },
-  { id: 'sec_morning', name: '午前', match: ['第2セッション', '午前'] },
-  { id: 'sec_afternoon', name: '午後', match: ['第3セッション', '午後'] },
-  { id: 'sec_night', name: '夜', match: ['第4セッション', '夜'] }
+  { id: 'sec_1', name: '第1セッション', match: ['第1セッション', '第1', '早朝', '朝'] },
+  { id: 'sec_2', name: '朝オペ', match: ['朝オペ', '家事', '育児'] },
+  { id: 'sec_3', name: '第2セッション', match: ['第2セッション', '第2', '午前'] },
+  { id: 'sec_4', name: '第3セッション', match: ['第3セッション', '第3', '午後'] },
+  { id: 'sec_5', name: '夜オペ', match: ['夜オペ', '夕食', '団らん'] },
+  { id: 'sec_6', name: '第4セッション', match: ['第4セッション', '第4', '夜'] }
 ];
 
 let mState = {
   tasks: [],
   habits: [],
   selectedDateOffset: 0,
+  activeType: 'task', // 'task' | 'habit'
   activeSectionId: 'all',
   activeTaskId: null,
-  isSyncing: false,
-  isCompletedAccordionOpen: false
+  isSyncing: false
 };
 
 let activeTimerInterval = null;
 let cloudDebounceTimeout = null;
+
+function switchItemType(type) {
+  haptic(12);
+  mState.activeType = type;
+  document.body.className = type === 'task' ? 'theme-task' : 'theme-habit';
+
+  const btnTask = document.getElementById('btn-mode-task');
+  const btnHabit = document.getElementById('btn-mode-habit');
+  if (btnTask && btnHabit) {
+    btnTask.classList.toggle('active', type === 'task');
+    btnHabit.classList.toggle('active', type === 'habit');
+  }
+
+  renderMobileApp();
+}
 
 // =========================================================================
 // 1. Utilities & Haptic Feedback
@@ -54,12 +71,14 @@ function getTodayDateString(offset = 0) {
 
 function detectCurrentSectionId() {
   const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
+  const hours = now.getHours() + now.getMinutes() / 60;
 
-  if (mins >= 180 && mins < 510) return 'sec_early';       // 03:00 - 08:30 (第1)
-  if (mins >= 510 && mins < 720) return 'sec_morning';     // 08:30 - 12:00 (第2)
-  if (mins >= 720 && mins < 1080) return 'sec_afternoon';  // 12:00 - 18:00 (第3)
-  return 'sec_night';                                      // 18:00 - 03:00 (第4)
+  if (hours >= 3 && hours < 6) return 'sec_1';       // 03:00 - 06:00 (第1セッション)
+  if (hours >= 6 && hours < 8.5) return 'sec_2';     // 06:00 - 08:30 (朝オペ)
+  if (hours >= 8.5 && hours < 12) return 'sec_3';    // 08:30 - 12:00 (第2セッション)
+  if (hours >= 12 && hours < 17) return 'sec_4';     // 12:00 - 17:00 (第3セッション)
+  if (hours >= 17 && hours < 21) return 'sec_5';     // 17:00 - 21:00 (夜オペ)
+  return 'sec_6';                                    // 21:00 - 03:00 (第4セッション)
 }
 
 function formatTime(totalSec) {
@@ -201,13 +220,19 @@ async function pushToCloud() {
 
     const res = await fetch(gasUrl, {
       method: 'POST',
-      mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
-    if (data.status === 'success') {
+    let isSuccess = false;
+    try {
+      const data = await res.json();
+      if (data && data.status === 'success') isSuccess = true;
+    } catch (e) {
+      if (res.ok || res.status === 200 || res.type === 'opaque') isSuccess = true;
+    }
+
+    if (isSuccess) {
       updateSyncUI('success');
     } else {
       updateSyncUI('error');
@@ -228,11 +253,7 @@ async function pullFromCloud(force = false) {
   updateSyncUI('syncing');
 
   try {
-    const res = await fetch(`${gasUrl}?t=${Date.now()}`, {
-      method: 'GET',
-      mode: 'cors'
-    });
-
+    const res = await fetch(`${gasUrl}?t=${Date.now()}`);
     const data = await res.json();
     if (data.status === 'success' && data.data) {
       const cloud = data.data;
@@ -242,7 +263,7 @@ async function pullFromCloud(force = false) {
       const cloudTime = new Date(cloudMeta.lastUpdatedAt || 0).getTime();
       const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
 
-      if (force || cloudTime > localTime) {
+      if (force || cloudTime > localTime || (Array.isArray(cloud.tasks) && cloud.tasks.length > 0)) {
         if (Array.isArray(cloud.tasks)) {
           mState.tasks = cloud.tasks;
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
@@ -429,6 +450,7 @@ function toggleHabit(habitId) {
 // =========================================================================
 
 function renderMobileApp() {
+  document.body.className = mState.activeType === 'task' ? 'theme-task' : 'theme-habit';
   renderHeaderDateAndETA();
   renderStickyActiveBar();
   renderSectionTabs();
@@ -447,10 +469,22 @@ function renderHeaderDateAndETA() {
     dateEl.textContent = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]}) ${isToday ? '今日' : ''}`;
   }
 
-  // Calculate ETA
+  // Count Uncompleted for Today
   const todayTasks = mState.tasks.filter(t => (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.bucket !== 'someday' && t.bucket !== 'vault');
   const uncompletedTasks = todayTasks.filter(t => t.status !== 'completed' && t.status !== 'skipped');
-  
+
+  const uncompletedHabits = mState.habits.filter(h => {
+    const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
+    return !(entry && entry.done);
+  });
+
+  // Update Switcher Counts
+  const taskCountEl = document.getElementById('m-task-count');
+  const habitCountEl = document.getElementById('m-habit-count');
+  if (taskCountEl) taskCountEl.textContent = `(${uncompletedTasks.length})`;
+  if (habitCountEl) habitCountEl.textContent = `(${uncompletedHabits.length})`;
+
+  // Calculate ETA for Tasks
   let remainingMinutes = 0;
   uncompletedTasks.forEach(t => {
     remainingMinutes += (t.estMin || 25);
@@ -489,10 +523,13 @@ function renderStickyActiveBar() {
 
 function updateActiveTimerDisplay(task) {
   const timerEl = document.getElementById('active-bar-timer');
-  if (!timerEl || !task || !task.startTimestamp) return;
+  const badgeEl = document.getElementById(`timer-badge-${task.id}`);
+  if (!task || !task.startTimestamp) return;
 
   const elapsedSec = (task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0)) + Math.floor((Date.now() - task.startTimestamp) / 1000);
-  timerEl.textContent = formatTime(elapsedSec);
+  const timeFormatted = formatTime(elapsedSec);
+  if (timerEl) timerEl.textContent = timeFormatted;
+  if (badgeEl) badgeEl.textContent = timeFormatted;
 }
 
 function renderSectionTabs() {
@@ -503,14 +540,30 @@ function renderSectionTabs() {
 
   container.innerHTML = SECTIONS.map(sec => {
     let count = 0;
-    if (sec.id === 'all') {
-      count = mState.tasks.filter(t => (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.status !== 'completed' && t.status !== 'skipped').length;
+    if (mState.activeType === 'task') {
+      if (sec.id === 'all') {
+        count = mState.tasks.filter(t => (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.status !== 'completed' && t.status !== 'skipped' && t.bucket !== 'someday' && t.bucket !== 'vault').length;
+      } else {
+        count = mState.tasks.filter(t => {
+          if (t.scheduledDate !== targetDateKey && (t.scheduledDate || mState.selectedDateOffset !== 0)) return false;
+          if (t.status === 'completed' || t.status === 'skipped' || t.bucket === 'someday' || t.bucket === 'vault') return false;
+          return sec.match.some(m => (t.section || '').includes(m));
+        }).length;
+      }
     } else {
-      count = mState.tasks.filter(t => {
-        if (t.scheduledDate !== targetDateKey && (t.scheduledDate || mState.selectedDateOffset !== 0)) return false;
-        if (t.status === 'completed' || t.status === 'skipped') return false;
-        return sec.match.some(m => (t.section || '').includes(m));
-      }).length;
+      // Habits count
+      if (sec.id === 'all') {
+        count = mState.habits.filter(h => {
+          const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
+          return !(entry && entry.done);
+        }).length;
+      } else {
+        count = mState.habits.filter(h => {
+          const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
+          if (entry && entry.done) return false;
+          return sec.match.some(m => (h.section || '').includes(m));
+        }).length;
+      }
     }
 
     const isActive = mState.activeSectionId === sec.id;
@@ -530,143 +583,105 @@ function selectSectionTab(secId) {
 
 function renderList() {
   const container = document.getElementById('m-cards-list');
-  const completedContainer = document.getElementById('m-completed-list');
-  const completedCountEl = document.getElementById('m-completed-count');
-  if (!container || !completedContainer) return;
+  if (!container) return;
 
   const targetDateKey = getTodayDateString(mState.selectedDateOffset);
   const currentSecObj = SECTIONS.find(s => s.id === mState.activeSectionId);
 
-  // 1. Filter Tasks
-  let filteredTasks = mState.tasks.filter(t => {
-    if (t.bucket === 'someday' || t.bucket === 'vault') return false;
-    const isDateMatch = (t.scheduledDate === targetDateKey) || (!t.scheduledDate && mState.selectedDateOffset === 0);
-    if (!isDateMatch) return false;
+  if (mState.activeType === 'task') {
+    // 1. Filter Tasks (Uncompleted Only)
+    let filteredTasks = mState.tasks.filter(t => {
+      if (t.bucket === 'someday' || t.bucket === 'vault') return false;
+      if (t.status === 'completed' || t.status === 'skipped') return false; // Hide Completed
+      const isDateMatch = (t.scheduledDate === targetDateKey) || (!t.scheduledDate && mState.selectedDateOffset === 0);
+      if (!isDateMatch) return false;
 
-    if (mState.activeSectionId === 'all') return true;
-    return currentSecObj.match.some(m => (t.section || '').includes(m));
-  });
+      if (mState.activeSectionId === 'all') return true;
+      return currentSecObj.match.some(m => (t.section || '').includes(m));
+    });
 
-  // 2. Filter Habits
-  let filteredHabits = mState.habits.filter(h => {
-    if (mState.activeSectionId === 'all') return true;
-    return currentSecObj.match.some(m => (h.section || '').includes(m));
-  });
-
-  const uncompletedItems = [];
-  const completedItems = [];
-
-  // Separate Habits
-  filteredHabits.forEach(h => {
-    const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
-    const isDone = entry && entry.done;
-    if (isDone) completedItems.push({ type: 'habit', data: h });
-    else uncompletedItems.push({ type: 'habit', data: h });
-  });
-
-  // Separate Tasks
-  filteredTasks.forEach(t => {
-    if (t.status === 'completed' || t.status === 'skipped') {
-      completedItems.push({ type: 'task', data: t });
+    if (filteredTasks.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">✨</span>
+          <b style="color: var(--text-muted); font-size: 14px;">未完了のタスクはありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">このセクションのタスクは全完了です！</p>
+        </div>
+      `;
     } else {
-      uncompletedItems.push({ type: 'task', data: t });
+      container.innerHTML = filteredTasks.map(t => renderSlimTaskCard(t)).join('');
     }
-  });
-
-  // Render Uncompleted
-  if (uncompletedItems.length === 0) {
-    container.innerHTML = `
-      <div style="text-align: center; padding: 40px 20px; color: var(--text-dim);">
-        <span style="font-size: 32px; display: block; margin-bottom: 8px;">✨</span>
-        <b style="color: var(--text-muted); font-size: 14px;">未完了のアイテムはありません</b>
-        <p style="font-size: 12px; margin-top: 4px;">素晴らしい！このセクションはクリアです</p>
-      </div>
-    `;
   } else {
-    container.innerHTML = uncompletedItems.map(item => {
-      if (item.type === 'habit') return renderHabitCard(item.data);
-      return renderTaskCard(item.data);
-    }).join('');
-  }
+    // 2. Filter Habits (Uncompleted Only)
+    let filteredHabits = mState.habits.filter(h => {
+      const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
+      if (entry && entry.done) return false; // Hide Completed
 
-  // Render Completed
-  if (completedCountEl) completedCountEl.textContent = completedItems.length;
-  if (completedItems.length === 0) {
-    completedContainer.innerHTML = '<div style="padding: 10px; color: var(--text-dim); font-size: 12px;">完了アイテムはありません</div>';
-  } else {
-    completedContainer.innerHTML = completedItems.map(item => {
-      if (item.type === 'habit') return renderHabitCard(item.data, true);
-      return renderTaskCard(item.data, true);
-    }).join('');
+      if (mState.activeSectionId === 'all') return true;
+      return currentSecObj.match.some(m => (h.section || '').includes(m));
+    });
+
+    if (filteredHabits.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">🌿</span>
+          <b style="color: var(--text-muted); font-size: 14px;">未完了のハビットはありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">今日の習慣はすべて達成済みです！</p>
+        </div>
+      `;
+    } else {
+      container.innerHTML = filteredHabits.map(h => renderSlimHabitCard(h)).join('');
+    }
   }
 }
 
-function renderHabitCard(habit, isCompleted = false) {
-  const streak = calculateHabitStreak(habit);
+function renderSlimHabitCard(habit) {
   return `
-    <div class="m-card ${isCompleted ? 'completed' : ''}" id="h-card-${habit.id}">
-      <div class="m-card-top">
-        <div class="m-card-title-row">
-          <span class="m-card-type-icon">🌿</span>
-          <span class="m-card-title">${habit.name}</span>
-        </div>
+    <div class="m-card-slim" id="h-card-${habit.id}">
+      <div class="m-card-left">
+        <span class="m-slim-icon">🌿</span>
+        <span class="m-slim-title">${habit.name}</span>
       </div>
-      <div class="m-card-meta">
-        ${streak > 0 ? `<span class="m-meta-badge streak">🔥 ${streak}日連続</span>` : ''}
-        <span class="m-meta-badge section">⏱️ ${habit.targetMin || 15}分</span>
-        <span class="m-meta-badge">${habit.section || '日常'}</span>
-      </div>
-      <div class="m-card-actions">
-        <button class="btn-touch ${isCompleted ? 'btn-touch-subtle' : 'btn-touch-success'}" onclick="toggleHabit('${habit.id}')">
-          ${isCompleted ? '↩️ 未完了に戻す' : '✔ 完了する'}
+      <div class="m-card-actions-slim">
+        <button class="btn-slim btn-slim-success" onclick="toggleHabit('${habit.id}')">
+          ✔ 完了
         </button>
       </div>
     </div>
   `;
 }
 
-function renderTaskCard(task, isCompleted = false) {
+function renderSlimTaskCard(task) {
   const isInProgress = task.status === 'in_progress';
   const isPaused = task.status === 'paused';
 
   return `
-    <div class="m-card ${isInProgress ? 'in-progress' : ''} ${isPaused ? 'paused' : ''} ${isCompleted ? 'completed' : ''}" id="t-card-${task.id}">
-      <div class="m-card-top">
-        <div class="m-card-title-row">
-          <span class="m-card-type-icon">🎯</span>
-          <span class="m-card-title">${task.title}</span>
-        </div>
+    <div class="m-card-slim ${isInProgress ? 'in-progress' : ''} ${isPaused ? 'paused' : ''}" id="t-card-${task.id}">
+      <div class="m-card-left">
+        <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🎯'}</span>
+        <span class="m-slim-title">${task.title}</span>
+        ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : ''}
       </div>
-      <div class="m-card-meta">
-        <span class="m-meta-badge section">⏱️ 予定 ${task.estMin || 25}分</span>
-        ${task.actMin ? `<span class="m-meta-badge" style="color:var(--accent-emerald);">実績 ${task.actMin}分</span>` : ''}
-        ${task.domainMinor ? `<span class="m-meta-badge">${task.domainMinor}</span>` : ''}
-        ${task.section ? `<span class="m-meta-badge">${task.section}</span>` : ''}
-      </div>
-      <div class="m-card-actions">
-        ${isCompleted ? `
-          <button class="btn-touch btn-touch-subtle" onclick="uncompleteTask('${task.id}')">
-            ↩️ 未完了に戻す
-          </button>
-        ` : isInProgress ? `
-          <button class="btn-touch btn-touch-pause" onclick="pauseTask('${task.id}')">
+      <div class="m-card-actions-slim">
+        ${isInProgress ? `
+          <button class="btn-slim btn-slim-pause" onclick="pauseTask('${task.id}')">
             ⏸ 中断
           </button>
-          <button class="btn-touch btn-touch-success" onclick="completeTask('${task.id}')">
+          <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
             ✔ 完了
           </button>
         ` : isPaused ? `
-          <button class="btn-touch btn-touch-primary" onclick="startTask('${task.id}')">
+          <button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">
             ▶ 再開
           </button>
-          <button class="btn-touch btn-touch-success" onclick="completeTask('${task.id}')">
+          <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
             ✔ 完了
           </button>
         ` : `
-          <button class="btn-touch btn-touch-primary" onclick="startTask('${task.id}')">
+          <button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">
             ▶ 開始
           </button>
-          <button class="btn-touch btn-touch-success" onclick="completeTask('${task.id}')">
+          <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
             ✔ 完了
           </button>
         `}

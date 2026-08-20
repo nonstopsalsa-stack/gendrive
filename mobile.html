@@ -74,6 +74,16 @@
     </div>
   </div>
 
+  <!-- Task / Habit Dual Mode Switcher (Deep-Blue vs Deep-Green) -->
+  <div class="mode-switcher-container">
+    <button class="mode-switch-btn active" id="btn-mode-task" onclick="switchItemType('task')">
+      ⚡ タスク <span class="mode-count" id="m-task-count">(0)</span>
+    </button>
+    <button class="mode-switch-btn" id="btn-mode-habit" onclick="switchItemType('habit')">
+      🌿 ハビット <span class="mode-count" id="m-habit-count">(0)</span>
+    </button>
+  </div>
+
   <!-- Section Tabs (Horizontally Scrollable) -->
   <div class="section-tabs-container" id="m-section-tabs">
     <!-- Rendered Dynamically -->
@@ -81,20 +91,9 @@
 
   <!-- Mobile Main Content -->
   <main class="mobile-content">
-    <!-- Uncompleted Cards List -->
+    <!-- Uncompleted Slim Cards List -->
     <div class="cards-container" id="m-cards-list">
       <!-- Rendered Dynamically -->
-    </div>
-
-    <!-- Completed Accordion Section -->
-    <div class="completed-accordion" id="m-completed-accordion">
-      <button class="accordion-toggle" onclick="toggleCompletedAccordion()">
-        <span>✓ 完了済みアイテム (<span id="m-completed-count">0</span>件)</span>
-        <span class="accordion-arrow">▼</span>
-      </button>
-      <div class="completed-list" id="m-completed-list">
-        <!-- Rendered Dynamically -->
-      </div>
     </div>
   </main>
 

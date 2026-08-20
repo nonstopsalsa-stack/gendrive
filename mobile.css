@@ -331,116 +331,209 @@ body {
   font-family: var(--font-mono);
 }
 
+/* =========================================================================
+   1-B. Mode Switcher (Task vs Habit Dual Switch)
+   ========================================================================= */
+
+.mode-switcher-container {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mode-switch-btn {
+  flex: 1;
+  height: 38px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mode-switch-btn.active#btn-mode-task {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.3), rgba(56, 189, 248, 0.2));
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.2);
+}
+
+.mode-switch-btn.active#btn-mode-habit {
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.3), rgba(52, 211, 153, 0.2));
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.5);
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.2);
+}
+
+.mode-count {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  opacity: 0.85;
+}
+
+/* =========================================================================
+   Theme Switching (Deep Blue vs Deep Green Atmosphere)
+   ========================================================================= */
+
+body.theme-task {
+  background-color: #060b17;
+  background-image: radial-gradient(circle at 50% 0%, rgba(14, 40, 80, 0.35) 0%, transparent 70%);
+}
+
+body.theme-habit {
+  background-color: #04120b;
+  background-image: radial-gradient(circle at 50% 0%, rgba(10, 48, 28, 0.4) 0%, transparent 70%);
+}
+
+/* =========================================================================
+   4. Ultra-Slim High-Density Mobile Cards (Half Height / Double Capacity)
+   ========================================================================= */
+
 .cards-container {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 6px;
+  padding-bottom: 20px;
 }
 
-/* Mobile Action Card */
-.m-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 12px 14px;
+/* Slim Card */
+.m-card-slim {
+  min-height: 46px;
+  padding: 8px 12px;
+  border-radius: 9px;
   display: flex;
-  flex-direction: column;
-  gap: 9px;
-  transition: transform 0.15s, border-color 0.2s, background 0.2s;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  transition: transform 0.12s, border-color 0.15s, background 0.15s;
   position: relative;
   overflow: hidden;
 }
 
-.m-card:active {
-  transform: scale(0.985);
+body.theme-task .m-card-slim {
+  background: rgba(14, 25, 48, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.16);
 }
 
-.m-card.in-progress {
-  background: var(--bg-card-active);
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.2);
+body.theme-habit .m-card-slim {
+  background: rgba(9, 32, 21, 0.85);
+  border: 1px solid rgba(52, 211, 153, 0.2);
 }
 
-.m-card.paused {
-  border-color: var(--accent-amber);
+.m-card-slim:active {
+  transform: scale(0.988);
 }
 
-.m-card.completed {
-  background: var(--bg-card-completed);
-  border-color: transparent;
-  opacity: 0.7;
+/* Status Highlights */
+.m-card-slim.in-progress {
+  background: rgba(20, 40, 75, 0.95) !important;
+  border-color: var(--accent-cyan) !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.28);
 }
 
-.m-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
+.m-card-slim.paused {
+  border-color: var(--accent-amber) !important;
 }
 
-.m-card-title-row {
+/* Left Content: Icon + Title + Timer */
+.m-card-left {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }
 
-.m-card-type-icon {
+.m-slim-icon {
   font-size: 14px;
   flex-shrink: 0;
 }
 
-.m-card-title {
-  font-size: 14px;
+.m-slim-title {
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-main);
   line-height: 1.35;
   word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.m-card.completed .m-card-title {
-  text-decoration: line-through;
-  color: var(--text-muted);
+.m-slim-timer-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(56, 189, 248, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 4px;
+  flex-shrink: 0;
 }
 
-.m-card-meta {
+/* Right Actions: Compact Touch Buttons */
+.m-card-actions-slim {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
+  flex-shrink: 0;
 }
 
-.m-meta-badge {
-  background: rgba(255, 255, 255, 0.05);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.m-meta-badge.streak {
-  background: rgba(251, 146, 60, 0.15);
-  color: #fb923c;
+.btn-slim {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 700;
-  border: 1px solid rgba(251, 146, 60, 0.3);
-}
-
-.m-meta-badge.section {
-  background: rgba(129, 140, 248, 0.12);
-  color: var(--accent-indigo);
-}
-
-/* Card Actions Row */
-.m-card-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 2px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.08s, opacity 0.15s;
+  white-space: nowrap;
 }
 
-/* Touch Action Buttons (Big Hit Target) */
+.btn-slim:active {
+  transform: scale(0.92);
+}
+
+.btn-slim-primary {
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(56, 189, 248, 0.25);
+}
+
+.btn-slim-success {
+  background: linear-gradient(135deg, #15803d, #22c55e);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.25);
+}
+
+.btn-slim-pause {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--accent-amber);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.btn-slim-subtle {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+/* Touch Action Buttons for Header / Modals */
 .btn-touch {
   height: 38px;
   padding: 0 16px;
