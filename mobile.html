@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="mobile.css?v=20260820_11">
+  <link rel="stylesheet" href="mobile.css?v=20260820_12">
 </head>
 <body>
 
@@ -57,20 +57,25 @@
       </div>
     </div>
 
-    <!-- 4-Mode Switcher Bar (Section / Daily / Task / Habit) -->
+    <!-- 2x2 Matrix Switcher Bar (Scope: Section/Daily × Type: Task/Habit) in 1 Single Line -->
     <div class="mode-switcher-container" id="m-mode-switcher">
-      <button class="mode-switch-btn active" id="btn-mode-section" onclick="switchMode('section')" title="現在セクション">
-        <span class="btn-icon">⚡</span><span class="btn-text">セクション</span><span class="mode-count" id="m-section-count">0</span>
-      </button>
-      <button class="mode-switch-btn" id="btn-mode-daily" onclick="switchMode('daily')" title="今日の全未完タスク・ハビット">
-        <span class="btn-icon">📅</span><span class="btn-text">デイリー</span><span class="mode-count" id="m-daily-count">0</span>
-      </button>
-      <button class="mode-switch-btn" id="btn-mode-task" onclick="switchMode('task')" title="今日の全未完タスク">
-        <span class="btn-icon">🎯</span><span class="btn-text">タスク</span><span class="mode-count" id="m-task-count">0</span>
-      </button>
-      <button class="mode-switch-btn" id="btn-mode-habit" onclick="switchMode('habit')" title="今日の全未完ハビット">
-        <span class="btn-icon">🌿</span><span class="btn-text">ハビット</span><span class="mode-count" id="m-habit-count">0</span>
-      </button>
+      <div class="segmented-group scope-group">
+        <button class="mode-switch-btn active" id="btn-scope-section" onclick="setScope('section')" title="現在セクション">
+          <span class="btn-icon">⚡</span><span class="btn-text">セクション</span><span class="mode-count" id="m-section-count">0</span>
+        </button>
+        <button class="mode-switch-btn" id="btn-scope-daily" onclick="setScope('daily')" title="今日全体">
+          <span class="btn-icon">📅</span><span class="btn-text">デイリー</span><span class="mode-count" id="m-daily-count">0</span>
+        </button>
+      </div>
+      <div class="segmented-divider"></div>
+      <div class="segmented-group type-group">
+        <button class="mode-switch-btn active" id="btn-type-task" onclick="setType('task')" title="タスクのみ">
+          <span class="btn-icon">🎯</span><span class="btn-text">タスク</span><span class="mode-count" id="m-task-count">0</span>
+        </button>
+        <button class="mode-switch-btn" id="btn-type-habit" onclick="setType('habit')" title="ハビットのみ">
+          <span class="btn-icon">🌿</span><span class="btn-text">ハビット</span><span class="mode-count" id="m-habit-count">0</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -165,6 +170,6 @@
     <button class="m-undo-btn" id="m-undo-action-btn" onclick="executeMobileUndo()">↩️ 元に戻す</button>
   </div>
 
-  <script src="mobile.js?v=20260820_11"></script>
+  <script src="mobile.js?v=20260820_12"></script>
 </body>
 </html>

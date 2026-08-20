@@ -27,7 +27,8 @@ let mState = {
   tasks: [],
   habits: [],
   selectedDateOffset: 0,
-  activeMode: 'section', // 'section' | 'daily' | 'task' | 'habit'
+  activeScope: 'section', // 'section' | 'daily'
+  activeType: 'task',      // 'task' | 'habit'
   activeTaskId: null,
   isSyncing: false
 };
@@ -35,35 +36,49 @@ let mState = {
 let activeTimerInterval = null;
 let cloudDebounceTimeout = null;
 
-function switchMode(mode) {
-  try {
-    haptic(12);
-  } catch (e) {}
+function setScope(scope) {
+  try { haptic(12); } catch (e) {}
+  mState.activeScope = scope;
 
-  mState.activeMode = mode;
-  document.body.className = `theme-${mode}`;
+  const btnSection = document.getElementById('btn-scope-section');
+  const btnDaily = document.getElementById('btn-scope-daily');
+  if (btnSection) btnSection.classList.toggle('active', scope === 'section');
+  if (btnDaily) btnDaily.classList.toggle('active', scope === 'daily');
 
-  // Dynamically update Android status bar theme-color
-  const metaTheme = document.querySelector('meta[name="theme-color"]');
-  if (metaTheme) {
-    let barColor = '#070b14';
-    if (mode === 'daily') barColor = '#0a0817';
-    else if (mode === 'task') barColor = '#060b17';
-    else if (mode === 'habit') barColor = '#04120b';
-    metaTheme.setAttribute('content', barColor);
-  }
-
-  const modes = ['section', 'daily', 'task', 'habit'];
-  modes.forEach(m => {
-    const btn = document.getElementById(`btn-mode-${m}`);
-    if (btn) btn.classList.toggle('active', mode === m);
-  });
-
+  updateTheme();
   renderMobileApp();
 }
 
-function switchItemType(type) {
-  switchMode(type);
+function setType(type) {
+  try { haptic(12); } catch (e) {}
+  mState.activeType = type;
+
+  const btnTask = document.getElementById('btn-type-task');
+  const btnHabit = document.getElementById('btn-type-habit');
+  if (btnTask) btnTask.classList.toggle('active', type === 'task');
+  if (btnHabit) btnHabit.classList.toggle('active', type === 'habit');
+
+  updateTheme();
+  renderMobileApp();
+}
+
+function updateTheme() {
+  const scope = mState.activeScope || 'section';
+  const type = mState.activeType || 'task';
+  document.body.className = `theme-${type} scope-${scope}`;
+
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) {
+    let barColor = type === 'habit' ? '#04120b' : (scope === 'daily' ? '#0a0817' : '#070b14');
+    metaTheme.setAttribute('content', barColor);
+  }
+
+  // Update FAB button icon
+  const fab = document.getElementById('m-fab-add');
+  if (fab) {
+    fab.innerHTML = type === 'habit' ? '<span>🌿＋</span>' : '<span>⚡＋</span>';
+    fab.title = type === 'habit' ? '習慣を追加' : 'タスクを追加';
+  }
 }
 
 // =========================================================================
@@ -512,7 +527,7 @@ function toggleHabit(habitId) {
 
 function renderMobileApp() {
   autoCarryoverPastSessionTasks();
-  document.body.className = `theme-${mState.activeMode || 'section'}`;
+  updateTheme();
   renderHeaderDateAndETA();
   renderStickyActiveBar();
   renderList();
@@ -545,16 +560,16 @@ function renderHeaderDateAndETA() {
   const sectionTasks = todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
   const sectionHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
 
-  // Update 4-Button Counts (Pure numbers for sleek pill badge)
+  // Update 2x2 Matrix Counts
   const sectionCountEl = document.getElementById('m-section-count');
   const dailyCountEl = document.getElementById('m-daily-count');
   const taskCountEl = document.getElementById('m-task-count');
   const habitCountEl = document.getElementById('m-habit-count');
 
-  if (sectionCountEl) sectionCountEl.textContent = sectionTasks.length + sectionHabits.length;
-  if (dailyCountEl) dailyCountEl.textContent = todayTasks.length + todayHabits.length;
-  if (taskCountEl) taskCountEl.textContent = todayTasks.length;
-  if (habitCountEl) habitCountEl.textContent = todayHabits.length;
+  if (sectionCountEl) sectionCountEl.textContent = mState.activeType === 'habit' ? sectionHabits.length : sectionTasks.length;
+  if (dailyCountEl) dailyCountEl.textContent = mState.activeType === 'habit' ? todayHabits.length : todayTasks.length;
+  if (taskCountEl) taskCountEl.textContent = mState.activeScope === 'section' ? sectionTasks.length : todayTasks.length;
+  if (habitCountEl) habitCountEl.textContent = mState.activeScope === 'section' ? sectionHabits.length : todayHabits.length;
 
   // Calculate ETA for Tasks
   let remainingMinutes = 0;
@@ -625,103 +640,95 @@ function renderList() {
     return !(entry && entry.done);
   });
 
-  const mode = mState.activeMode || 'section';
+  const scope = mState.activeScope || 'section';
+  const type = mState.activeType || 'task';
 
-  if (mode === 'section') {
-    // Current Section Tasks + Habits
+  // =========================================================================
+  // 4 Explicit Rendering Modes (Scope: Section/Daily × Type: Task/Habit)
+  // =========================================================================
+
+  if (scope === 'section' && type === 'task') {
+    // 1. Section × Task: そのセクションの未完タスクだけ
     const secTasks = todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
-    const secHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
-
-    const secHeaderHtml = `
+    const headerHtml = `
       <div class="m-section-indicator">
-        <span class="m-sec-left">⚡ <b>${currentSecObj.name}</b> (現在セクション)</span>
-        <span class="m-sec-count-tag">${secTasks.length + secHabits.length}件</span>
+        <span class="m-sec-left">⚡ <b>${currentSecObj.name}</b> の未完了タスク</span>
+        <span class="m-sec-count-tag">${secTasks.length}件</span>
       </div>
     `;
 
-    if (secTasks.length === 0 && secHabits.length === 0) {
+    if (secTasks.length === 0) {
       container.innerHTML = `
-        ${secHeaderHtml}
+        ${headerHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">✨</span>
-          <b style="color: var(--text-muted); font-size: 14px;">現在セクション（${currentSecObj.name}）の未完了項目はありません</b>
-          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">このセクションのタスク・ハビットは全完了です！</p>
+          <b style="color: var(--text-muted); font-size: 14px;">現在セクション（${currentSecObj.name}）の未完了タスクはありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">このセクションのタスクは全完了です！</p>
         </div>
       `;
       return;
     }
+    container.innerHTML = headerHtml + secTasks.map(t => renderSlimTaskCard(t)).join('');
 
-    const tasksHtml = secTasks.map(t => renderSlimTaskCard(t)).join('');
-    const habitsHtml = secHabits.map(h => renderSlimHabitCard(h)).join('');
-    container.innerHTML = secHeaderHtml + tasksHtml + habitsHtml;
-
-  } else if (mode === 'daily') {
-    // All Today Tasks + Habits (Flat list, no section partitions)
-    const sortedTasks = secSortedTasks(todayTasks);
-    const sortedHabits = secSortedHabits(todayHabits);
-
-    const dailyHeaderHtml = `
-      <div class="m-section-indicator daily-indicator">
-        <span class="m-sec-left">📅 <b>本日の全アイテム</b> (フラット表示)</span>
-        <span class="m-sec-count-tag">${sortedTasks.length + sortedHabits.length}件</span>
+  } else if (scope === 'section' && type === 'habit') {
+    // 2. Section × Habit: そのセクションの未完ハビットだけ
+    const secHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
+    const headerHtml = `
+      <div class="m-section-indicator habit-indicator">
+        <span class="m-sec-left">🌿 <b>${currentSecObj.name}</b> の未完了ハビット</span>
+        <span class="m-sec-count-tag">${secHabits.length}件</span>
       </div>
     `;
 
-    if (sortedTasks.length === 0 && sortedHabits.length === 0) {
+    if (secHabits.length === 0) {
       container.innerHTML = `
-        ${dailyHeaderHtml}
+        ${headerHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">🎉</span>
-          <b style="color: var(--text-muted); font-size: 14px;">本日のタスク・習慣はすべて完了しました！</b>
-          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">素晴らしい一日です⚡</p>
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">🌱</span>
+          <b style="color: var(--text-muted); font-size: 14px;">現在セクション（${currentSecObj.name}）の習慣はありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">このセクションの習慣はすべて達成済みです！</p>
         </div>
       `;
       return;
     }
+    container.innerHTML = headerHtml + secHabits.map(h => renderSlimHabitCard(h)).join('');
 
-    const tasksHtml = sortedTasks.map(t => renderSlimTaskCard(t)).join('');
-    const habitsHtml = sortedHabits.map(h => renderSlimHabitCard(h)).join('');
-    container.innerHTML = dailyHeaderHtml + tasksHtml + habitsHtml;
-
-  } else if (mode === 'task') {
-    // Today's Tasks Only (Flat list)
+  } else if (scope === 'daily' && type === 'task') {
+    // 3. Daily × Task: 今日一日の全未完タスク
     const sortedTasks = secSortedTasks(todayTasks);
-
-    const taskHeaderHtml = `
+    const headerHtml = `
       <div class="m-section-indicator task-indicator">
-        <span class="m-sec-left">🎯 <b>本日のタスク一覧</b></span>
+        <span class="m-sec-left">🎯 <b>本日の全未完了タスク</b> (全セクション)</span>
         <span class="m-sec-count-tag">${sortedTasks.length}件</span>
       </div>
     `;
 
     if (sortedTasks.length === 0) {
       container.innerHTML = `
-        ${taskHeaderHtml}
+        ${headerHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">⚡</span>
-          <b style="color: var(--text-muted); font-size: 14px;">未完了のタスクはありません</b>
-          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">本日のタスクは全完了です！</p>
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">🎉</span>
+          <b style="color: var(--text-muted); font-size: 14px;">本日のタスクはすべて完了しました！</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">素晴らしい一日です⚡</p>
         </div>
       `;
       return;
     }
+    container.innerHTML = headerHtml + sortedTasks.map(t => renderSlimTaskCard(t)).join('');
 
-    container.innerHTML = taskHeaderHtml + sortedTasks.map(t => renderSlimTaskCard(t)).join('');
-
-  } else if (mode === 'habit') {
-    // Today's Habits Only (Flat list)
+  } else if (scope === 'daily' && type === 'habit') {
+    // 4. Daily × Habit: 今日一日の全未完ハビット
     const sortedHabits = secSortedHabits(todayHabits);
-
-    const habitHeaderHtml = `
+    const headerHtml = `
       <div class="m-section-indicator habit-indicator">
-        <span class="m-sec-left">🌿 <b>本日のハビット一覧</b></span>
+        <span class="m-sec-left">🌿 <b>本日の全未完了ハビット</b> (全セクション)</span>
         <span class="m-sec-count-tag">${sortedHabits.length}件</span>
       </div>
     `;
 
     if (sortedHabits.length === 0) {
       container.innerHTML = `
-        ${habitHeaderHtml}
+        ${headerHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">🌿</span>
           <b style="color: var(--text-muted); font-size: 14px;">未完了のハビットはありません</b>
@@ -730,8 +737,7 @@ function renderList() {
       `;
       return;
     }
-
-    container.innerHTML = habitHeaderHtml + sortedHabits.map(h => renderSlimHabitCard(h)).join('');
+    container.innerHTML = headerHtml + sortedHabits.map(h => renderSlimHabitCard(h)).join('');
   }
 }
 
@@ -788,13 +794,11 @@ function renderSlimTaskCard(task) {
     </div>
   `;
 }
-
 function calculateHabitStreak(h) {
-  if (!h.history) return 0;
+  if (!h || !h.history) return 0;
   let streak = 0;
   const d = new Date();
   
-  // Check today or yesterday as start
   for (let i = 0; i < 365; i++) {
     const cur = new Date();
     cur.setDate(d.getDate() - i);
@@ -803,7 +807,6 @@ function calculateHabitStreak(h) {
     if (entry && (entry.done || entry.count > 0)) {
       streak++;
     } else if (i === 0) {
-      // today not done yet is fine, check yesterday
       continue;
     } else {
       break;
@@ -837,12 +840,21 @@ function toggleCompletedAccordion() {
 }
 
 function openQuickAddModal() {
-  haptic(10);
+  haptic(15);
   const modal = document.getElementById('m-quick-add-modal');
   const titleInput = document.getElementById('m-quick-task-title');
   const secSelect = document.getElementById('m-quick-task-section');
+  const modalTitle = document.querySelector('#m-quick-add-modal .sheet-title');
+  const submitBtn = document.querySelector('#m-quick-add-modal button[type="submit"]');
 
-  // Set current active section as default in select
+  const isHabit = mState.activeType === 'habit';
+
+  if (modalTitle) modalTitle.textContent = isHabit ? '🌿 クイック習慣追加' : '⚡ クイックタスク追加';
+  if (submitBtn) submitBtn.textContent = isHabit ? '🌿 習慣を追加' : '⚡ 追加する';
+  if (titleInput) {
+    titleInput.placeholder = isHabit ? '習慣名を入力... (例: 水2L飲む、読書15分)' : 'タスク名を入力...';
+  }
+
   const currentSecId = detectCurrentSectionId();
   const currentSecObj = SECTIONS.find(s => s.id === currentSecId);
   if (secSelect && currentSecObj) {
@@ -884,31 +896,57 @@ function handleQuickAddTask(e) {
 
   const section = secSelect ? secSelect.value : '第3セッション';
   const estMin = parseInt(estSelect ? estSelect.value : '25', 10) || 25;
+  const isHabit = mState.activeType === 'habit';
 
-  const newTask = {
-    id: `m_task_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    title: title,
-    status: 'uncompleted',
-    section: section,
-    estMin: estMin,
-    actMin: 0,
-    scheduledDate: getTodayDateString(mState.selectedDateOffset),
-    timingType: 'scheduled',
-    bucket: 'today',
-    label: 'p1',
-    createdAt: new Date().toISOString()
-  };
-
-  mState.tasks.push(newTask);
-  saveLocalTasks(true); // Save & Push to Cloud immediately!
-  closeQuickAddModal();
-  renderMobileApp();
-
-  showMobileUndoToast(`⚡ 「${title}」を追加しました`, () => {
-    mState.tasks = mState.tasks.filter(t => t.id !== newTask.id);
-    saveLocalTasks(true);
+  if (isHabit) {
+    const newHabit = {
+      id: `m_habit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      name: title,
+      status: 'uncompleted',
+      section: section,
+      targetMin: estMin,
+      timingType: 'section',
+      recurrence: 'daily',
+      frogLevel: 3,
+      history: {},
+      createdAt: new Date().toISOString()
+    };
+    mState.habits.push(newHabit);
+    saveLocalHabits(true);
+    closeQuickAddModal();
     renderMobileApp();
-  });
+
+    showMobileUndoToast(`🌿 「${title}」を追加しました`, () => {
+      mState.habits = mState.habits.filter(h => h.id !== newHabit.id);
+      saveLocalHabits(true);
+      renderMobileApp();
+    });
+  } else {
+    const newTask = {
+      id: `m_task_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      title: title,
+      status: 'uncompleted',
+      section: section,
+      estMin: estMin,
+      actMin: 0,
+      scheduledDate: getTodayDateString(mState.selectedDateOffset),
+      timingType: 'scheduled',
+      bucket: 'today',
+      label: 'p1',
+      createdAt: new Date().toISOString()
+    };
+
+    mState.tasks.push(newTask);
+    saveLocalTasks(true);
+    closeQuickAddModal();
+    renderMobileApp();
+
+    showMobileUndoToast(`⚡ 「${title}」を追加しました`, () => {
+      mState.tasks = mState.tasks.filter(t => t.id !== newTask.id);
+      saveLocalTasks(true);
+      renderMobileApp();
+    });
+  }
 }
 
 function openSettingsModal() {
@@ -963,14 +1001,33 @@ window.addEventListener('DOMContentLoaded', () => {
   checkAndRunDayRollover();
   renderMobileApp();
 
-  // Attach safe explicit listeners to the 4 mode switch buttons
-  ['section', 'daily', 'task', 'habit'].forEach(m => {
-    const btn = document.getElementById(`btn-mode-${m}`);
-    if (btn) {
-      btn.addEventListener('click', (e) => {
+  // Attach safe explicit listeners to the 2x2 switcher buttons
+  const scopeBtns = [
+    { id: 'btn-scope-section', fn: () => setScope('section') },
+    { id: 'btn-scope-daily', fn: () => setScope('daily') }
+  ];
+  scopeBtns.forEach(b => {
+    const el = document.getElementById(b.id);
+    if (el) {
+      el.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        switchMode(m);
+        b.fn();
+      });
+    }
+  });
+
+  const typeBtns = [
+    { id: 'btn-type-task', fn: () => setType('task') },
+    { id: 'btn-type-habit', fn: () => setType('habit') }
+  ];
+  typeBtns.forEach(b => {
+    const el = document.getElementById(b.id);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        b.fn();
       });
     }
   });

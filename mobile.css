@@ -265,30 +265,48 @@ body {
 }
 
 /* =========================================================================
-   3. Mode Switcher (Section / Daily / Task / Habit 4-Way Switch)
+   3. Dual Matrix Switcher (Scope: Section/Daily × Type: Task/Habit)
    ========================================================================= */
 
 .mode-switcher-container {
   display: flex;
-  gap: 4px;
+  gap: 5px;
+  align-items: center;
   padding: 6px 0 0 0;
   margin-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.segmented-group {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2.5px;
+  border-radius: 9px;
+  border: 1px solid var(--border-subtle);
+}
+
+.segmented-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
 .mode-switch-btn {
   flex: 1 1 0;
   min-width: 0;
-  height: 35px;
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.04);
+  height: 33px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-dim);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 0 2px;
+  padding: 0 3px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -319,7 +337,7 @@ body {
   font-size: 9.5px;
   font-weight: 800;
   font-family: var(--font-mono);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   color: inherit;
   padding: 1.5px 4.5px;
   border-radius: 10px;
@@ -331,51 +349,53 @@ body {
   transform: scale(0.96);
 }
 
-.mode-switch-btn.active#btn-mode-section {
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(99, 102, 241, 0.25));
+/* Scope Active Styles */
+.mode-switch-btn.active#btn-scope-section {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.28), rgba(99, 102, 241, 0.25));
   color: #38bdf8;
   border-color: rgba(56, 189, 248, 0.6);
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
 }
 
-.mode-switch-btn.active#btn-mode-section .mode-count {
-  background: rgba(56, 189, 248, 0.25);
+.mode-switch-btn.active#btn-scope-section .mode-count {
+  background: rgba(56, 189, 248, 0.3);
   color: #38bdf8;
 }
 
-.mode-switch-btn.active#btn-mode-daily {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(236, 72, 153, 0.22));
+.mode-switch-btn.active#btn-scope-daily {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.28), rgba(236, 72, 153, 0.22));
   color: #c084fc;
   border-color: rgba(192, 132, 252, 0.6);
-  box-shadow: 0 0 14px rgba(192, 132, 252, 0.25);
+  box-shadow: 0 0 12px rgba(192, 132, 252, 0.3);
 }
 
-.mode-switch-btn.active#btn-mode-daily .mode-count {
-  background: rgba(192, 132, 252, 0.25);
+.mode-switch-btn.active#btn-scope-daily .mode-count {
+  background: rgba(192, 132, 252, 0.3);
   color: #c084fc;
 }
 
-.mode-switch-btn.active#btn-mode-task {
-  background: linear-gradient(135deg, rgba(2, 132, 199, 0.3), rgba(56, 189, 248, 0.2));
+/* Type Active Styles */
+.mode-switch-btn.active#btn-type-task {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.35), rgba(56, 189, 248, 0.25));
   color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.5);
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.6);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
 }
 
-.mode-switch-btn.active#btn-mode-task .mode-count {
-  background: rgba(56, 189, 248, 0.25);
+.mode-switch-btn.active#btn-type-task .mode-count {
+  background: rgba(56, 189, 248, 0.3);
   color: #38bdf8;
 }
 
-.mode-switch-btn.active#btn-mode-habit {
-  background: linear-gradient(135deg, rgba(5, 150, 105, 0.3), rgba(52, 211, 153, 0.2));
+.mode-switch-btn.active#btn-type-habit {
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.35), rgba(52, 211, 153, 0.25));
   color: #34d399;
-  border-color: rgba(52, 211, 153, 0.5);
-  box-shadow: 0 0 14px rgba(52, 211, 153, 0.2);
+  border-color: rgba(52, 211, 153, 0.6);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.3);
 }
 
-.mode-switch-btn.active#btn-mode-habit .mode-count {
-  background: rgba(52, 211, 153, 0.25);
+.mode-switch-btn.active#btn-type-habit .mode-count {
+  background: rgba(52, 211, 153, 0.3);
   color: #34d399;
 }
 
