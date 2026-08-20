@@ -153,6 +153,41 @@ function saveLocalHabits(instant = true) {
   else triggerCloudPush();
 }
 
+function getSectionOrder(secStr) {
+  if (!secStr) return 4;
+  if (secStr.includes('第1') || secStr.includes('早朝') || secStr.includes('朝') && !secStr.includes('朝オペ')) return 1;
+  if (secStr.includes('朝オペ') || secStr.includes('家事') || secStr.includes('育児')) return 2;
+  if (secStr.includes('第2') || secStr.includes('午前')) return 3;
+  if (secStr.includes('第3') || secStr.includes('午後')) return 4;
+  if (secStr.includes('夜オペ') || secStr.includes('夕食') || secStr.includes('団らん')) return 5;
+  if (secStr.includes('第4') || secStr.includes('夜')) return 6;
+  return 4;
+}
+
+function autoCarryoverPastSessionTasks() {
+  if (mState.selectedDateOffset !== 0) return; // Only for today
+  const currentSecId = detectCurrentSectionId();
+  const currentOrder = parseInt(currentSecId.replace('sec_', '')) || 4;
+  const currentSecObj = SECTIONS.find(s => s.id === currentSecId);
+  const currentSecName = currentSecObj ? currentSecObj.match[0] : '第3セッション';
+
+  let carried = false;
+  mState.tasks.forEach(t => {
+    if (t.status !== 'completed' && t.status !== 'skipped' && t.bucket !== 'someday' && t.bucket !== 'vault') {
+      const taskOrder = getSectionOrder(t.section);
+      if (taskOrder < currentOrder) {
+        // Carry forward to current active session
+        t.section = currentSecName;
+        carried = true;
+      }
+    }
+  });
+
+  if (carried) {
+    saveLocalTasks();
+  }
+}
+
 // =========================================================================
 // 3. Autonomous Day-Rollover & Carryover Engine (Midnight Bed Support)
 // =========================================================================
@@ -244,12 +279,47 @@ async function pushToCloud() {
   }
 }
 
-async function pullFromCloud(force = false) {
-  const gasUrl = getGasUrl();
-  if (!gasUrl || mState.isSyncing) return;
+let lastUndoAction = null;
+let undoTimeout = null;
 
-  mState.isSyncing = true;
-  updateSyncUI('syncing');
+function showMobileUndoToast(message, undoCallback) {
+  lastUndoAction = undoCallback;
+  const toast = document.getElementById('m-undo-toast');
+  const text = document.getElementById('m-undo-text');
+  if (!toast || !text) return;
+
+  text.textContent = message;
+  toast.classList.remove('hidden');
+
+  if (undoTimeout) clearTimeout(undoTimeout);
+  undoTimeout = setTimeout(() => {
+    toast.classList.add('hidden');
+    lastUndoAction = null;
+  }, 5000);
+}
+
+function executeMobileUndo() {
+  if (typeof lastUndoAction === 'function') {
+    haptic([20, 20]);
+    lastUndoAction();
+    const toast = document.getElementById('m-undo-toast');
+    if (toast) toast.classList.add('hidden');
+    lastUndoAction = null;
+  }
+}
+
+async function pullFromCloud(force = false, isSilent = false) {
+  const gasUrl = getGasUrl();
+  if (!gasUrl) {
+    if (force) alert('⚠️ GAS URLが未設定です。右上の ⚙️（歯車アイコン）からURLを設定してください。');
+    return;
+  }
+  if (mState.isSyncing) return;
+
+  if (!isSilent) {
+    mState.isSyncing = true;
+    updateSyncUI('syncing');
+  }
 
   try {
     const res = await fetch(`${gasUrl}?t=${Date.now()}`);
@@ -284,6 +354,7 @@ async function pullFromCloud(force = false) {
 
         renderMobileApp();
         updateSyncUI('success');
+        if (force && !isSilent) showMobileUndoToast(`✅ 最新データを同期しました（${mState.tasks.length}件）`);
       } else if (localTime > cloudTime) {
         pushToCloud();
       } else {
@@ -291,8 +362,9 @@ async function pullFromCloud(force = false) {
       }
     }
   } catch (err) {
-    console.error('Mobile cloud pull failed:', err);
+    if (!isSilent) console.error('Mobile cloud pull failed:', err);
     updateSyncUI('offline');
+    if (force && !isSilent) alert('クラウドからの取得に失敗しました。URLまたはネット接続を確認してください。');
   } finally {
     mState.isSyncing = false;
   }
@@ -325,20 +397,19 @@ function updateSyncUI(status) {
 }
 
 // =========================================================================
-// 5. Task & Habit Actions
+// 5. Touch Action Handlers (Task & Habit State Transitions)
 // =========================================================================
 
 function startTask(taskId) {
-  haptic(15);
-  const now = new Date();
-  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  haptic(20);
+  const targetTask = mState.tasks.find(t => t.id === taskId);
+  if (!targetTask) return;
 
   mState.tasks.forEach(t => {
     if (t.id === taskId) {
       t.status = 'in_progress';
-      t.actStart = t.actStart || nowTimeStr;
       t.startTimestamp = Date.now();
-      mState.activeTaskId = taskId;
+      mState.activeTaskId = t.id;
     } else if (t.status === 'in_progress') {
       t.status = 'paused';
       if (t.startTimestamp) {
@@ -354,31 +425,12 @@ function startTask(taskId) {
   renderMobileApp();
 }
 
-function pauseTask(taskId) {
-  haptic(15);
-  const task = mState.tasks.find(t => t.id === taskId);
-  if (!task) return;
-
-  task.status = 'paused';
-  if (task.startTimestamp) {
-    const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));
-    task.accumulatedSeconds = (task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0)) + sessionElapsedSec;
-    task.actMin = Math.round(task.accumulatedSeconds / 60);
-  }
-  task.startTimestamp = null;
-
-  if (mState.activeTaskId === taskId) {
-    mState.activeTaskId = null;
-  }
-
-  saveLocalTasks();
-  renderMobileApp();
-}
-
 function completeTask(taskId) {
   haptic([20, 50, 20]);
   const task = mState.tasks.find(t => t.id === taskId);
   if (!task) return;
+
+  const backupTask = JSON.parse(JSON.stringify(task));
 
   const now = new Date();
   const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -400,6 +452,13 @@ function completeTask(taskId) {
 
   saveLocalTasks();
   renderMobileApp();
+
+  showMobileUndoToast(`⚡ 「${task.title}」を完了しました`, () => {
+    Object.assign(task, backupTask);
+    if (backupTask.status === 'in_progress') mState.activeTaskId = task.id;
+    saveLocalTasks();
+    renderMobileApp();
+  });
 }
 
 function uncompleteTask(taskId) {
@@ -423,6 +482,7 @@ function toggleHabit(habitId) {
   const dateKey = getTodayDateString(mState.selectedDateOffset);
   if (!habit.history) habit.history = {};
 
+  const backupHistory = JSON.parse(JSON.stringify(habit.history));
   const currentEntry = habit.history[dateKey] || { count: 0 };
   const targetTimes = habit.targetTimes || 1;
 
@@ -449,6 +509,7 @@ function toggleHabit(habitId) {
 // =========================================================================
 
 function renderMobileApp() {
+  autoCarryoverPastSessionTasks();
   document.body.className = mState.activeType === 'task' ? 'theme-task' : 'theme-habit';
   renderHeaderDateAndETA();
   renderStickyActiveBar();
@@ -781,20 +842,30 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }, 1000);
 
+  // 15-Second Silent Heartbeat Sync Loop
+  setInterval(() => {
+    if (getGasUrl() && !mState.isSyncing) {
+      pullFromCloud(false, true); // Silent background check
+    }
+  }, 15000);
+
+  // Auto-sync when app comes to foreground (tab focus or PWA resume)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && getGasUrl()) {
+      pullFromCloud(false, true);
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    if (getGasUrl()) {
+      pullFromCloud(false, true);
+    }
+  });
+
   // Register Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(err => {
       console.log('SW registration skipped:', err);
     });
-  }
-});
-
-// Auto-sync when switching back to phone app
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    checkAndRunDayRollover();
-    if (getGasUrl()) {
-      pullFromCloud(false);
-    }
   }
 });

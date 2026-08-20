@@ -822,16 +822,17 @@ function saveCloudSyncSettings() {
 
   if (newUrl) {
     if (statusEl) {
-      statusEl.textContent = '🔄 接続テスト＆同期中...';
+      statusEl.textContent = '🔄 クラウドへPCのデータを送信中...';
       statusEl.style.color = '#38bdf8';
     }
-    pullDataFromCloud(true).then(() => {
+    pushDataToCloud().then(() => {
       if (statusEl) {
-        statusEl.textContent = '🟢 同期成功！設定が保存されました';
+        statusEl.textContent = '🟢 送信成功！PCのデータがクラウドに保存されました';
         statusEl.style.color = '#4ade80';
       }
-      setTimeout(() => closeModal(), 1200);
+      setTimeout(() => closeModal(), 1500);
     }).catch(err => {
+      console.error(err);
       if (statusEl) {
         statusEl.textContent = '⚠️ 接続エラー: URLを確認してください';
         statusEl.style.color = '#f87171';

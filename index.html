@@ -2918,8 +2918,34 @@
           <button type="button" class="btn-secondary" onclick="testCloudSyncPush()" style="flex: 1; height: 42px;">📤 クラウドへ送信</button>
         </div>
 
-        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 14px;">
-          <span id="cloud-sync-modal-status" style="font-size: 12px; color: var(--text-dim);">ステータス: 未設定</span>
+        <!-- Local Backup & Safety Vault Section -->
+        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border-color);">
+          <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <span>🛡️ データ保護・ローカルバックアップ</span>
+            <span style="font-size: 11px; color: var(--accent-cyan);">※10世代自動保存中</span>
+          </div>
+
+          <!-- Auto Vault File Sync -->
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <b style="font-size: 12px; color: var(--accent-emerald);">📁 Obsidian Vault自動ファイル同期</b>
+              <div id="vault-sync-status-badge" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">⚪ 未設定 (クリックして設定)</div>
+            </div>
+            <button type="button" class="btn-secondary" onclick="setupVaultAutoSyncFile()" style="font-size: 11px; padding: 4px 10px; color: var(--accent-emerald);">⚙️ 保存先を指定</button>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn-secondary" onclick="exportFullBackupJSON()" style="flex: 1; font-size: 12px; height: 36px;" title="PCに全データのバックアップJSONファイルを保存します">💾 JSONバックアップ保存</button>
+            <label class="btn-secondary" style="flex: 1; font-size: 12px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin: 0;" title="過去のバックアップファイルからデータを復元します">
+              📂 JSON復元
+              <input type="file" accept=".json" onchange="importFullBackupJSON(this.files[0])" style="display: none;">
+            </label>
+            <button type="button" class="btn-secondary" onclick="restoreFromSnapshot(0)" style="flex: 1; font-size: 12px; height: 36px; color: #fb923c;" title="直前の自動保存スナップショットへ巻き戻します">⏪ 直前復元</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 14px; gap: 8px;">
+          <button type="button" class="btn-secondary" onclick="restoreDefaultMasterData()" style="font-size: 12px; padding: 6px 12px; color: var(--accent-cyan);" title="消えてしまったタスクやハビットを初期マスターデータから一発復元します">⚡ マスターデータを復元</button>
           <button type="button" class="btn-danger-subtle" onclick="clearCloudSyncSettings()" style="font-size: 12px; padding: 6px 12px;">URL設定を解除</button>
         </div>
       </div>

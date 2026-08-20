@@ -3,7 +3,7 @@
  * Offline Cache & High-Speed Launch Engine
  */
 
-const CACHE_NAME = 'gendrive-lite-v1';
+const CACHE_NAME = 'gendrive-lite-v5';
 const ASSETS_TO_CACHE = [
   './mobile.html',
   './mobile.css',

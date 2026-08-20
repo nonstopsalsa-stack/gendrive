@@ -11,14 +11,263 @@ const STORAGE_KEYS = {
   MANIFESTO: 'habit_flow_manifesto_v1',
   PRESETS: 'habit_flow_task_presets_v1',
   GAS_URL: 'gendrive_gas_api_url',
-  METADATA: 'gendrive_sync_metadata_v1'
+  METADATA: 'gendrive_sync_metadata_v1',
+  SNAPSHOTS: 'gendrive_snapshots_v1'
 };
 
 let cloudSyncTimeout = null;
 let isSyncing = false;
 
 // =========================================================================
-// 0. Metadata & Settings Management
+// 0. Multi-Generation Local Auto-Backup Engine (10-Snapshot Rollback System)
+// =========================================================================
+
+let vaultFileHandle = null;
+
+// IndexedDB Helper for Storing File Handle
+const IDB_CONFIG = { dbName: 'gendrive_idb', storeName: 'handles', key: 'vault_backup_file' };
+
+function openIdb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_CONFIG.dbName, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_CONFIG.storeName);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveFileHandleToIdb(handle) {
+  try {
+    const db = await openIdb();
+    const tx = db.transaction(IDB_CONFIG.storeName, 'readwrite');
+    tx.objectStore(IDB_CONFIG.storeName).put(handle, IDB_CONFIG.key);
+  } catch (e) {
+    console.error('Failed to save file handle to IDB:', e);
+  }
+}
+
+async function loadFileHandleFromIdb() {
+  try {
+    const db = await openIdb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_CONFIG.storeName, 'readonly');
+      const req = tx.objectStore(IDB_CONFIG.storeName).get(IDB_CONFIG.key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+async function setupVaultAutoSyncFile() {
+  try {
+    if (!('showSaveFilePicker' in window)) {
+      alert('⚠️ お使いのブラウザはローカルファイル自動書き込みAPIに対応していません。');
+      return;
+    }
+
+    const handle = await window.showSaveFilePicker({
+      suggestedName: 'gendrive_backup.json',
+      types: [{
+        description: 'JSON Backup File',
+        accept: { 'application/json': ['.json'] }
+      }]
+    });
+
+    if (handle) {
+      vaultFileHandle = handle;
+      await saveFileHandleToIdb(handle);
+      await writeToVaultBackupFile();
+      updateVaultSyncUI(true, handle.name);
+      alert(`✅ Vault自動バックアップ先を設定しました！\nファイル: ${handle.name}\n今後はタスク操作や日跨ぎのたびに完全自動で上書き保存されます。`);
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      alert('設定中にエラーが発生しました: ' + err.message);
+    }
+  }
+}
+
+async function writeToVaultBackupFile() {
+  if (!vaultFileHandle) {
+    vaultFileHandle = await loadFileHandleFromIdb();
+  }
+  if (!vaultFileHandle) return;
+
+  try {
+    const backupData = {
+      exportDate: new Date().toISOString(),
+      displayDate: new Date().toLocaleString(),
+      version: '1.0',
+      tasks: state.tasks || [],
+      habits: state.habits || [],
+      goals: state.goals || {},
+      manifesto: state.manifesto || {},
+      taskPresets: state.taskPresets || []
+    };
+
+    const writable = await vaultFileHandle.createWritable();
+    await writable.write(JSON.stringify(backupData, null, 2));
+    await writable.close();
+    updateVaultSyncUI(true, vaultFileHandle.name);
+  } catch (e) {
+    console.warn('Vault auto-sync write failed (permissions may need re-granting on click):', e);
+  }
+}
+
+function updateVaultSyncUI(isActive, filename = 'gendrive_backup.json') {
+  const statusEl = document.getElementById('vault-sync-status-badge');
+  if (statusEl) {
+    if (isActive) {
+      statusEl.innerHTML = `🟢 自動同期中 (${filename})`;
+      statusEl.style.color = 'var(--accent-emerald)';
+    } else {
+      statusEl.innerHTML = `⚪ 未設定 (クリックして設定)`;
+      statusEl.style.color = 'var(--text-muted)';
+    }
+  }
+}
+
+function createAutoBackupSnapshot() {
+  try {
+    const rawSnapshots = localStorage.getItem(STORAGE_KEYS.SNAPSHOTS);
+    let snapshots = rawSnapshots ? JSON.parse(rawSnapshots) : [];
+
+    const newSnapshot = {
+      timestamp: new Date().toISOString(),
+      displayTime: new Date().toLocaleString(),
+      taskCount: (state.tasks || []).length,
+      habitCount: (state.habits || []).length,
+      data: {
+        tasks: state.tasks || [],
+        habits: state.habits || [],
+        goals: state.goals || {},
+        manifesto: state.manifesto || {},
+        taskPresets: state.taskPresets || []
+      }
+    };
+
+    // Keep last 10 snapshots max
+    snapshots.unshift(newSnapshot);
+    if (snapshots.length > 10) snapshots = snapshots.slice(0, 10);
+
+    localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots));
+
+    // Also trigger Vault physical file auto-write in background
+    writeToVaultBackupFile();
+  } catch (e) {
+    console.error('Failed to create auto backup snapshot:', e);
+  }
+}
+
+function restoreFromSnapshot(snapshotIndex = 0) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SNAPSHOTS);
+    if (!raw) {
+      alert('⚠️ バックアップ履歴が見つかりません。');
+      return;
+    }
+    const snapshots = JSON.parse(raw);
+    if (!snapshots[snapshotIndex]) {
+      alert('⚠️ 指定されたバックアップが存在しません。');
+      return;
+    }
+
+    const snap = snapshots[snapshotIndex];
+    if (confirm(`【安全復元】${snap.displayTime} の自動バックアップ（タスク ${snap.taskCount}件 / ハビット ${snap.habitCount}件）へ復元しますか？`)) {
+      state.tasks = snap.data.tasks || [];
+      state.habits = (snap.data.habits || []).map(migrateHabit);
+      state.goals = snap.data.goals || {};
+      state.manifesto = snap.data.manifesto || {};
+      state.taskPresets = snap.data.taskPresets || [];
+
+      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+      localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+      localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(state.goals));
+      localStorage.setItem(STORAGE_KEYS.MANIFESTO, JSON.stringify(state.manifesto));
+      localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
+
+      if (typeof renderApp === 'function') renderApp();
+      if (getGasApiUrl()) pushDataToCloud();
+
+      alert(`✅ ${snap.displayTime} の状態に完全復元しました！`);
+    }
+  } catch (e) {
+    alert('復元中にエラーが発生しました: ' + e.message);
+  }
+}
+
+function exportFullBackupJSON() {
+  const backupData = {
+    exportDate: new Date().toISOString(),
+    version: '1.0',
+    tasks: state.tasks,
+    habits: state.habits,
+    goals: state.goals,
+    manifesto: state.manifesto,
+    taskPresets: state.taskPresets
+  };
+
+  const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+  a.href = url;
+  a.download = `Gendrive_Backup_${dateStr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importFullBackupJSON(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data.tasks) && !Array.isArray(data.habits)) {
+        throw new Error('有効なGendriveバックアップファイルではありません。');
+      }
+
+      if (confirm(`【バックアップ復元】ファイルから全データ（タスク ${(data.tasks||[]).length}件 / ハビット ${(data.habits||[]).length}件）を読み込みますか？`)) {
+        createAutoBackupSnapshot(); // Save current before overwriting
+
+        if (Array.isArray(data.tasks)) {
+          state.tasks = data.tasks;
+          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+        }
+        if (Array.isArray(data.habits)) {
+          state.habits = data.habits.map(migrateHabit);
+          localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+        }
+        if (data.goals) {
+          state.goals = data.goals;
+          localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(state.goals));
+        }
+        if (data.manifesto) {
+          state.manifesto = data.manifesto;
+          localStorage.setItem(STORAGE_KEYS.MANIFESTO, JSON.stringify(state.manifesto));
+        }
+        if (Array.isArray(data.taskPresets)) {
+          state.taskPresets = data.taskPresets;
+          localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
+        }
+
+        if (typeof renderApp === 'function') renderApp();
+        if (getGasApiUrl()) pushDataToCloud();
+
+        alert('✅ バックアップファイルからの復元が完了しました！');
+      }
+    } catch (err) {
+      alert('ファイルの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// =========================================================================
+// 0-B. Metadata & Settings Management
 // =========================================================================
 
 function getGasApiUrl() {
@@ -94,6 +343,7 @@ function loadTasks() {
 
 function saveTasks(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+  createAutoBackupSnapshot();
   if (typeof updateSidebarBadges === 'function') {
     updateSidebarBadges();
   }
@@ -143,6 +393,7 @@ function loadGoals() {
 
 function saveGoals(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(state.goals));
+  createAutoBackupSnapshot();
   if (!skipCloudSync) {
     triggerCloudSync();
   }
@@ -167,6 +418,7 @@ function loadTaskPresets() {
 
 function saveTaskPresets(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
+  createAutoBackupSnapshot();
   if (!skipCloudSync) {
     triggerCloudSync();
   }
@@ -196,6 +448,7 @@ function loadManifesto() {
 
 function saveManifesto(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.MANIFESTO, JSON.stringify(state.manifesto));
+  createAutoBackupSnapshot();
   if (!skipCloudSync) {
     triggerCloudSync();
   }
@@ -254,6 +507,7 @@ function loadHabits() {
 
 function saveHabits(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+  createAutoBackupSnapshot();
   updateSyncStatus('local');
   if (!skipCloudSync) {
     triggerCloudSync();
@@ -261,20 +515,19 @@ function saveHabits(skipCloudSync = false) {
 }
 
 // =========================================================================
-// 6. Cloud Sync Engine (Google Apps Script / Spreadsheet API)
+// 6. Zero-Click Realtime Cloud Sync Engine (Instant Push & 15s Heartbeat)
 // =========================================================================
+
+let heartbeatInterval = null;
 
 function triggerCloudSync() {
   const gasUrl = getGasApiUrl();
   if (!gasUrl) return;
 
-  if (cloudSyncTimeout) {
-    clearTimeout(cloudSyncTimeout);
-  }
-
+  if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
   cloudSyncTimeout = setTimeout(() => {
     pushDataToCloud();
-  }, 1000);
+  }, 300); // 300ms instant push
 }
 
 async function pushDataToCloud() {
@@ -297,42 +550,50 @@ async function pushDataToCloud() {
 
     const response = await fetch(gasUrl, {
       method: 'POST',
-      mode: 'cors',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8'
       },
       body: JSON.stringify(payload)
     });
 
-    const resJson = await response.json();
-    if (resJson.status === 'success') {
+    let isSuccess = false;
+    try {
+      const resJson = await response.json();
+      if (resJson && resJson.status === 'success') {
+        isSuccess = true;
+      }
+    } catch (e) {
+      if (response.ok || response.status === 200 || response.type === 'opaque') {
+        isSuccess = true;
+      }
+    }
+
+    if (isSuccess) {
       updateSyncStatus('cloud_success');
     } else {
-      console.warn('Cloud sync returned error:', resJson);
       updateSyncStatus('cloud_error');
     }
   } catch (err) {
-    console.error('Cloud sync push failed (offline or network error):', err);
+    console.error('Cloud sync push failed:', err);
     updateSyncStatus('offline');
   } finally {
     isSyncing = false;
   }
 }
 
-async function pullDataFromCloud(forceApply = false) {
+async function pullDataFromCloud(forceApply = false, isSilent = false) {
   const gasUrl = getGasApiUrl();
   if (!gasUrl || isSyncing) return;
 
-  isSyncing = true;
-  updateSyncStatus('syncing');
+  if (!isSilent) {
+    isSyncing = true;
+    updateSyncStatus('syncing');
+  }
 
   try {
-    const response = await fetch(`${gasUrl}?t=${Date.now()}`, {
-      method: 'GET',
-      mode: 'cors'
-    });
-
+    const response = await fetch(`${gasUrl}?t=${Date.now()}`);
     const resJson = await response.json();
+
     if (resJson.status === 'success' && resJson.data) {
       const cloudData = resJson.data;
       const cloudMeta = cloudData.metadata || {};
@@ -343,23 +604,23 @@ async function pullDataFromCloud(forceApply = false) {
 
       // If cloud is newer or forceApply requested, update local state
       if (forceApply || cloudTime > localTime) {
-        if (Array.isArray(cloudData.tasks)) {
+        if (Array.isArray(cloudData.tasks) && cloudData.tasks.length > 0) {
           state.tasks = cloudData.tasks;
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
         }
-        if (Array.isArray(cloudData.habits)) {
+        if (Array.isArray(cloudData.habits) && cloudData.habits.length > 0) {
           state.habits = cloudData.habits.map(migrateHabit);
           localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
         }
-        if (cloudData.goals) {
+        if (cloudData.goals && Object.keys(cloudData.goals).length > 0) {
           state.goals = cloudData.goals;
           localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(state.goals));
         }
-        if (cloudData.manifesto) {
+        if (cloudData.manifesto && cloudData.manifesto.body) {
           state.manifesto = cloudData.manifesto;
           localStorage.setItem(STORAGE_KEYS.MANIFESTO, JSON.stringify(state.manifesto));
         }
-        if (Array.isArray(cloudData.taskPresets)) {
+        if (Array.isArray(cloudData.taskPresets) && cloudData.taskPresets.length > 0) {
           state.taskPresets = cloudData.taskPresets;
           localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
         }
@@ -382,11 +643,75 @@ async function pullDataFromCloud(forceApply = false) {
       }
     }
   } catch (err) {
-    console.error('Cloud pull failed (offline or network error):', err);
+    if (!isSilent) console.error('Cloud pull failed (offline or network error):', err);
     updateSyncStatus('offline');
   } finally {
     isSyncing = false;
   }
+}
+
+// 15-Second Silent Heartbeat Sync & Focus Resume Loop
+function initRealtimeSyncHeartbeat() {
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(() => {
+    if (getGasApiUrl() && !isSyncing) {
+      pullDataFromCloud(false, true); // Silent background sync
+    }
+  }, 15000); // Poll every 15s
+
+  window.addEventListener('focus', () => {
+    if (getGasApiUrl() && !isSyncing) {
+      pullDataFromCloud(false, true);
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && getGasApiUrl() && !isSyncing) {
+      pullDataFromCloud(false, true);
+    }
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    initRealtimeSyncHeartbeat();
+  });
+}
+
+/**
+ * 哲生さんの全マスターデータ（ハビット・タスク・目標）を一発で完全復元する関数
+ */
+function restoreDefaultMasterData() {
+  localStorage.removeItem(STORAGE_KEYS.TASKS);
+  localStorage.removeItem(STORAGE_KEYS.HABITS);
+  localStorage.removeItem(STORAGE_KEYS.GOALS);
+  localStorage.removeItem(STORAGE_KEYS.MANIFESTO);
+  localStorage.removeItem(STORAGE_KEYS.PRESETS);
+
+  state.habits = loadHabits();
+  state.tasks = loadTasks();
+  state.goals = loadGoals();
+  state.manifesto = loadManifesto();
+  state.taskPresets = loadTaskPresets();
+
+  localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+  localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+  localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(state.goals));
+  localStorage.setItem(STORAGE_KEYS.MANIFESTO, JSON.stringify(state.manifesto));
+  localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
+
+  updateSyncMetadata({ lastUpdatedDevice: 'PC', lastUpdatedAt: new Date().toISOString() });
+
+  if (typeof renderApp === 'function') {
+    renderApp();
+  }
+
+  // クラウドにも即時プッシュ
+  if (getGasApiUrl()) {
+    pushDataToCloud();
+  }
+
+  alert('⚡ 哲生さんのマスターデータ（全ハビット・タスク・目標）を完全に復元しました！');
 }
 
 function updateSyncStatus(type = 'local', customText = null) {
