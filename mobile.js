@@ -261,7 +261,12 @@ async function pushToCloud() {
     let isSuccess = false;
     try {
       const data = await res.json();
-      if (data && data.status === 'success') isSuccess = true;
+      if (data && data.status === 'success') {
+        isSuccess = true;
+        if (data.lastUpdatedAt) {
+          updateMetadata({ lastUpdatedAt: data.lastUpdatedAt });
+        }
+      }
     } catch (e) {
       if (res.ok || res.status === 200 || res.type === 'opaque') isSuccess = true;
     }
@@ -332,7 +337,8 @@ async function pullFromCloud(force = false, isSilent = false) {
       const cloudTime = new Date(cloudMeta.lastUpdatedAt || 0).getTime();
       const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
 
-      if (force || cloudTime > localTime || (Array.isArray(cloud.tasks) && cloud.tasks.length > 0)) {
+      // ONLY overwrite if cloud is strictly newer OR force requested
+      if (force || cloudTime > localTime) {
         if (Array.isArray(cloud.tasks)) {
           mState.tasks = cloud.tasks;
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
@@ -356,6 +362,7 @@ async function pullFromCloud(force = false, isSilent = false) {
         updateSyncUI('success');
         if (force && !isSilent) showMobileUndoToast(`✅ 最新データを同期しました（${mState.tasks.length}件）`);
       } else if (localTime > cloudTime) {
+        // Local is newer, push our changes to cloud!
         pushToCloud();
       } else {
         updateSyncUI('success');
