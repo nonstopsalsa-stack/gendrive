@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Gendrive Lite - Action Engine</title>
+  
+  <!-- PWA & Mobile Web App Meta -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#070b14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gendrive">
+
+  <!-- High-Res Dynamic Neon SVG Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2338bdf8'/><stop offset='50%25' stop-color='%23818cf8'/><stop offset='100%25' stop-color='%23c084fc'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='3.5' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><rect width='100' height='100' rx='26' fill='%230b1324'/><rect x='3' y='3' width='94' height='94' rx='23' fill='none' stroke='url(%23g)' stroke-width='4'/><text x='50' y='69' font-size='56' text-anchor='middle' filter='url(%23glow)'>⚡</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2338bdf8'/><stop offset='50%25' stop-color='%23818cf8'/><stop offset='100%25' stop-color='%23c084fc'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='3.5' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><rect width='100' height='100' rx='26' fill='%230b1324'/><rect x='3' y='3' width='94' height='94' rx='23' fill='none' stroke='url(%23g)' stroke-width='4'/><text x='50' y='69' font-size='56' text-anchor='middle' filter='url(%23glow)'>⚡</text></svg>">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+
+  <!-- Smart Mobile Header -->
+  <header class="mobile-header">
+    <div class="header-top-row">
+      <div class="brand-badge">
+        <span class="brand-icon">⚡</span>
+        <span class="brand-title">Gendrive</span>
+        <span class="brand-tag">LITE</span>
+      </div>
+      <div class="header-meta-actions">
+        <div class="sync-badge" id="m-sync-badge" onclick="pullFromCloud(true)" title="タップで強制再同期">
+          💾 ローカル
+        </div>
+        <button class="btn-icon-touch" onclick="pullFromCloud(true)" title="更新">🔄</button>
+        <button class="btn-icon-touch" onclick="openSettingsModal()" title="設定">⚙️</button>
+      </div>
+    </div>
+
+    <!-- Date & ETA Info Bar -->
+    <div class="header-info-bar">
+      <div class="date-selector-group">
+        <button class="btn-date-nav" onclick="changeDate(-1)">◀</button>
+        <span class="date-label" id="m-header-date" onclick="resetToToday()">--/-- 今日</span>
+        <button class="btn-date-nav" onclick="changeDate(1)">▶</button>
+      </div>
+      <div class="eta-summary-badge" title="本日の全未完了タスク消化時の見込み時刻">
+        <span>🏁</span>
+        <b class="eta-time" id="m-eta-time-val">--:--</b>
+        <span id="m-eta-remain-info" style="font-size: 11px; opacity: 0.85;">(残 --)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sticky Top Active Task Bar (Shown when task is running) -->
+  <div class="sticky-active-bar hidden" id="sticky-active-bar">
+    <div class="active-bar-info">
+      <div class="active-bar-tag">
+        <span class="active-bar-pulse"></span>
+        <span>RUNNING</span>
+        <span class="active-bar-timer" id="active-bar-timer">00:00</span>
+      </div>
+      <div class="active-bar-title" id="active-bar-title">タスクタイトル</div>
+    </div>
+    <div class="active-bar-actions">
+      <button class="btn-touch btn-touch-pause" onclick="pauseTask(mState.activeTaskId)">⏸ 中断</button>
+      <button class="btn-touch btn-touch-success" onclick="completeTask(mState.activeTaskId)">✔ 完了</button>
+    </div>
+  </div>
+
+  <!-- Section Tabs (Horizontally Scrollable) -->
+  <div class="section-tabs-container" id="m-section-tabs">
+    <!-- Rendered Dynamically -->
+  </div>
+
+  <!-- Mobile Main Content -->
+  <main class="mobile-content">
+    <!-- Uncompleted Cards List -->
+    <div class="cards-container" id="m-cards-list">
+      <!-- Rendered Dynamically -->
+    </div>
+
+    <!-- Completed Accordion Section -->
+    <div class="completed-accordion" id="m-completed-accordion">
+      <button class="accordion-toggle" onclick="toggleCompletedAccordion()">
+        <span>✓ 完了済みアイテム (<span id="m-completed-count">0</span>件)</span>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="completed-list" id="m-completed-list">
+        <!-- Rendered Dynamically -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Settings Bottom Sheet Modal -->
+  <div class="m-modal-overlay" id="m-settings-modal" onclick="closeSettingsModal()">
+    <div class="m-modal-sheet" onclick="event.stopPropagation()">
+      <div class="sheet-handle"></div>
+      <h3 class="sheet-title">☁️ クラウド同期設定 (GAS)</h3>
+      
+      <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
+        Google Apps Script のウェブアプリ URL を貼り付けることで、PC版と完全自動同期します。
+      </p>
+
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 12px; font-weight: 700; color: var(--text-dim); display: block; margin-bottom: 6px;">GAS Web App URL</label>
+        <input type="url" id="m-gas-url-input" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; font-family: var(--font-mono); font-size: 12px; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff;">
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <button class="btn-touch btn-touch-primary" onclick="saveSettings()" style="flex: 2;">💾 保存して同期</button>
+        <button class="btn-touch btn-touch-subtle" onclick="pullFromCloud(true)" style="flex: 1;">📥 取得</button>
+        <button class="btn-touch btn-touch-subtle" onclick="closeSettingsModal()" style="flex: 1;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="mobile.js"></script>
+</body>
+</html>

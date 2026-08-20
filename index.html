@@ -1,0 +1,2980 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gendrive - Personal Action Engine</title>
+  <!-- High-Res Dynamic Neon SVG Favicon for Gendrive -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2338bdf8'/><stop offset='50%25' stop-color='%23818cf8'/><stop offset='100%25' stop-color='%23c084fc'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='3.5' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><rect width='100' height='100' rx='26' fill='%230b1324'/><rect x='3' y='3' width='94' height='94' rx='23' fill='none' stroke='url(%23g)' stroke-width='4'/><text x='50' y='69' font-size='56' text-anchor='middle' filter='url(%23glow)'>⚡</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Shippori+Mincho:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+  <div class="app-container">
+    <!-- Compact Smart Top Header (1-Line Integrated) -->
+    <header class="app-header-smart">
+      <div class="header-left">
+        <div class="logo-brand">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-text">Gendrive</span>
+          <span class="logo-badge">ACTION ENGINE</span>
+        </div>
+
+        <!-- Date Navigation Bar -->
+        <div class="date-nav-bar">
+          <button class="btn-date-arrow" id="btn-date-prev" title="前日へ (昨日の修正など)">◀</button>
+          <div class="date-capsule" id="header-date-badge">
+            <span class="date-text" id="header-date-text">2026年8月17日(月)</span>
+            <span class="date-tag-today" id="header-date-tag">今日</span>
+          </div>
+          <button class="btn-date-arrow" id="btn-date-next" title="翌日へ">▶</button>
+          <button class="btn-date-today hidden" id="btn-date-today" title="今日の日付に戻る (0 / Home)">⚡ 今日に戻る <span class="kbd-sub">0</span></button>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- TaskChute Dynamic Daily ETA (Full-Day End-Time Estimate) -->
+        <div class="header-daily-eta-badge" id="header-daily-eta-badge" title="今日の全未完了アイテムを今すぐ順に実行した場合の終了見込み時刻">
+          <div class="daily-eta-top">
+            <span class="daily-eta-icon">🏁</span>
+            <span class="daily-eta-label">今日完了見込み:</span>
+            <b class="daily-eta-time" id="daily-eta-time-val">--:--</b>
+          </div>
+          <div class="daily-eta-sub">
+            <span id="daily-eta-remain-info">残り --分 (--件)</span>
+          </div>
+        </div>
+
+        <!-- Live Section Time Progress Scale Bar -->
+        <div class="section-scale-container" id="current-section-badge" title="現セクションの時間経過スケール">
+          <div class="scale-header-row">
+            <div class="section-badge-left">
+              <span class="pulse-dot"></span>
+              <span class="clock-val" id="current-time-display">--:--</span>
+              <span class="clock-divider">/</span>
+              <span class="section-val" id="current-section-name">第2セッション</span>
+            </div>
+            <span class="scale-percent-badge" id="section-scale-percent">0% 経過 (残り --分)</span>
+          </div>
+          <div class="scale-bar-wrapper">
+            <span class="scale-time-label" id="scale-boundary-start">08:30</span>
+            <div class="scale-bar-track">
+              <div class="scale-bar-fill" id="section-scale-fill" style="width: 0%;"></div>
+            </div>
+            <span class="scale-time-label" id="scale-boundary-end">12:00</span>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button class="btn-icon-subtle" id="btn-cloud-sync" onclick="openCloudSyncModal()" title="☁️ Googleドライブ/スプレッドシート クラウド同期設定">☁️ <span class="kbd-sub">Sync</span></button>
+          <button class="btn-icon-subtle" id="btn-quick-reload" onclick="reloadAppData()" title="データ即時リロード・再同期 (R)">🔄 <span class="kbd-sub">R</span></button>
+          <button class="btn-icon-subtle" id="btn-shortcuts" onclick="openShortcutsModal()" title="ショートカット一覧 (?)">⌨️ <span class="kbd-sub">?</span></button>
+          <button class="btn-add-primary btn-add-preset" id="btn-task-presets" onclick="openTaskPresetsModal()" title="プリセットタスク (P)">⚡ プリセットタスク <span class="kbd-sub">P</span></button>
+          <button class="btn-add-primary btn-add-task" id="btn-add-task" onclick="openAddTaskModal()" title="タスク追加 (T)">🎯 タスク追加 <span class="kbd-sub">T</span></button>
+          <button class="btn-add-secondary btn-add-habit" id="btn-add-habit" onclick="openAddModal()" title="ハビット追加 (N)">🌿 ハビット追加 <span class="kbd-sub">N</span></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Past Date Edit Notice Banner (Shown when selected date != today) -->
+    <div class="past-date-banner hidden" id="past-date-banner">
+      <div class="banner-left">
+        <span class="banner-icon">⚠️</span>
+        <span class="banner-text">過去日（<b id="banner-date-str">8月15日</b>）の実行記録モードです。過去の完了・未完了を修正できます。</span>
+      </div>
+      <button class="btn-banner-reset" id="btn-banner-reset">⚡ 今日の画面に戻る</button>
+    </div>
+
+    <!-- Carryover Banner for Past Incomplete Tasks (Shown on Today when past tasks exist) -->
+    <div class="carryover-banner hidden" id="carryover-banner">
+      <div class="carryover-banner-left">
+        <span class="carryover-banner-icon">📥</span>
+        <span class="carryover-banner-text">昨日までの未完了タスクが <b id="carryover-task-count">0</b> 件あります</span>
+      </div>
+      <div class="carryover-banner-actions">
+        <button class="btn-carryover-primary" id="btn-carryover-all" title="現在のセクションに未完タスクを一括取り込み">
+          ⚡ <span id="carryover-target-sec-name">現在のセクション</span> に一括取り込み
+        </button>
+        <button class="btn-carryover-subtle" id="btn-carryover-review" title="タスクを確認して個別に選ぶ">
+          🔍 確認して選択
+        </button>
+        <button class="btn-carryover-dismiss" id="btn-carryover-dismiss" title="このバナーを閉じる">✕</button>
+      </div>
+    </div>
+
+    <!-- Integrated Toolbar (View Modes + Filter Pills in 1 Single Bar) -->
+    <nav class="app-toolbar">
+      <div class="toolbar-left">
+        <div class="mode-tabs-integrated">
+          <button class="mode-tab active" data-mode="section" id="mode-section">
+            <span class="mode-num">1</span>
+            <span class="mode-name">セクション</span>
+          </button>
+          <button class="mode-tab" data-mode="focus" id="mode-focus">
+            <span class="mode-num">2</span>
+            <span class="mode-name">フォーカス</span>
+          </button>
+          <button class="mode-tab" data-mode="all" id="mode-all">
+            <span class="mode-num">3</span>
+            <span class="mode-name">デイリー</span>
+          </button>
+          <button class="mode-tab" data-mode="table" id="mode-table">
+            <span class="mode-num">4</span>
+            <span class="mode-name">マスター</span>
+          </button>
+          <button class="mode-tab" data-mode="goals" id="mode-goals">
+            <span class="mode-num">5</span>
+            <span class="mode-name">ビジョン</span>
+          </button>
+          <button class="mode-tab" data-mode="timer" id="mode-timer">
+            <span class="mode-num">6</span>
+            <span class="mode-name">タイマー</span>
+          </button>
+        </div>
+
+        <!-- Single-Click View Target Filter (All / Tasks Only / Habits Only) -->
+        <div class="view-type-segmented" id="filter-view-type">
+          <button class="view-type-btn active" data-type="all" id="vt-all" onclick="setViewType('all')" title="すべて表示 (V)">✨ すべて</button>
+          <button class="view-type-btn" data-type="task" id="vt-task" onclick="setViewType('task')" title="タスクのみ表示 (V)">🎯 タスク</button>
+          <button class="view-type-btn" data-type="habit" id="vt-habit" onclick="setViewType('habit')" title="ハビットのみ表示 (V)">🌿 ハビット</button>
+        </div>
+      </div>
+
+      <div class="toolbar-right">
+        <div class="filter-pills-bar">
+          <div class="filter-pill-compact" id="filter-status-pill" title="状態切替 (Tab)">
+            <span class="pill-lbl">状態:</span>
+            <span class="pill-val" id="filter-status-val">未完了のみ</span>
+          </div>
+          <div class="filter-pill-compact" id="filter-domain-pill" title="ドメイン絞込 (D)">
+            <span class="pill-lbl">ドメイン:</span>
+            <span class="pill-val" id="filter-domain-val">すべて</span>
+          </div>
+          <div class="filter-pill-compact" id="filter-dept-pill" title="部門絞込 (B)">
+            <span class="pill-lbl">部門:</span>
+            <span class="pill-val" id="filter-dept-val">すべて</span>
+          </div>
+          <div class="filter-pill-compact" id="filter-proj-pill" title="PJ絞込 (P)">
+            <span class="pill-lbl">PJ:</span>
+            <span class="pill-val" id="filter-proj-val">すべて</span>
+          </div>
+          <div class="filter-pill-compact" id="filter-tag-pill" title="タグ絞込・除外 (クリックで設定)">
+            <span class="pill-lbl">タグ:</span>
+            <span class="pill-val" id="filter-tag-val">すべて</span>
+          </div>
+          <button class="btn-reset-filters-compact hidden" id="btn-reset-filters" title="フィルタ全解除 (Esc)">✕ 解除</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Dynamic Smart Quick Tag Bar (Filter & Exclude Toggle) -->
+    <div class="smart-tag-bar-container" id="smart-tag-bar-container">
+      <div class="smart-tag-bar-header">
+        <span class="smart-tag-bar-icon">🏷️</span>
+        <span class="smart-tag-bar-label">タグ:</span>
+      </div>
+      <div class="smart-tag-chips-list" id="smart-tag-chips-list">
+        <!-- Dynamic tags with 3-state cycle: Default -> Include (Blue) -> Exclude (Red Strikethrough) -> Default -->
+      </div>
+    </div>
+
+    <!-- Main Layout (Sidebar + Content Viewport) -->
+    <div class="app-body-layout">
+      <!-- Left Sidebar: GTD Buckets & Eisenhower Labels -->
+      <aside class="app-sidebar" id="app-sidebar">
+        <!-- Sidebar Mini Calendar Widget (Amazing Marvin Style) -->
+        <div class="sidebar-calendar-widget" id="sidebar-calendar-widget">
+          <div class="sidebar-cal-header">
+            <div class="sidebar-cal-nav-group">
+              <button type="button" class="btn-cal-nav" id="btn-cal-prev-year" title="前年へ">«</button>
+              <button type="button" class="btn-cal-nav" id="btn-cal-prev" title="前月へ">‹</button>
+            </div>
+            <div class="sidebar-cal-title-wrapper" id="sidebar-cal-title" title="当月にリセット">
+              <span id="cal-month-name" class="cal-month-name">2026年 8月</span>
+            </div>
+            <div class="sidebar-cal-nav-group">
+              <button type="button" class="btn-cal-nav" id="btn-cal-next" title="翌月へ">›</button>
+              <button type="button" class="btn-cal-nav" id="btn-cal-next-year" title="翌年へ">»</button>
+            </div>
+          </div>
+          <div class="sidebar-cal-weekdays">
+            <span class="cal-wd mon">月</span>
+            <span class="cal-wd tue">火</span>
+            <span class="cal-wd wed">水</span>
+            <span class="cal-wd thu">木</span>
+            <span class="cal-wd fri">金</span>
+            <span class="cal-wd sat">土</span>
+            <span class="cal-wd sun">日</span>
+          </div>
+          <div class="sidebar-cal-grid" id="sidebar-cal-grid">
+            <!-- Dynamically populated by renderSidebarCalendar() -->
+          </div>
+          <div class="sidebar-cal-footer">
+            <button type="button" class="btn-cal-quick-today" id="btn-cal-today" title="今日の日付に戻る (0 / Home)">
+              <span class="cal-today-dot"></span> 今日に戻る (Today)
+            </button>
+          </div>
+        </div>
+
+        <!-- GTD Buckets Section -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">📦 箱 (GTD BUCKETS)</div>
+          <div class="sidebar-items-list">
+            <button class="sidebar-item bucket-item" data-bucket="inbox" id="sb-inbox" title="未整理メモ・即時投入 (D&Dで移動)">
+              <span class="item-icon">📥</span>
+              <span class="item-label">Inbox</span>
+              <span class="item-badge" id="badge-count-inbox">0</span>
+            </button>
+            <button class="sidebar-item bucket-item" data-bucket="this_week" id="sb-this_week" title="今週やるタスク（順算でTodayへ / D&Dで移動）">
+              <span class="item-icon">📅</span>
+              <span class="item-label">今週</span>
+              <span class="item-badge" id="badge-count-this_week">0</span>
+            </button>
+            <button class="sidebar-item bucket-item" data-bucket="next_week" id="sb-next_week" title="来週やるタスク（過集中バッファ / D&Dで移動）">
+              <span class="item-icon">🗓️</span>
+              <span class="item-label">来週</span>
+              <span class="item-badge" id="badge-count-next_week">0</span>
+            </button>
+            <button class="sidebar-item bucket-item genius" data-bucket="genius" id="sb-genius" title="天才の閃き・ドーパミン着火箱（俺サイコー！ / D&Dで移動）">
+              <span class="item-icon">💡</span>
+              <span class="item-label">Genius Ideas</span>
+              <span class="item-badge" id="badge-count-genius">0</span>
+            </button>
+            <button class="sidebar-item bucket-item" data-bucket="someday" id="sb-someday" title="いつかやるアイデア (D&Dで移動)">
+              <span class="item-icon">⏳</span>
+              <span class="item-label">Someday</span>
+              <span class="item-badge" id="badge-count-someday">0</span>
+            </button>
+            <button class="sidebar-item bucket-item vault" data-bucket="vault" id="sb-vault" title="隔離・削除許容セーフティネット (D&Dで移動)">
+              <span class="item-icon">🗄️</span>
+              <span class="item-label">Vault (隔離)</span>
+              <span class="item-badge" id="badge-count-vault">0</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Eisenhower Labels Section -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">🏷️ アイゼンハワー分類</div>
+          <div class="sidebar-items-list">
+            <button class="sidebar-item label-item label-iron" data-label="iron_rule" id="sb-label-iron" title="目標達成のセンターピン！何をさしおいてもALL INする最重要タスク (D&Dでラベル付与)">
+              <span class="item-icon">🔥</span>
+              <span class="item-label">ALL - IN (センターピン)</span>
+              <span class="item-badge" id="badge-count-iron">0</span>
+            </button>
+            <button class="sidebar-item label-item label-frog0" data-label="frog0" id="sb-label-frog0" title="カエル × 重要（最重・最重要 / D&Dでラベル付与）">
+              <span class="item-icon">🐸</span>
+              <span class="item-label">第0 (カエル×重要)</span>
+              <span class="item-badge" id="badge-count-frog0">0</span>
+            </button>
+            <button class="sidebar-item label-item label-p1" data-label="p1" id="sb-label-p1" title="重要 × 緊急（当面の稼ぎ / D&Dでラベル付与）">
+              <span class="item-icon">💼</span>
+              <span class="item-label">第1 (重要/緊急)</span>
+              <span class="item-badge" id="badge-count-p1">0</span>
+            </button>
+            <button class="sidebar-item label-item label-p2" data-label="p2" id="sb-label-p2" title="重要 × 非緊急（将来の稼ぎ・仕組み化 / D&Dでラベル付与）">
+              <span class="item-icon">🌱</span>
+              <span class="item-label">第2 (計画/仕組み)</span>
+              <span class="item-badge" id="badge-count-p2">0</span>
+            </button>
+            <button class="sidebar-item label-item label-p3" data-label="p3" id="sb-label-p3" title="非重要 × 緊急（家事・雑務 / D&Dでラベル付与）">
+              <span class="item-icon">🧺</span>
+              <span class="item-label">第3 (家事/雑務)</span>
+              <span class="item-badge" id="badge-count-p3">0</span>
+            </button>
+            <button class="sidebar-item label-item label-p4" data-label="p4" id="sb-label-p4" title="非重要 × 非緊急（趣味・娯楽 / D&Dでラベル付与）">
+              <span class="item-icon">🎮</span>
+              <span class="item-label">第4 (趣味/娯楽)</span>
+              <span class="item-badge" id="badge-count-p4">0</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Viewport -->
+      <main class="main-content">
+        <!-- 1. Section List View (Plan A: Separated Tasks & Habits) -->
+        <section class="view-container active" id="view-section">
+          <!-- 0. Anytime / Unassigned Tasks Top Container -->
+          <div class="anytime-section-wrapper" id="anytime-section-block">
+            <div class="anytime-header-row">
+              <div class="anytime-title-group">
+                <span class="anytime-icon">📋</span>
+                <span class="anytime-title">いつでも / セクション未設定 (Anytime)</span>
+                <span class="anytime-count-badge" id="anytime-task-count">0件</span>
+              </div>
+              <div class="anytime-actions">
+                <button type="button" class="btn-anytime-add" onclick="openAddTaskModal(null, null, 'today', 'anytime')" title="セクション未設定タスクを追加">
+                  <span>＋</span> タスク追加
+                </button>
+              </div>
+            </div>
+            <div class="anytime-tasks-list" id="anytime-task-list">
+              <!-- Dynamic Render of Anytime Tasks -->
+            </div>
+          </div>
+
+          <div class="section-banner">
+            <div class="banner-info">
+              <div class="banner-title-line">
+                <h2 id="section-title">🌅 第1セッション (03:00 - 06:00)</h2>
+                <div class="section-eta-badge" id="section-eta-badge" title="このセクションの未完了アイテムを今すぐ順に実行した場合の終了見込み">
+                  <span class="eta-icon">⏱️</span>
+                  <span class="eta-label">残り:</span>
+                  <b class="eta-val" id="section-remain-minutes">0分</b>
+                  <span class="eta-arrow">➔</span>
+                  <span class="eta-label">終了見込み:</span>
+                  <b class="eta-val eta-highlight" id="section-eta-time">--:--</b>
+                </div>
+              </div>
+              <p id="section-desc">起床、静寂の自己投資、思考整理</p>
+            </div>
+            <div class="banner-right-area">
+              <div class="banner-actions">
+                <button class="btn-banner-add btn-banner-add-task" onclick="openAddTaskModal()" title="このセクションにタスクを追加">
+                  <span class="btn-icon">🎯</span> ＋ タスク追加
+                </button>
+                <button class="btn-banner-add btn-banner-add-habit" onclick="openAddModal()" title="ハビットを追加">
+                  <span class="btn-icon">🌿</span> ＋ ハビット追加
+                </button>
+              </div>
+              <div class="banner-stats">
+                <div class="section-stats-row">
+                  <span class="stat-tag task">🎯 タスク: <b id="section-task-progress">0/0</b></span>
+                  <span class="stat-tag habit">🌿 ハビット: <b id="section-habit-progress">0/0</b></span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill" id="section-progress-bar" style="width: 0%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Subgroups: Plan A -->
+          <div class="section-split-container">
+            <!-- Tasks Subgroup -->
+            <div class="section-subgroup" id="subgroup-section-tasks">
+              <div class="cards-list" id="section-task-list"
+                   ondragover="handleContainerDragOver(event)"
+                   ondragleave="handleContainerDragLeave(event)"
+                   ondrop="handleContainerDrop(event, state.currentSection, 'task')">
+                <!-- Dynamic Tasks Render -->
+              </div>
+            </div>
+
+            <!-- Habits Subgroup -->
+            <div class="section-subgroup" id="subgroup-section-habits">
+              <div class="cards-list" id="section-habit-list"
+                   ondragover="handleContainerDragOver(event)"
+                   ondragleave="handleContainerDragLeave(event)"
+                   ondrop="handleContainerDrop(event, state.currentSection, 'habit')">
+                <!-- Dynamic Habits Render -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Next 1 Focus View (Dual Focus: Left Task × Right Habit) -->
+        <section class="view-container" id="view-focus">
+          <div class="dual-focus-layout">
+            <!-- Left Pane: Next 1 Task -->
+            <div class="focus-pane" id="focus-pane-task">
+              <div class="focus-pane-header">
+                <span class="focus-pane-badge task">🎯 NEXT 1 タスク</span>
+                <span class="focus-pane-counter" id="focus-task-counter">1 / 1</span>
+              </div>
+              <div class="focus-card-wrapper" id="focus-task-card-container">
+                <!-- Dynamic Render of Next Task Card -->
+              </div>
+              <div class="focus-footer-controls">
+                <div class="focus-nav-btn prev" id="btn-focus-task-prev" title="前のタスク (Shift+K)">← 前へ</div>
+                <div class="focus-nav-btn next" id="btn-focus-task-next" title="次のタスク (Shift+J)">次へ →</div>
+              </div>
+            </div>
+
+            <!-- Right Pane: Next 1 Habit -->
+            <div class="focus-pane" id="focus-pane-habit">
+              <div class="focus-pane-header">
+                <span class="focus-pane-badge habit">🌿 NEXT 1 ハビット</span>
+                <span class="focus-pane-counter" id="focus-habit-counter">1 / 1</span>
+              </div>
+              <div class="focus-card-wrapper" id="focus-habit-card-container">
+                <!-- Dynamic Render of Next Habit Card -->
+              </div>
+              <div class="focus-footer-controls">
+                <div class="focus-nav-btn prev" id="btn-focus-habit-prev" title="前のハビット (K / ↑)">← 前へ <span class="kbd-hint">K</span></div>
+                <div class="focus-nav-btn next" id="btn-focus-habit-next" title="次のハビット (J / ↓)">次へ → <span class="kbd-hint">J</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. All Today View (Today Screen with Section Groups) -->
+        <section class="view-container" id="view-all">
+          <div class="all-header">
+            <h2>📋 デイリー (Daily Timeline)</h2>
+            <div class="all-stats" id="all-stats-summary">
+              タスク: <b id="stat-tasks-summary">0 / 0</b> | ハビット: <b id="stat-habits-summary">0 / 0</b> | 総達成率: <b id="stat-rate-text">0%</b>
+            </div>
+          </div>
+
+          <!-- 0. Anytime / Unassigned Tasks Container in Daily View -->
+          <div class="anytime-section-wrapper" id="anytime-daily-block">
+            <div class="anytime-header-row">
+              <div class="anytime-title-group">
+                <span class="anytime-icon">📋</span>
+                <span class="anytime-title">いつでも / セクション未設定 (Anytime)</span>
+                <span class="anytime-count-badge" id="anytime-daily-count">0件</span>
+              </div>
+              <div class="anytime-actions">
+                <button type="button" class="btn-anytime-add" onclick="openAddTaskModal(null, null, 'today', 'anytime')" title="セクション未設定タスクを追加">
+                  <span>＋</span> タスク追加
+                </button>
+              </div>
+            </div>
+            <div class="anytime-tasks-list" id="anytime-daily-list">
+              <!-- Dynamic Render of Anytime Tasks -->
+            </div>
+          </div>
+
+          <div class="today-groups-container" id="all-today-groups">
+            <!-- Dynamic Render grouped by section with tasks and habits -->
+          </div>
+        </section>
+
+        <!-- 4. Master Management Table View (Habits & Recurring Tasks) -->
+        <section class="view-container" id="view-table">
+          <div class="table-tab-switch">
+            <button class="table-subtab active" data-subtab="habits" id="subtab-habits">🌿 ハビット一覧 (習慣マスター)</button>
+            <button class="table-subtab" data-subtab="tasks" id="subtab-tasks">🎯 定期タスク一覧 (定期配信マスター)</button>
+            <button class="table-subtab" data-subtab="single_tasks" id="subtab-single-tasks">📋 単発タスク一覧 (全履歴・予定)</button>
+          </div>
+
+          <!-- 4-A. Habits Master Table -->
+          <div class="master-subview" id="master-habits-view">
+            <div class="table-control-header">
+              <div class="table-title-area">
+                <h2>🌿 ハビット管理台帳</h2>
+                <span class="badge-count" id="table-total-count">0件</span>
+              </div>
+              <div class="table-sort-controls">
+                <span class="sort-label">並び替え:</span>
+                <div class="sort-select-wrapper">
+                  <select id="table-sort-select" class="sort-select">
+                    <option value="default">標準（ドメイン ➔ PJ ➔ 部門 ➔ 時間帯）</option>
+                    <option value="created_desc">🆕 登録が新しい順（直近追加した順）</option>
+                    <option value="created_asc">📜 登録が古い順（初期登録順）</option>
+                    <option value="domain">ドメイン順</option>
+                    <option value="proj">プロジェクト順</option>
+                    <option value="dept">部門順</option>
+                    <option value="time">開始時刻順</option>
+                    <option value="name">ハビット名（50音順）</option>
+                    <option value="rate7">直近7日実行率順</option>
+                    <option value="rate30">直近30日実行率順</option>
+                  </select>
+                </div>
+                <button class="btn-sort-order" id="btn-sort-order" title="昇順/降順切替">
+                  <span id="sort-order-icon">▲ 昇順</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="habit-table-wrapper">
+              <div class="habit-table-head">
+                <div class="col-head col-num sortable" data-sort="created" title="クリックで登録順ソート切替">No. <span class="sort-indicator"></span></div>
+                <div class="col-head col-name sortable" data-sort="name">ハビット名 <span class="sort-indicator"></span></div>
+                <div class="col-head col-domain sortable" data-sort="domain">ドメイン <span class="sort-indicator"></span></div>
+                <div class="col-head col-proj sortable" data-sort="proj">プロジェクト <span class="sort-indicator"></span></div>
+                <div class="col-head col-dept sortable" data-sort="dept">部門 <span class="sort-indicator"></span></div>
+                <div class="col-head col-rec">定期</div>
+                <div class="col-head col-timing sortable" data-sort="time">タイミング <span class="sort-indicator"></span></div>
+                <div class="col-head col-min">目安</div>
+                <div class="col-head col-load">負荷</div>
+                <div class="col-head col-stats">
+                  <div class="stats-head-title">達成度（実行率）</div>
+                  <div class="stats-head-sub">
+                    <span>3日</span>
+                    <span>7日</span>
+                    <span>30日</span>
+                    <span>90日</span>
+                  </div>
+                </div>
+              </div>
+              <div class="habit-table-body" id="habit-table-body">
+                <!-- Dynamic Render -->
+              </div>
+            </div>
+          </div>
+
+          <!-- 4-B. Recurring Tasks Master Table -->
+          <div class="master-subview hidden" id="master-tasks-view">
+            <div class="table-control-header">
+              <div class="table-title-area">
+                <h2>🎯 定期タスク台帳 (リピート配信マスター)</h2>
+                <span class="badge-count" id="table-recurring-tasks-count">0件</span>
+              </div>
+              <button class="btn-add-primary" onclick="openAddTaskModal('section', true)">➕ 定期タスク登録</button>
+            </div>
+
+            <div class="habit-table-wrapper">
+              <div class="task-table-head">
+                <div class="col-head col-num">No.</div>
+                <div class="col-head col-name">タスク名</div>
+                <div class="col-head col-label">アイゼンハワー</div>
+                <div class="col-head col-domain">ドメイン / PJ</div>
+                <div class="col-head col-rec">配信定期</div>
+                <div class="col-head col-timing">セクション / 時間帯</div>
+                <div class="col-head col-min">見積</div>
+                <div class="col-head col-load">カエル</div>
+              </div>
+              <div class="task-table-body" id="recurring-task-table-body">
+                <!-- Dynamic Render of Recurring Tasks -->
+              </div>
+            </div>
+          </div>
+
+          <!-- 4-C. Single Tasks Master Table -->
+          <div class="master-subview hidden" id="master-single-tasks-view">
+            <div class="table-control-header">
+              <div class="table-title-area">
+                <h2>📋 単発タスク台帳 (全タスク履歴・予定)</h2>
+                <span class="badge-count" id="table-single-tasks-count">0件</span>
+              </div>
+              <button class="btn-add-primary" onclick="openAddTaskModal()">➕ 単発タスク登録</button>
+            </div>
+
+            <div class="habit-table-wrapper single-task-table-wrapper" id="single-task-table-wrapper">
+              <div class="single-task-table-head">
+                <div class="col-head col-date">完了日 / 予定日</div>
+                <div class="col-head col-num">No.</div>
+                <div class="col-head col-name">タスク名</div>
+                <div class="col-head col-label">アイゼンハワー</div>
+                <div class="col-head col-domain">ドメイン / PJ</div>
+                <div class="col-head col-timing">セクション / 時間</div>
+                <div class="col-head col-min">見積 / 実績</div>
+                <div class="col-head col-status">状態</div>
+              </div>
+              <div class="single-task-table-body" id="single-task-table-body">
+                <!-- Dynamic Render of Single Tasks -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Sidebar Bucket / Label View (Inbox, This Week, Next Week, Genius, Someday, Vault, Labels) -->
+        <section class="view-container" id="view-bucket">
+          <div class="bucket-view-header">
+            <div class="bucket-header-info">
+              <h2 id="bucket-view-title">📥 Inbox 一覧</h2>
+              <p id="bucket-view-desc">思いついたタスクを一時保管する場所（ドラッグ＆ドロップで移動可能）</p>
+            </div>
+            <div class="bucket-actions">
+              <button class="btn-add-primary" id="btn-add-task-to-bucket" onclick="openAddTaskModal()">➕ この箱にタスク追加</button>
+              <button class="btn-secondary" id="btn-back-to-today" onclick="setMode('section')">⚡ 今日の実行画面に戻る (3)</button>
+            </div>
+          </div>
+          <div class="cards-list bucket-cards-list" id="bucket-task-list">
+            <!-- Dynamic Render of bucket tasks -->
+          </div>
+        </section>
+
+        <!-- 6. Goals & Vision View (Weekly, Monthly, Half-Year, 3-Year Phase & Core Manifesto) -->
+        <section class="view-container" id="view-goals">
+          <!-- Front Subview: 4-Level Goals Grid -->
+          <div class="goals-subview active" id="goals-front-view">
+            <div class="goals-front-toolbar">
+              <div class="goals-view-indicator">
+                <span class="indicator-dot"></span>
+                <span class="indicator-text">4大タイムスケール目標進捗</span>
+              </div>
+              <button type="button" class="btn-flip-to-manifesto" onclick="toggleGoalsSubmode()" title="裏画面：魂の宣誓・根本決意を開く (5)">
+                🔥 魂の宣誓 (マニフェスト) へ <span class="kbd-sub">5</span>
+              </button>
+            </div>
+
+            <div class="goals-grid-2x2">
+              <!-- 1. Weekly Goal (Top-Left) -->
+              <div class="goal-card goal-card-weekly" id="goal-card-weekly">
+                <div class="goal-card-header">
+                  <div class="goal-title-group">
+                    <span class="goal-level-badge badge-weekly">週次目標</span>
+                    <span class="goal-period-text" id="goal-weekly-period">今週</span>
+                  </div>
+                  <div class="goal-header-actions">
+                    <button type="button" class="btn-goal-obsidian" id="btn-goal-weekly-obsidian" title="Obsidianノートを開く">💎 ノート</button>
+                    <button type="button" class="btn-goal-quick-edit" onclick="openEditGoalsModal('weekly')" title="週次目標を編集">✏️ 編集</button>
+                  </div>
+                </div>
+                
+                <!-- Scale Bar -->
+                <div class="goal-scale-container">
+                  <div class="goal-scale-info">
+                    <span class="goal-scale-days" id="goal-weekly-days-info">7日中 1日目</span>
+                    <span class="goal-scale-percent" id="goal-weekly-percent">14% 経過 (残り 6日)</span>
+                  </div>
+                  <div class="goal-scale-track">
+                    <div class="goal-scale-fill fill-weekly" id="goal-weekly-scale-fill" style="width: 14%;"></div>
+                  </div>
+                </div>
+
+                <!-- Goal Text Content -->
+                <div class="goal-content-body" id="goal-weekly-content">
+                  <!-- Dynamic Lines -->
+                </div>
+              </div>
+
+              <!-- 2. Monthly Goal (Top-Right) -->
+              <div class="goal-card goal-card-monthly" id="goal-card-monthly">
+                <div class="goal-card-header">
+                  <div class="goal-title-group">
+                    <span class="goal-level-badge badge-monthly">月次目標</span>
+                    <span class="goal-period-text" id="goal-monthly-period">今月</span>
+                  </div>
+                  <div class="goal-header-actions">
+                    <button type="button" class="btn-goal-obsidian" id="btn-goal-monthly-obsidian" title="Obsidianノートを開く">💎 ノート</button>
+                    <button type="button" class="btn-goal-quick-edit" onclick="openEditGoalsModal('monthly')" title="月次目標を編集">✏️ 編集</button>
+                  </div>
+                </div>
+                
+                <!-- Scale Bar -->
+                <div class="goal-scale-container">
+                  <div class="goal-scale-info">
+                    <span class="goal-scale-days" id="goal-monthly-days-info">31日中 17日目</span>
+                    <span class="goal-scale-percent" id="goal-monthly-percent">55% 経過 (残り 14日)</span>
+                  </div>
+                  <div class="goal-scale-track">
+                    <div class="goal-scale-fill fill-monthly" id="goal-monthly-scale-fill" style="width: 55%;"></div>
+                  </div>
+                </div>
+
+                <div class="goal-content-body" id="goal-monthly-content">
+                  <!-- Dynamic Lines -->
+                </div>
+              </div>
+
+              <!-- 3. Half-Year Goal (Bottom-Left) -->
+              <div class="goal-card goal-card-half" id="goal-card-half">
+                <div class="goal-card-header">
+                  <div class="goal-title-group">
+                    <span class="goal-level-badge badge-half">ハーフ目標</span>
+                    <span class="goal-period-text" id="goal-half-period">半期</span>
+                  </div>
+                  <div class="goal-header-actions">
+                    <button type="button" class="btn-goal-obsidian" id="btn-goal-half-obsidian" title="Obsidianノートを開く">💎 ノート</button>
+                    <button type="button" class="btn-goal-quick-edit" onclick="openEditGoalsModal('half')" title="ハーフ目標を編集">✏️ 編集</button>
+                  </div>
+                </div>
+                
+                <!-- Scale Bar -->
+                <div class="goal-scale-container">
+                  <div class="goal-scale-info">
+                    <span class="goal-scale-days" id="goal-half-days-info">184日中 48日目</span>
+                    <span class="goal-scale-percent" id="goal-half-percent">26% 経過 (残り 136日)</span>
+                  </div>
+                  <div class="goal-scale-track">
+                    <div class="goal-scale-fill fill-half" id="goal-half-scale-fill" style="width: 26%;"></div>
+                  </div>
+                </div>
+
+                <div class="goal-content-body" id="goal-half-content">
+                  <!-- Dynamic Lines -->
+                </div>
+              </div>
+
+              <!-- 4. 3-Year Phase Goal (Bottom-Right) -->
+              <div class="goal-card goal-card-phase" id="goal-card-phase">
+                <div class="goal-card-header">
+                  <div class="goal-title-group">
+                    <span class="goal-level-badge badge-phase">フェイズ目標</span>
+                    <span class="goal-period-text" id="goal-phase-period">第1フェイズ</span>
+                  </div>
+                  <div class="goal-header-actions">
+                    <button type="button" class="btn-goal-obsidian" id="btn-goal-phase-obsidian" title="Obsidianノートを開く">💎 ノート</button>
+                    <button type="button" class="btn-goal-quick-edit" onclick="openEditGoalsModal('phase')" title="フェイズ目標を編集">✏️ 編集</button>
+                  </div>
+                </div>
+                
+                <!-- Scale Bar -->
+                <div class="goal-scale-container">
+                  <div class="goal-scale-info">
+                    <span class="goal-scale-days" id="goal-phase-days-info">1095日中 594日目</span>
+                    <span class="goal-scale-percent" id="goal-phase-percent">54% 経過 (残り 501日)</span>
+                  </div>
+                  <div class="goal-scale-track">
+                    <div class="goal-scale-fill fill-phase" id="goal-phase-scale-fill" style="width: 54%;"></div>
+                  </div>
+                </div>
+
+                <div class="goal-content-body" id="goal-phase-content">
+                  <!-- Dynamic Lines -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Back Subview: Special Core Manifesto (魂の宣誓・根本決意) -->
+          <div class="goals-subview" id="goals-back-view">
+            <div class="manifesto-stage">
+              <div class="manifesto-card">
+                <!-- Cosmic Stardust & Aura Elements -->
+                <div class="manifesto-aura-glow"></div>
+                <div class="manifesto-corner top-left"></div>
+                <div class="manifesto-corner top-right"></div>
+                <div class="manifesto-corner bottom-left"></div>
+                <div class="manifesto-corner bottom-right"></div>
+
+                <div class="manifesto-top-bar">
+                  <div class="manifesto-brand-badge">
+                    <span class="manifesto-emblem">⚜️</span>
+                    <span class="manifesto-subhead">CORE MANIFESTO & ABSOLUTE PRINCIPLES</span>
+                  </div>
+                  <div class="manifesto-actions">
+                    <button type="button" class="btn-manifesto-edit" id="btn-edit-manifesto" onclick="openEditManifestoModal()" title="決意文を編集">✏️ 決意文を編集</button>
+                    <button type="button" class="btn-manifesto-flip" onclick="toggleGoalsSubmode()" title="4大目標進捗画面に戻る (5)">📊 4大目標進捗へ <span class="kbd-sub">5</span></button>
+                  </div>
+                </div>
+
+                <div class="manifesto-header-block">
+                  <h1 class="manifesto-title" id="manifesto-display-title">我が人生の絶対原則・魂の宣誓</h1>
+                  <div class="manifesto-divider">
+                    <span class="divider-line"></span>
+                    <span class="divider-gem">✦ ✦ ✦</span>
+                    <span class="divider-line"></span>
+                  </div>
+                </div>
+
+                <div class="manifesto-quote-container">
+                  <div class="manifesto-quote-mark left">“</div>
+                  <div class="manifesto-body" id="manifesto-display-body">
+                    <!-- Dynamic Parsed Manifesto Text -->
+                  </div>
+                  <div class="manifesto-quote-mark right">”</div>
+                </div>
+
+                <div class="manifesto-footer-sign">
+                  <div class="manifesto-sign-line"></div>
+                  <div class="manifesto-sign-text">
+                    <span class="sign-label">DECLARATION FOR LIFE & MISSION</span>
+                    <span class="sign-motto" id="manifesto-display-motto">“恐れを突破し、己の真価を解き放て”</span>
+                  </div>
+                </div>
+
+                <div class="manifesto-nav-hint">
+                  <span>💡 <b>[ 5 ] キー</b> を押すといつでも【4大目標進捗 ⇄ 魂の宣誓】がトグル切り替えされます</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7. Timer & Cockpit View (Pomodoro & Quick Timers) -->
+        <section class="view-container" id="view-timer">
+          <div class="timer-view-wrapper">
+            <!-- 1. Default Idle Stage (When no active timer is selected) -->
+            <div class="timer-idle-stage" id="timer-idle-stage">
+              <div class="idle-emblem">⏱️</div>
+              <h2 class="idle-title">タイマー待機中</h2>
+              <p class="idle-desc">下のデッキをクリックするか、数字キー <kbd class="kbd-sub">0 ~ 9</kbd> を押すと即座にタイマーが開始します</p>
+              <div class="idle-quick-hints">
+                <span class="hint-pill" onclick="startPresetTimer('pomodoro')"><kbd>0</kbd> 🍅 ポモドーロ (25分)</span>
+                <span class="hint-pill" onclick="startPresetTimer(5)"><kbd>3</kbd> ⚡ 5分タイマー</span>
+                <span class="hint-pill" onclick="startPresetTimer(15)"><kbd>6</kbd> ⚡ 15分タイマー</span>
+                <span class="hint-pill" onclick="startPresetTimer(30)"><kbd>7</kbd> ⚡ 30分タイマー</span>
+              </div>
+            </div>
+
+            <!-- 2. Active Timer Cockpit Panel (Hidden by default until started) -->
+            <div class="timer-cockpit-stage hidden" id="timer-cockpit-stage">
+              <div class="timer-stage-ambient" id="timer-stage-ambient"></div>
+              
+              <div class="timer-cockpit-header">
+                <div class="timer-badge-group">
+                  <span class="timer-type-badge" id="timer-active-type-badge">🍅 ポモドーロタイマー</span>
+                  <span class="timer-set-badge" id="timer-active-set-badge">Set 1 / 4</span>
+                </div>
+                <div class="timer-cockpit-actions">
+                  <button type="button" class="btn-timer-sound-test" id="btn-timer-sound-test" onclick="playTimerAlarmSound()" title="アラーム音の試聴">🔊 サウンドテスト</button>
+                  <button type="button" class="btn-timer-stop-top" onclick="stopAndResetToIdle()" title="タイマーを終了して待機画面へ (Esc)">⏹️ 終了して待機画面へ <span class="kbd-sub">Esc</span></button>
+                </div>
+              </div>
+
+              <!-- Main State Label (全集中 / 体動かして 呼吸を数えて / 休憩) -->
+              <div class="timer-state-banner" id="timer-state-banner">
+                <div class="timer-state-icon" id="timer-state-icon">🔥</div>
+                <h1 class="timer-state-title" id="timer-state-title">全集中</h1>
+                <p class="timer-state-sub" id="timer-state-sub">ゾーンに入り、目の前の1点に全神経を注ぎ込め</p>
+              </div>
+
+              <!-- Giant Neon Digital Clock -->
+              <div class="timer-digital-display" id="timer-digital-display">
+                <div class="timer-digits-wrapper">
+                  <span class="timer-digits" id="timer-display-digits">25:00</span>
+                  <span class="timer-digits-ms" id="timer-display-ms">.00</span>
+                </div>
+              </div>
+
+              <!-- Live Timescale Gauge -->
+              <div class="timer-scale-wrapper">
+                <div class="timer-scale-meta">
+                  <span class="timer-scale-elapsed" id="timer-scale-elapsed">経過: 00:00</span>
+                  <span class="timer-scale-percent" id="timer-scale-percent">進捗: 0%</span>
+                  <span class="timer-scale-remain" id="timer-scale-remain">残り: 25:00</span>
+                </div>
+                <div class="timer-scale-track">
+                  <div class="timer-scale-fill" id="timer-scale-fill" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <!-- Controls Bar -->
+              <div class="timer-controls-bar">
+                <button type="button" class="btn-timer-ctrl btn-timer-toggle" id="btn-timer-toggle" onclick="toggleActiveTimer()">
+                  <span id="timer-toggle-icon">▶</span> <span id="timer-toggle-label">スタート</span> <span class="kbd-sub">Space</span>
+                </button>
+                <button type="button" class="btn-timer-ctrl btn-timer-reset" id="btn-timer-reset" onclick="resetActiveTimer()" title="リセット (R)">
+                  <span>↩️</span> リセット <span class="kbd-sub">R</span>
+                </button>
+                <button type="button" class="btn-timer-ctrl btn-timer-stop" id="btn-timer-stop" onclick="stopAndResetToIdle()" title="終了して待機画面へ (Esc)">
+                  <span>⏹️</span> 終了 <span class="kbd-sub">Esc</span>
+                </button>
+                <button type="button" class="btn-timer-ctrl btn-timer-skip hidden" id="btn-timer-skip" onclick="skipActiveTimerStep()" title="次のフェーズへスキップ (Enter)">
+                  <span>⏭️</span> スキップ <span class="kbd-sub">Enter</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Timer Selector Deck (10 Quick Launch Cards) -->
+            <div class="timer-deck-section">
+              <div class="timer-deck-header">
+                <div class="timer-deck-title">
+                  <h2>⚡ タイマーセレクター</h2>
+                  <span class="deck-hint">数字キー [ 0 ~ 9 ] で一発即時スタート</span>
+                </div>
+              </div>
+
+              <div class="timer-deck-grid">
+                <!-- 0: Pomodoro -->
+                <div class="timer-deck-card card-pomodoro active-preset" id="deck-card-0" onclick="startPresetTimer('pomodoro')">
+                  <div class="card-shortcut-badge">0</div>
+                  <div class="card-icon">🍅</div>
+                  <div class="card-main">
+                    <div class="card-title">ポモドーロ</div>
+                    <div class="card-desc">25m 全集中 ⇄ 5m 呼吸 / 15m 休憩</div>
+                  </div>
+                </div>
+
+                <!-- 1: 1 Min -->
+                <div class="timer-deck-card" id="deck-card-1" onclick="startPresetTimer(1)">
+                  <div class="card-shortcut-badge">1</div>
+                  <div class="card-icon">⚡</div>
+                  <div class="card-main">
+                    <div class="card-title">1分タイマー</div>
+                    <div class="card-desc">超速スタート・即時着火</div>
+                  </div>
+                </div>
+
+                <!-- 2: 3 Min -->
+                <div class="timer-deck-card" id="deck-card-2" onclick="startPresetTimer(3)">
+                  <div class="card-shortcut-badge">2</div>
+                  <div class="card-icon">⚡</div>
+                  <div class="card-main">
+                    <div class="card-title">3分タイマー</div>
+                    <div class="card-desc">カップ麺・プチ呼吸</div>
+                  </div>
+                </div>
+
+                <!-- 3: 5 Min -->
+                <div class="timer-deck-card" id="deck-card-3" onclick="startPresetTimer(5)">
+                  <div class="card-shortcut-badge">3</div>
+                  <div class="card-icon">⚡</div>
+                  <div class="card-main">
+                    <div class="card-title">5分タイマー</div>
+                    <div class="card-desc">ショートブレイク・瞑想</div>
+                  </div>
+                </div>
+
+                <!-- 4: 8 Min -->
+                <div class="timer-deck-card" id="deck-card-4" onclick="startPresetTimer(8)">
+                  <div class="card-shortcut-badge">4</div>
+                  <div class="card-icon">⚡</div>
+                  <div class="card-main">
+                    <div class="card-title">8分タイマー</div>
+                    <div class="card-desc">HIIT・ショートダッシュ</div>
+                  </div>
+                </div>
+
+                <!-- 5: 10 Min -->
+                <div class="timer-deck-card" id="deck-card-5" onclick="startPresetTimer(10)">
+                  <div class="card-shortcut-badge">5</div>
+                  <div class="card-icon">⚡</div>
+                  <div class="card-main">
+                    <div class="card-title">10分タイマー</div>
+                    <div class="card-desc">部屋片付け・ミニタスク</div>
+                  </div>
+                </div>
+
+                <!-- 6: 15 Min -->
+                <div class="timer-deck-card" id="deck-card-6" onclick="startPresetTimer(15)">
+                  <div class="card-shortcut-badge">6</div>
+                  <div class="card-icon">⚡</div>
+                  <div class="card-main">
+                    <div class="card-title">15分タイマー</div>
+                    <div class="card-desc">ロング休憩・標準タスク</div>
+                  </div>
+                </div>
+
+                <!-- 7: 30 Min -->
+                <div class="timer-deck-card" id="deck-card-7" onclick="startPresetTimer(30)">
+                  <div class="card-shortcut-badge">7</div>
+                  <div class="card-icon">⚡</div>
+                  <div class="card-main">
+                    <div class="card-title">30分タイマー</div>
+                    <div class="card-desc">1セッション集中ワーク</div>
+                  </div>
+                </div>
+
+                <!-- 8: 60 Min -->
+                <div class="timer-deck-card" id="deck-card-8" onclick="startPresetTimer(60)">
+                  <div class="card-shortcut-badge">8</div>
+                  <div class="card-icon">⚡</div>
+                  <div class="card-main">
+                    <div class="card-title">60分タイマー</div>
+                    <div class="card-desc">本格ディープワーク・講義</div>
+                  </div>
+                </div>
+
+                <!-- 9: Custom Timer -->
+                <div class="timer-deck-card card-custom" id="deck-card-9">
+                  <div class="card-shortcut-badge">9</div>
+                  <div class="card-icon">⚙️</div>
+                  <div class="card-main">
+                    <div class="card-title">時間設定タイマー</div>
+                    <div class="custom-input-row" onclick="event.stopPropagation()">
+                      <input type="number" id="custom-timer-minutes" class="input-custom-min" min="1" max="999" value="20" placeholder="分">
+                      <span class="custom-unit">分</span>
+                      <button type="button" class="btn-custom-start" onclick="startCustomTimer()">▶ スタート <span class="kbd-sub">9</span></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Bottom Status Bar -->
+    <footer class="app-status-bar">
+      <div class="status-left">
+        <span class="status-badge active-habit-indicator" id="status-active-habit">
+          <span class="active-pulse"></span>
+          進行中: <b id="active-habit-name">なし</b>
+        </span>
+      </div>
+      <div class="status-center">
+        <span class="hint-text"><kbd>Space</kbd> 開始/完了 &nbsp;|&nbsp; <kbd>J</kbd>/<kbd>K</kbd> 移動 &nbsp;|&nbsp; <kbd>1</kbd>〜<kbd>5</kbd> ビュー &nbsp;|&nbsp; <kbd>←</kbd>/<kbd>→</kbd> 日付 &nbsp;|&nbsp; <kbd>↑</kbd>/<kbd>↓</kbd> セクション</span>
+      </div>
+      <div class="status-right">
+        <span class="sync-status" id="sync-status">🟢 ローカル同期完了</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Modal: Shortcut Help -->
+  <div class="modal-overlay" id="modal-shortcuts">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⌨️ キーボードショートカット一覧</h3>
+        <button class="modal-close" id="btn-close-shortcuts">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcut-grid">
+          <div class="shortcut-item"><kbd>1</kbd><span>セクション（連打で状態トグル: 未完⇄全件⇄完了）</span></div>
+          <div class="shortcut-item"><kbd>2</kbd><span>フォーカス（連打で没入トグル: タスク⇄ハビット⇄両方 / サイドバー自動収納）</span></div>
+          <div class="shortcut-item"><kbd>3</kbd><span>デイリー（連打で状態トグル: 未完⇄全件⇄完了）</span></div>
+          <div class="shortcut-item"><kbd>4</kbd><span>マスター（連打で台帳トグル: ハビット⇄定期タスク / 広々全幅）</span></div>
+          <div class="shortcut-item"><kbd>5</kbd><span><b>ビジョン（5キーでトグル: 4大目標 ⇄ 🔥 魂の宣誓マニフェスト）</b></span></div>
+          <div class="shortcut-item"><kbd>[</kbd> / <kbd>]</kbd><span><b>サイドバーの表示 ⇄ 非表示トグル</b></span></div>
+          <div class="shortcut-item"><kbd>Ctrl+Enter</kbd><span><b>全ダイアログの入力確定・即時保存</b></span></div>
+          <div class="shortcut-item"><kbd>0</kbd> / <kbd>Home</kbd><span><b>今日の日付へ瞬時に戻る</b></span></div>
+          <div class="shortcut-item"><kbd>←</kbd> / <kbd>→</kbd><span><b>日付の移動</b>（過去日 ⇄ 今日側）</span></div>
+          <div class="shortcut-item"><kbd>↑</kbd> / <kbd>↓</kbd><span><b>セクションの移動</b>（前の時間 ⇄ 次の時間）</span></div>
+          <div class="shortcut-item"><kbd>V</kbd><span><b>表示切替</b>（すべて ⇄ タスク ⇄ ハビット）</span></div>
+          <div class="shortcut-item"><kbd>P</kbd><span>⚡ <b>プリセットタスク呼出（画面内: 1~0で即時実行 / Pで新規作成）</b></span></div>
+          <div class="shortcut-item"><kbd>T</kbd><span>🎯 新しいタスクを追加</span></div>
+          <div class="shortcut-item"><kbd>N</kbd><span>🌿 新しいハビットを追加</span></div>
+          <div class="shortcut-item"><kbd>Space</kbd> / <kbd>Enter</kbd><span>タスク/ハビットの [開始] ⇄ [完了]</span></div>
+          <div class="shortcut-item"><kbd>S</kbd><span>選択中ハビットを [スキップ]</span></div>
+          <div class="shortcut-item"><kbd>J</kbd> / <kbd>K</kbd><span>リスト内のカーソル選択移動</span></div>
+          <div class="shortcut-item"><kbd>Tab</kbd><span>未完了のみ ⇄ 完了済み含む 切替</span></div>
+          <div class="shortcut-item"><kbd>D</kbd><span>ドメインフィルタ（大分類→中分類）</span></div>
+          <div class="shortcut-item"><kbd>B</kbd><span>部門フィルタ（本部→部門）</span></div>
+          <div class="shortcut-item"><kbd>F</kbd><span>プロジェクトフィルタ</span></div>
+          <div class="shortcut-item"><kbd>R</kbd><span><b>🔄 データ即時リロード・完全同期（F5より高速）</b></span></div>
+          <div class="shortcut-item"><kbd>Esc</kbd><span>フィルタ全解除 / モーダルを閉じる</span></div>
+          <div class="shortcut-item"><kbd>?</kbd><span>ショートカット一覧表示</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Carryover Review & Selective Import -->
+  <div class="modal-overlay" id="modal-carryover">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <h3>📥 昨日までの未完了タスクの取り込み・再計画</h3>
+        <button class="modal-close" id="btn-close-carryover">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px;">
+          過去にやり残した未完了タスクです。今日の現在セクションに取り込むか、別のセクション・いつでも・別の日へ柔軟に再計画できます。
+        </p>
+        <div class="carryover-list-container" id="carryover-tasks-list">
+          <!-- Dynamic tasks rendered here -->
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; border-top: 1px solid var(--border-light); padding-top: 14px;">
+          <button class="btn-secondary" id="btn-carryover-move-inbox">📦 すべてInboxへ移動</button>
+          <button class="btn-primary" id="btn-carryover-modal-all-sec">⚡ すべて現在のセクションに取り込む</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cascade Filter (Domain / Dept / Proj) -->
+  <div class="modal-overlay" id="modal-filter">
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <h3 id="modal-filter-title">🔍 絞り込み</h3>
+        <button class="modal-close" id="btn-close-filter">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="cascade-filter-layout">
+          <div class="cascade-col" id="filter-col-major">
+            <div class="cascade-col-header">大分類</div>
+            <div class="cascade-list" id="filter-major-list"></div>
+          </div>
+          <div class="cascade-col" id="filter-col-minor">
+            <div class="cascade-col-header">詳細項目</div>
+            <div class="cascade-list" id="filter-minor-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add New Habit (with 3-Way Timing Select) -->
+  <div class="modal-overlay" id="modal-add-habit">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <h3>➕ 新規ハビット登録</h3>
+        <div class="modal-header-actions">
+          <button type="submit" form="form-add-habit" class="btn-primary btn-header-save" title="新規登録 (Enter)">➕ 登録する</button>
+          <button class="modal-close" id="btn-close-add">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <form id="form-add-habit">
+          <!-- Top Full Width: Habit Name -->
+          <div class="modal-form-top-title">
+            <input type="text" id="add-habit-name" required placeholder="⚡ ハビット名を入力... (例: 朝スクワット50回, プログラミング学習)">
+          </div>
+
+          <div class="modal-form-2col">
+            <!-- Left Column: Timing, Recurrence, Cascade Selects -->
+            <div class="modal-form-col">
+              <!-- 3-Way Timing Selector -->
+              <div class="form-group">
+                <label>⏰ 表示タイミング設定 *</label>
+                <div class="segmented-control" id="timing-type-selector">
+                  <button type="button" class="segment-btn" data-type="anytime">🌐 いつでも (終日)</button>
+                  <button type="button" class="segment-btn active" data-type="section">⏱️ セクション指定</button>
+                  <button type="button" class="segment-btn" data-type="custom">⏰ カスタム時間帯</button>
+                </div>
+              </div>
+
+              <!-- Dynamic Timing Sub-inputs -->
+              <div class="form-group timing-subpanel" id="panel-timing-section">
+                <select id="add-habit-section">
+                  <option value="第1セッション">🌅 第1セッション (03:00 - 06:00)</option>
+                  <option value="朝オペ">🍳 朝オペ (06:00 - 08:30)</option>
+                  <option value="第2セッション" selected>⚡ 第2セッション (08:30 - 12:00)</option>
+                  <option value="第3セッション">🛠️ 第3セッション (12:00 - 17:00)</option>
+                  <option value="夜オペ">🍲 夜オペ (17:00 - 21:00)</option>
+                  <option value="第4セッション">🌙 第4セッション (21:00 - 23:00)</option>
+                </select>
+              </div>
+
+              <div class="form-group timing-subpanel hidden" id="panel-timing-custom">
+                <div class="time-range-inputs">
+                  <input type="time" id="add-custom-start" value="13:00">
+                  <span>〜</span>
+                  <input type="time" id="add-custom-end" value="17:00">
+                </div>
+              </div>
+
+              <!-- Recurrence (Repeat Pattern) Selector -->
+              <div class="form-group">
+                <label>🔄 定期配信（リピート）設定 *</label>
+                <div class="segmented-control recurrence-segmented" id="add-recurrence-type-selector">
+                  <button type="button" class="segment-btn active" data-type="everyday">🌐 毎日</button>
+                  <button type="button" class="segment-btn" data-type="daily_times">⚡ 1日〜回</button>
+                  <button type="button" class="segment-btn" data-type="business_days">💼 平日</button>
+                  <button type="button" class="segment-btn" data-type="weekends">🌴 週末</button>
+                  <button type="button" class="segment-btn" data-type="custom_days">🗓️ 曜日</button>
+                  <button type="button" class="segment-btn" data-type="weekly_goal">🎯 週N回</button>
+                  <button type="button" class="segment-btn" data-type="interval">⏳ 間隔</button>
+                  <button type="button" class="segment-btn" data-type="monthly">📅 月次</button>
+                </div>
+              </div>
+
+              <!-- Dynamic Recurrence Sub-panels -->
+              <div class="form-group recurrence-subpanel hidden" id="add-panel-rec-daily-times">
+                <label>⚡ 1日の目標達成回数（マルチカウント実行）</label>
+                <div class="interval-input-row">
+                  <span class="subpanel-hint">1日に</span>
+                  <input type="number" id="add-rec-daily-times" min="1" max="20" value="2" class="num-compact-input">
+                  <span class="subpanel-hint">回達成するまで出続ける（回数カウント表示）</span>
+                </div>
+              </div>
+
+              <div class="form-group recurrence-subpanel hidden" id="add-panel-rec-custom-days">
+                <label>配信する曜日を選択（複数選択可）</label>
+                <div class="weekday-pills" id="add-weekday-pills">
+                  <button type="button" class="weekday-pill active" data-day="1">月</button>
+                  <button type="button" class="weekday-pill active" data-day="2">火</button>
+                  <button type="button" class="weekday-pill active" data-day="3">水</button>
+                  <button type="button" class="weekday-pill active" data-day="4">木</button>
+                  <button type="button" class="weekday-pill active" data-day="5">金</button>
+                  <button type="button" class="weekday-pill sat" data-day="6">土</button>
+                  <button type="button" class="weekday-pill sun" data-day="0">日</button>
+                </div>
+              </div>
+
+              <div class="form-group recurrence-subpanel hidden" id="add-panel-rec-weekly-goal">
+                <label>🎯 週の目標達成回数（月曜〜日曜サイクル）</label>
+                <div class="interval-input-row">
+                  <span class="subpanel-hint">週に</span>
+                  <input type="number" id="add-rec-weekly-times" min="1" max="7" value="3" class="num-compact-input">
+                  <span class="subpanel-hint">回達成するまで出続ける</span>
+                </div>
+              </div>
+
+              <div class="form-group recurrence-subpanel hidden" id="add-panel-rec-interval">
+                <label>実行間隔 (日)</label>
+                <div class="interval-input-row">
+                  <input type="number" id="add-rec-interval-days" min="2" max="365" value="2" class="num-compact-input">
+                  <span class="subpanel-hint">日ごと（例: 2日おき、3日おき）</span>
+                </div>
+              </div>
+
+              <div class="form-group recurrence-subpanel hidden" id="add-panel-rec-monthly">
+                <label>📅 月次配信ルール設定</label>
+                <div class="monthly-rule-grid">
+                  <div class="monthly-rule-col">
+                    <span class="subpanel-sublabel">配信間隔:</span>
+                    <select id="add-rec-month-interval" class="select-compact">
+                      <option value="1">毎月 (1ヶ月ごと)</option>
+                      <option value="2">2ヶ月ごと (隔月)</option>
+                      <option value="3">3ヶ月ごと (四半期)</option>
+                      <option value="6">6ヶ月ごと (半年)</option>
+                      <option value="12">1年ごと (年次)</option>
+                    </select>
+                  </div>
+                  <div class="monthly-rule-col">
+                    <span class="subpanel-sublabel">配信タイミング:</span>
+                    <select id="add-rec-month-timing-type" class="select-compact">
+                      <option value="specific_day">指定日 (毎月○日)</option>
+                      <option value="first_business_day">月の最初の営業日</option>
+                      <option value="last_business_day">月の最後の営業日</option>
+                      <option value="last_day">月の末日</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="interval-input-row" id="add-panel-month-day-input" style="margin-top: 6px;">
+                  <span class="subpanel-hint">指定日付:</span>
+                  <input type="number" id="add-rec-month-day" min="1" max="31" value="1" class="num-compact-input">
+                  <span class="subpanel-hint">日</span>
+                </div>
+              </div>
+
+              <!-- Minutes & Display Period Row -->
+              <div class="cascade-grid">
+                <div class="form-group">
+                  <label>⏱️ 目安時間 (分)</label>
+                  <input type="number" id="add-habit-min" value="10" min="1" max="180">
+                </div>
+                <div class="form-group">
+                  <label>📅 表示期間 (任意)</label>
+                  <div class="time-range-inputs">
+                    <input type="date" id="add-habit-display-start" style="padding: 6px 8px; font-size: 11px;">
+                    <span>〜</span>
+                    <input type="date" id="add-habit-display-end" style="padding: 6px 8px; font-size: 11px;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Domain, Dept, Project 2-Step Cascade Group -->
+              <div class="form-group">
+                <label>🏷️ 階層分類（ドメイン・部門・プロジェクト）</label>
+                <div class="cascade-grid cascade-row">
+                  <select id="add-domain-major">
+                    <option value="">ドメイン (大分類)</option>
+                    <option value="PN1">PN1系 稼ぐ</option>
+                    <option value="PN2">PN2系 動く</option>
+                    <option value="PN3">PN3系 ストレスを減らす</option>
+                    <option value="PN4">PN4系 夢中を増やす</option>
+                    <option value="PN5">PN5系 貢献する</option>
+                  </select>
+                  <select id="add-domain-minor">
+                    <option value="">ドメイン (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="add-dept-major">
+                    <option value="">部門 (本部/直轄)</option>
+                    <option value="CEO直轄">CEO直轄 / 秘書室 / 経営企画</option>
+                    <option value="制作本部">制作本部 (企画/制作/クリエイティブ)</option>
+                    <option value="営業マーケ本部">営業マーケ本部 (営業/マーケ/広報)</option>
+                    <option value="管理本部">管理本部 (経理/財務/人事/総務/購買/情シス)</option>
+                    <option value="ガバナンス本部">ガバナンス本部 (法務/知財)</option>
+                    <option value="開発・QA">開発部 / 品質保証部</option>
+                  </select>
+                  <select id="add-dept-minor">
+                    <option value="">部門 (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="add-proj-major">
+                    <option value="">プロジェクト (分類)</option>
+                    <option value="ビジネス">💼 ビジネス系</option>
+                    <option value="プライベート">🏡 プライベート系</option>
+                  </select>
+                  <select id="add-proj-minor">
+                    <option value="">プロジェクト (詳細)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: 6-Axis Load & Evaluation Smart Matrix -->
+            <div class="modal-form-col">
+              <div class="load-matrix-card">
+                <div class="load-matrix-title-row">
+                  <span class="load-matrix-title">📊 6軸 負荷・評価マトリクス</span>
+                  <span class="load-matrix-hint">※未設定は Mid (標準)</span>
+                </div>
+                <div class="load-matrix-grid">
+                  <!-- 1. Importance -->
+                  <div class="load-matrix-item" data-matrix="importance">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🎯 重要度</span>
+                      <span class="load-item-val-badge" id="badge-add-habit-importance">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-habit-importance">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 2. Urgency -->
+                  <div class="load-matrix-item" data-matrix="urgency">
+                    <div class="load-item-header">
+                      <span class="load-item-name">⏰ 緊急度</span>
+                      <span class="load-item-val-badge" id="badge-add-habit-urgency">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-habit-urgency">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 3. Mental Load -->
+                  <div class="load-matrix-item" data-matrix="mentalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🧠 認知負荷</span>
+                      <span class="load-item-val-badge" id="badge-add-habit-mentalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-habit-mentalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 4. Physical Load -->
+                  <div class="load-matrix-item" data-matrix="physicalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🏃 体力負荷</span>
+                      <span class="load-item-val-badge" id="badge-add-habit-physicalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-habit-physicalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 5. Frog Level -->
+                  <div class="load-matrix-item" data-matrix="frogLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🐸 カエル度</span>
+                      <span class="load-item-val-badge" id="badge-add-habit-frogLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-habit-frogLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 6. Interest Level -->
+                  <div class="load-matrix-item" data-matrix="interestLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">💡 興味・関心</span>
+                      <span class="load-item-val-badge" id="badge-add-habit-interestLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-habit-interestLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tags (Right Column Bottom) -->
+              <div class="form-group">
+                <label>🏷️ タグ（例: 食材, サプリ, ルーティン, 運動 / カンマ区切り）</label>
+                <input type="text" id="add-habit-tags" placeholder="食材, サプリ, 運動（カンマ区切り）" autocomplete="off" />
+                <div class="tag-suggestions-row" id="add-habit-tag-suggestions"></div>
+              </div>
+
+              <!-- Notes (Right Column Bottom with Generous Height) -->
+              <div class="form-group">
+                <label>📝 メモ・備考</label>
+                <textarea id="add-habit-notes" rows="3" placeholder="習慣のコツ、チェックポイント、メモなど" style="min-height: 64px;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions full-width" style="margin-top: 10px;">
+            <button type="button" class="btn-secondary" id="btn-cancel-add">キャンセル</button>
+            <button type="submit" class="btn-primary">🌿 習慣を登録 <span class="kbd-sub">Ctrl+Enter</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Habit Profile & Edit -->
+  <div class="modal-overlay" id="modal-edit-habit">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <div class="modal-header-left">
+          <h3>⚙️ ハビット設定・詳細</h3>
+          <span class="habit-id-badge" id="edit-habit-id-badge">H001</span>
+        </div>
+        <div class="modal-header-actions">
+          <button type="submit" form="form-edit-habit" class="btn-primary btn-header-save" title="変更を保存 (Ctrl+Enter)">💾 保存する <span class="kbd-sub">Ctrl+Enter</span></button>
+          <button class="modal-close" id="btn-close-edit">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- Profile Analytics Summary -->
+        <div class="profile-stats-bar">
+          <div class="profile-tier-badge" id="edit-profile-tier">🥇 Gold</div>
+          <div class="profile-rates-list">
+            <span class="profile-rate-item">3日: <b id="edit-rate-3d" class="rate-badge">100%</b></span>
+            <span class="profile-rate-item">7日: <b id="edit-rate-7d" class="rate-badge">85%</b></span>
+            <span class="profile-rate-item">30日: <b id="edit-rate-30d" class="rate-badge">80%</b></span>
+            <span class="profile-rate-item">90日: <b id="edit-rate-90d" class="rate-badge">75%</b></span>
+          </div>
+        </div>
+
+        <!-- Recent 14 Days History Grid (Clickable Tiles to Recover/Edit Past Days) -->
+        <div class="profile-history-card">
+          <div class="history-card-header">
+            <span class="history-title">📅 直近14日間の実行履歴（日付をクリックして過去の完了/未完了を修正）</span>
+            <span class="history-hint">緑: 完了 / 灰: 未完了</span>
+          </div>
+          <div class="history-tiles-grid" id="edit-history-grid">
+            <!-- Dynamic Render 14-day tiles -->
+          </div>
+        </div>
+
+        <form id="form-edit-habit">
+          <input type="hidden" id="edit-habit-id">
+
+          <!-- Today's Execution Status Modifier -->
+          <div class="form-group status-modifier-card" style="margin-bottom: 8px;">
+            <label class="status-modifier-label">⚡ 本日の実行ステータス（今日やった・やってないの修正）</label>
+            <div class="segmented-control status-segmented" id="edit-status-selector">
+              <button type="button" class="segment-btn status-btn-uncompleted" data-status="uncompleted">⏳ 未完了</button>
+              <button type="button" class="segment-btn status-btn-inprogress" data-status="in_progress">● 進行中</button>
+              <button type="button" class="segment-btn status-btn-completed" data-status="completed">✓ 完了</button>
+              <button type="button" class="segment-btn status-btn-skipped" data-status="skipped">✕ スキップ</button>
+            </div>
+          </div>
+
+          <!-- Top Full Width: Habit Name -->
+          <div class="modal-form-top-title">
+            <input type="text" id="edit-habit-name" required placeholder="例: 朝スクワット50回">
+          </div>
+
+          <div class="modal-form-2col">
+            <!-- Left Column: Timing, Recurrence, Cascade Selects -->
+            <div class="modal-form-col">
+              <!-- 3-Way Timing Selector -->
+              <div class="form-group">
+                <label>⏰ 表示タイミング設定 *</label>
+                <div class="segmented-control" id="edit-timing-type-selector">
+                  <button type="button" class="segment-btn" data-type="anytime">🌐 いつでも (終日)</button>
+                  <button type="button" class="segment-btn active" data-type="section">⏱️ セクション指定</button>
+                  <button type="button" class="segment-btn" data-type="custom">⏰ カスタム時間帯</button>
+                </div>
+              </div>
+
+              <!-- Dynamic Timing Sub-inputs -->
+              <div class="form-group timing-subpanel" id="edit-panel-timing-section">
+                <select id="edit-habit-section">
+                  <option value="第1セッション">🌅 第1セッション (03:00 - 06:00)</option>
+                  <option value="朝オペ">🍳 朝オペ (06:00 - 08:30)</option>
+                  <option value="第2セッション">⚡ 第2セッション (08:30 - 12:00)</option>
+                  <option value="第3セッション">🛠️ 第3セッション (12:00 - 17:00)</option>
+                  <option value="夜オペ">🍲 夜オペ (17:00 - 21:00)</option>
+                  <option value="第4セッション">🌙 第4セッション (21:00 - 23:00)</option>
+                </select>
+              </div>
+
+              <div class="form-group timing-subpanel hidden" id="edit-panel-timing-custom">
+                <div class="time-range-inputs">
+                  <input type="time" id="edit-custom-start" value="13:00">
+                  <span>〜</span>
+                  <input type="time" id="edit-custom-end" value="17:00">
+                </div>
+              </div>
+
+              <!-- Recurrence Selector -->
+              <div class="form-group">
+                <label>🔄 定期配信（リピート）設定 *</label>
+                <div class="segmented-control recurrence-segmented" id="edit-recurrence-type-selector">
+                  <button type="button" class="segment-btn active" data-type="everyday">🌐 毎日</button>
+                  <button type="button" class="segment-btn" data-type="daily_times">⚡ 1日〜回</button>
+                  <button type="button" class="segment-btn" data-type="business_days">💼 平日</button>
+                  <button type="button" class="segment-btn" data-type="weekends">🌴 週末</button>
+                  <button type="button" class="segment-btn" data-type="custom_days">🗓️ 曜日</button>
+                  <button type="button" class="segment-btn" data-type="weekly_goal">🎯 週N回</button>
+                  <button type="button" class="segment-btn" data-type="interval">⏳ 間隔</button>
+                  <button type="button" class="segment-btn" data-type="monthly">📅 月次</button>
+                </div>
+              </div>
+
+              <!-- Dynamic Recurrence Sub-panels -->
+              <div class="form-group recurrence-subpanel hidden" id="edit-panel-rec-daily-times">
+                <label>⚡ 1日の目標達成回数（マルチカウント実行）</label>
+                <div class="interval-input-row">
+                  <span class="subpanel-hint">1日に</span>
+                  <input type="number" id="edit-rec-daily-times" min="1" max="20" value="2" class="num-compact-input">
+                  <span class="subpanel-hint">回達成するまで出続ける（回数カウント表示）</span>
+                </div>
+              </div>
+
+              <div class="form-group recurrence-subpanel hidden" id="edit-panel-rec-custom-days">
+                <label>配信する曜日を選択（複数選択可）</label>
+                <div class="weekday-pills" id="edit-weekday-pills">
+                  <button type="button" class="weekday-pill" data-day="1">月</button>
+                  <button type="button" class="weekday-pill" data-day="2">火</button>
+                  <button type="button" class="weekday-pill" data-day="3">水</button>
+                  <button type="button" class="weekday-pill" data-day="4">木</button>
+                  <button type="button" class="weekday-pill" data-day="5">金</button>
+                  <button type="button" class="weekday-pill sat" data-day="6">土</button>
+                  <button type="button" class="weekday-pill sun" data-day="0">日</button>
+                </div>
+              </div>
+
+              <div class="form-group recurrence-subpanel hidden" id="edit-panel-rec-weekly-goal">
+                <label>🎯 週の目標達成回数（月曜〜日曜サイクル）</label>
+                <div class="interval-input-row">
+                  <span class="subpanel-hint">週に</span>
+                  <input type="number" id="edit-rec-weekly-times" min="1" max="7" value="3" class="num-compact-input">
+                  <span class="subpanel-hint">回達成するまで出続ける</span>
+                </div>
+              </div>
+
+              <div class="form-group recurrence-subpanel hidden" id="edit-panel-rec-interval">
+                <label>実行間隔 (日)</label>
+                <div class="interval-input-row">
+                  <input type="number" id="edit-rec-interval-days" min="2" max="365" value="2" class="num-compact-input">
+                  <span class="subpanel-hint">日ごと（例: 2日おき、3日おき）</span>
+                </div>
+              </div>
+
+              <div class="form-group recurrence-subpanel hidden" id="edit-panel-rec-monthly">
+                <label>📅 月次配信ルール設定</label>
+                <div class="monthly-rule-grid">
+                  <div class="monthly-rule-col">
+                    <span class="subpanel-sublabel">配信間隔:</span>
+                    <select id="edit-rec-month-interval" class="select-compact">
+                      <option value="1">毎月 (1ヶ月ごと)</option>
+                      <option value="2">2ヶ月ごと (隔月)</option>
+                      <option value="3">3ヶ月ごと (四半期)</option>
+                      <option value="6">6ヶ月ごと (半年)</option>
+                      <option value="12">1年ごと (年次)</option>
+                    </select>
+                  </div>
+                  <div class="monthly-rule-col">
+                    <span class="subpanel-sublabel">配信タイミング:</span>
+                    <select id="edit-rec-month-timing-type" class="select-compact">
+                      <option value="specific_day">指定日 (毎月○日)</option>
+                      <option value="first_business_day">月の最初の営業日</option>
+                      <option value="last_business_day">月の最後の営業日</option>
+                      <option value="last_day">月の末日</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="interval-input-row" id="edit-panel-month-day-input" style="margin-top: 6px;">
+                  <span class="subpanel-hint">指定日付:</span>
+                  <input type="number" id="edit-rec-month-day" min="1" max="31" value="1" class="num-compact-input">
+                  <span class="subpanel-hint">日</span>
+                </div>
+              </div>
+
+              <!-- Minutes & Display Period Row -->
+              <div class="cascade-grid">
+                <div class="form-group">
+                  <label>⏱️ 目安時間 (分)</label>
+                  <input type="number" id="edit-habit-min" value="10" min="1" max="180">
+                </div>
+                <div class="form-group">
+                  <label>📅 表示期間</label>
+                  <div class="time-range-inputs">
+                    <input type="date" id="edit-habit-display-start" style="padding: 6px 8px; font-size: 11px;">
+                    <span>〜</span>
+                    <input type="date" id="edit-habit-display-end" style="padding: 6px 8px; font-size: 11px;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Domain, Dept, Project 2-Step Cascade Group -->
+              <div class="form-group">
+                <label>🏷️ 階層分類（ドメイン・部門・プロジェクト）</label>
+                <div class="cascade-grid cascade-row">
+                  <select id="edit-domain-major">
+                    <option value="">ドメイン (大分類)</option>
+                    <option value="PN1">PN1系 稼ぐ</option>
+                    <option value="PN2">PN2系 動く</option>
+                    <option value="PN3">PN3系 ストレスを減らす</option>
+                    <option value="PN4">PN4系 夢中を増やす</option>
+                    <option value="PN5">PN5系 貢献する</option>
+                  </select>
+                  <select id="edit-domain-minor">
+                    <option value="">ドメイン (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="edit-dept-major">
+                    <option value="">部門 (本部/直轄)</option>
+                    <option value="CEO直轄">CEO直轄 / 秘書室 / 経営企画</option>
+                    <option value="制作本部">制作本部 (企画/制作/クリエイティブ)</option>
+                    <option value="営業マーケ本部">営業マーケ本部 (営業/マーケ/広報)</option>
+                    <option value="管理本部">管理本部 (経理/財務/人事/総務/購買/情シス)</option>
+                    <option value="ガバナンス本部">ガバナンス本部 (法務/知財)</option>
+                    <option value="開発・QA">開発部 / 品質保証部</option>
+                  </select>
+                  <select id="edit-dept-minor">
+                    <option value="">部門 (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="edit-proj-major">
+                    <option value="">プロジェクト (分類)</option>
+                    <option value="ビジネス">💼 ビジネス系</option>
+                    <option value="プライベート">🏡 プライベート系</option>
+                  </select>
+                  <select id="edit-proj-minor">
+                    <option value="">プロジェクト (詳細)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: 6-Axis Load & Evaluation Smart Matrix, Tags, Notes -->
+            <div class="modal-form-col">
+              <div class="load-matrix-card">
+                <div class="load-matrix-title-row">
+                  <span class="load-matrix-title">📊 6軸 負荷・評価マトリクス</span>
+                  <span class="load-matrix-hint">※未設定は Mid (標準)</span>
+                </div>
+                <div class="load-matrix-grid">
+                  <!-- 1. Importance -->
+                  <div class="load-matrix-item" data-matrix="importance">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🎯 重要度</span>
+                      <span class="load-item-val-badge" id="badge-edit-habit-importance">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-habit-importance">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 2. Urgency -->
+                  <div class="load-matrix-item" data-matrix="urgency">
+                    <div class="load-item-header">
+                      <span class="load-item-name">⏰ 緊急度</span>
+                      <span class="load-item-val-badge" id="badge-edit-habit-urgency">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-habit-urgency">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 3. Mental Load -->
+                  <div class="load-matrix-item" data-matrix="mentalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🧠 認知負荷</span>
+                      <span class="load-item-val-badge" id="badge-edit-habit-mentalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-habit-mentalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 4. Physical Load -->
+                  <div class="load-matrix-item" data-matrix="physicalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🏃 体力負荷</span>
+                      <span class="load-item-val-badge" id="badge-edit-habit-physicalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-habit-physicalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 5. Frog Level -->
+                  <div class="load-matrix-item" data-matrix="frogLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🐸 カエル度</span>
+                      <span class="load-item-val-badge" id="badge-edit-habit-frogLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-habit-frogLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 6. Interest Level -->
+                  <div class="load-matrix-item" data-matrix="interestLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">💡 興味・関心</span>
+                      <span class="load-item-val-badge" id="badge-edit-habit-interestLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-habit-interestLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tags (Moved to Right Column Bottom) -->
+              <div class="form-group">
+                <label>🏷️ タグ（例: 食材, サプリ, ルーティン, 運動 / カンマ区切り）</label>
+                <input type="text" id="edit-habit-tags" placeholder="食材, サプリ（カンマ区切り）" autocomplete="off" />
+                <div class="tag-suggestions-row" id="edit-habit-tag-suggestions"></div>
+              </div>
+
+              <!-- Notes (Moved to Right Column Bottom with Generous Height) -->
+              <div class="form-group">
+                <label>📝 メモ・備考</label>
+                <textarea id="edit-habit-notes" rows="3" placeholder="習慣のコツ、チェックポイント、メモなど" style="min-height: 64px;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Execution Log & Notes Timeline Card -->
+          <div class="execution-timeline-card">
+            <div class="timeline-header-row">
+              <span class="timeline-title">📜 実行履歴 & メモタイムライン</span>
+              <span class="timeline-count-badge" id="edit-habit-timeline-count">全0件の記録</span>
+            </div>
+            <div class="timeline-list" id="edit-habit-timeline-list">
+              <!-- Dynamically populated by JS -->
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="form-actions-split full-width" style="margin-top: 10px;">
+            <button type="button" class="btn-danger" id="btn-delete-habit">🗑️ ハビット削除</button>
+            <div class="form-actions-right">
+              <button type="button" class="btn-secondary" id="btn-cancel-edit">キャンセル</button>
+              <button type="submit" class="btn-primary">💾 変更を保存する</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add New Task (TaskChute & GTD/Eisenhower Integrated) -->
+  <div class="modal-overlay" id="modal-add-task">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <h3>🎯 新規タスク登録</h3>
+        <div class="modal-header-actions">
+          <button type="submit" form="form-add-task" class="btn-primary btn-header-save" title="タスク登録 (Enter)">➕ 登録する</button>
+          <button class="modal-close" id="btn-close-add-task">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <form id="form-add-task">
+          <!-- Top Full Width: Task Title -->
+          <div class="modal-form-top-title">
+            <input type="text" id="add-task-title" required placeholder="🎯 タスク名を入力... (例: A社向け見積書ドラフト作成, 確定申告書類の整理)">
+          </div>
+
+          <div class="modal-form-2col">
+            <!-- Left Column: Bucket, Timing, Duration, Cascades -->
+            <div class="modal-form-col">
+              <!-- Bucket / Target Box Selector -->
+              <div class="form-group">
+                <label>📦 投入する箱（GTDバケット）</label>
+                <div class="segmented-control bucket-segmented" id="add-task-bucket-selector">
+                  <button type="button" class="segment-btn active" data-bucket="today">⚡ 今日のToday</button>
+                  <button type="button" class="segment-btn" data-bucket="inbox">📥 Inbox</button>
+                  <button type="button" class="segment-btn" data-bucket="this_week">📅 今週</button>
+                  <button type="button" class="segment-btn" data-bucket="next_week">🗓️ 来週</button>
+                  <button type="button" class="segment-btn genius" data-bucket="genius">💡 Genius</button>
+                  <button type="button" class="segment-btn" data-bucket="someday">⏳ Someday</button>
+                  <button type="button" class="segment-btn" data-bucket="vault">🗄️ Vault</button>
+                </div>
+              </div>
+
+              <!-- Scheduled Date (Single Task Date Assignment) -->
+              <div class="form-group" id="add-task-scheduled-date-group">
+                <label>📅 実施予定日</label>
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                  <input type="date" id="add-task-scheduled-date" style="background: var(--bg-surface-2); border: 1px solid var(--border-subtle); color: var(--text-main); padding: 5px 8px; border-radius: var(--radius-sm); font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+                  <button type="button" class="btn-date-chip" onclick="setAddTaskDate('today')">⚡ 今日</button>
+                  <button type="button" class="btn-date-chip" onclick="setAddTaskDate('tomorrow')">▶ 明日</button>
+                  <button type="button" class="btn-date-chip" onclick="setAddTaskDate('in_2_days')">⏩ 明後日</button>
+                  <button type="button" class="btn-date-chip" onclick="setAddTaskDate('next_monday')">📅 来週月</button>
+                </div>
+              </div>
+
+              <!-- Timing Selector -->
+              <div class="form-group">
+                <label>⏰ 実行タイミング設定 *</label>
+                <div class="segmented-control" id="add-task-timing-type-selector">
+                  <button type="button" class="segment-btn" data-type="anytime">🌐 いつでも (終日)</button>
+                  <button type="button" class="segment-btn active" data-type="section">⏱️ セクション指定</button>
+                  <button type="button" class="segment-btn" data-type="custom">⏰ カスタム時間帯</button>
+                </div>
+              </div>
+
+              <!-- Dynamic Timing Panels -->
+              <div class="form-group timing-subpanel" id="add-task-panel-timing-section">
+                <select id="add-task-section">
+                  <option value="第1セッション">🌅 第1セッション (03:00 - 06:00)</option>
+                  <option value="朝オペ">🍳 朝オペ (06:00 - 08:30)</option>
+                  <option value="第2セッション" selected>⚡ 第2セッション (08:30 - 12:00)</option>
+                  <option value="第3セッション">🛠️ 第3セッション (12:00 - 17:00)</option>
+                  <option value="夜オペ">🍲 夜オペ (17:00 - 21:00)</option>
+                  <option value="第4セッション">🌙 第4セッション (21:00 - 23:00)</option>
+                </select>
+              </div>
+
+              <div class="form-group timing-subpanel hidden" id="add-task-panel-timing-custom">
+                <div class="time-range-inputs">
+                  <input type="time" id="add-task-custom-start" value="13:00">
+                  <span>〜</span>
+                  <input type="time" id="add-task-custom-end" value="15:00">
+                </div>
+              </div>
+
+              <!-- Minutes & Type Row -->
+              <div class="cascade-grid">
+                <div class="form-group">
+                  <label>⏱️ 見積もり所要時間 (分) *</label>
+                  <input type="number" id="add-task-est-min" required min="1" max="600" value="25">
+                </div>
+                <div class="form-group">
+                  <label>🔄 タスク種別</label>
+                  <div class="segmented-control" id="add-task-type-selector">
+                    <button type="button" class="segment-btn active" data-task-type="single">🎯 単発</button>
+                    <button type="button" class="segment-btn" data-task-type="recurring">🔄 定期</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recurrence Subpanel (Shown if recurring) -->
+              <div class="form-group recurrence-subpanel hidden" id="add-task-panel-recurrence">
+                <label>🔄 定期配信設定</label>
+                <div class="segmented-control recurrence-segmented" id="add-task-rec-type-selector">
+                  <button type="button" class="segment-btn active" data-type="everyday">🌐 毎日</button>
+                  <button type="button" class="segment-btn" data-type="business_days">💼 平日</button>
+                  <button type="button" class="segment-btn" data-type="weekends">🌴 週末</button>
+                  <button type="button" class="segment-btn" data-type="custom_days">🗓️ 曜日</button>
+                  <button type="button" class="segment-btn" data-type="weekly_goal">🎯 週N回</button>
+                  <button type="button" class="segment-btn" data-type="interval">⏳ 間隔</button>
+                  <button type="button" class="segment-btn" data-type="monthly">📅 月次</button>
+                </div>
+              </div>
+
+              <!-- Domain, Dept, Proj Cascades -->
+              <div class="form-group">
+                <label>🏷️ 階層分類（ドメイン・部門・プロジェクト）</label>
+                <div class="cascade-grid cascade-row">
+                  <select id="add-task-domain-major">
+                    <option value="">ドメイン (大分類)</option>
+                    <option value="PN1">PN1 個人基盤</option>
+                    <option value="PN2" selected>PN2 事業・顧客</option>
+                    <option value="PN3">PN3 組織・チーム</option>
+                    <option value="PN4">PN4 財務・資産</option>
+                    <option value="PN5">PN5 投資・研究開発</option>
+                  </select>
+                  <select id="add-task-domain-minor">
+                    <option value="">ドメイン (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="add-task-dept-major">
+                    <option value="">部門 (大分類)</option>
+                    <option value="HONBU" selected>本部 (コア機能)</option>
+                    <option value="CHOKKATSU">直轄・専門機能</option>
+                  </select>
+                  <select id="add-task-dept-minor">
+                    <option value="">部門 (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="add-task-proj-major">
+                    <option value="">プロジェクト (大分類)</option>
+                    <option value="BIZ" selected>ビジネス系</option>
+                    <option value="LIFE">プライベート系</option>
+                  </select>
+                  <select id="add-task-proj-minor">
+                    <option value="">プロジェクト (詳細)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Eisenhower, 6-Axis Matrix, Tags, Notes -->
+            <div class="modal-form-col">
+              <!-- Eisenhower Priority Label Selector -->
+              <div class="form-group">
+                <label>🏷️ アイゼンハワー分類（優先度・重要度）</label>
+                <div class="segmented-control eisenhower-segmented" id="add-task-label-selector">
+                  <button type="button" class="segment-btn label-iron" data-label="iron_rule" title="センターピン中のセンターピン。何をさしおいてもALL INする最重要タスク">🔥 ALL - IN</button>
+                  <button type="button" class="segment-btn label-frog0" data-label="frog0">🐸 第0</button>
+                  <button type="button" class="segment-btn label-p1 active" data-label="p1">💼 第1</button>
+                  <button type="button" class="segment-btn label-p2" data-label="p2">🌱 第2</button>
+                  <button type="button" class="segment-btn label-p3" data-label="p3">🧺 第3</button>
+                  <button type="button" class="segment-btn label-p4" data-label="p4">🎮 第4</button>
+                  <button type="button" class="segment-btn" data-label="none">なし</button>
+                </div>
+              </div>
+
+              <!-- 6-Axis Load & Evaluation Smart Matrix -->
+              <div class="load-matrix-card">
+                <div class="load-matrix-title-row">
+                  <span class="load-matrix-title">📊 6軸 負荷・評価マトリクス</span>
+                  <span class="load-matrix-hint">※未設定は Mid (標準)</span>
+                </div>
+                <div class="load-matrix-grid">
+                  <!-- 1. Importance -->
+                  <div class="load-matrix-item" data-matrix="importance">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🎯 重要度</span>
+                      <span class="load-item-val-badge" id="badge-add-task-importance">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-task-importance">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 2. Urgency -->
+                  <div class="load-matrix-item" data-matrix="urgency">
+                    <div class="load-item-header">
+                      <span class="load-item-name">⏰ 緊急度</span>
+                      <span class="load-item-val-badge" id="badge-add-task-urgency">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-task-urgency">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 3. Mental Load -->
+                  <div class="load-matrix-item" data-matrix="mentalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🧠 認知負荷</span>
+                      <span class="load-item-val-badge" id="badge-add-task-mentalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-task-mentalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 4. Physical Load -->
+                  <div class="load-matrix-item" data-matrix="physicalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🏃 体力負荷</span>
+                      <span class="load-item-val-badge" id="badge-add-task-physicalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-task-physicalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 5. Frog Level -->
+                  <div class="load-matrix-item" data-matrix="frogLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🐸 カエル度</span>
+                      <span class="load-item-val-badge" id="badge-add-task-frogLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-task-frogLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 6. Interest Level -->
+                  <div class="load-matrix-item" data-matrix="interestLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">💡 興味・関心</span>
+                      <span class="load-item-val-badge" id="badge-add-task-interestLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-add-task-interestLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tags (Moved to Right Column Bottom) -->
+              <div class="form-group">
+                <label>🏷️ タグ（例: 食材, サプリ, PC作業, 外出 / カンマ区切り）</label>
+                <input type="text" id="add-task-tags" placeholder="食材, サプリ, 経理（カンマ区切り）" autocomplete="off" />
+                <div class="tag-suggestions-row" id="add-task-tag-suggestions"></div>
+              </div>
+
+              <!-- Notes (Moved to Right Column Bottom with Generous Height) -->
+              <div class="form-group">
+                <label>📝 メモ・備考</label>
+                <textarea id="add-task-notes" rows="3" placeholder="参考リンク、要件、チェックリストなど" style="min-height: 64px;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions full-width" style="margin-top: 10px;">
+            <button type="button" class="btn-secondary" id="btn-cancel-add-task">キャンセル</button>
+            <button type="submit" class="btn-primary">🎯 タスク登録 <span class="kbd-sub">Ctrl+Enter</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Task (Task Profile & TaskChute Timer) -->
+  <div class="modal-overlay" id="modal-edit-task">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <div class="profile-header-title">
+          <span class="profile-id-badge" id="edit-task-id-badge">T001</span>
+          <h3 id="edit-task-modal-title">🎯 タスク詳細 & 編集</h3>
+        </div>
+        <div class="modal-header-actions">
+          <button type="submit" form="form-edit-task" class="btn-primary btn-header-save" title="変更を保存 (Ctrl+Enter)">💾 保存する <span class="kbd-sub">Ctrl+Enter</span></button>
+          <button class="modal-close" id="btn-close-edit-task">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- TaskChute Time Track Card -->
+        <div class="taskchute-summary-card">
+          <div class="taskchute-col">
+            <span class="tc-label">見積時間</span>
+            <span class="tc-val" id="edit-task-est-display">25分</span>
+          </div>
+          <div class="taskchute-col">
+            <span class="tc-label">実績開始時刻</span>
+            <span class="tc-val time" id="edit-task-act-start-display">--:--</span>
+          </div>
+          <div class="taskchute-col">
+            <span class="tc-label">実績終了時刻</span>
+            <span class="tc-val time" id="edit-task-act-end-display">--:--</span>
+          </div>
+          <div class="taskchute-col">
+            <span class="tc-label">実働時間</span>
+            <span class="tc-val actual" id="edit-task-act-min-display">0分</span>
+          </div>
+        </div>
+
+        <form id="form-edit-task">
+          <input type="hidden" id="edit-task-id">
+
+          <!-- Status Selector -->
+          <div class="form-group status-modifier-card" style="margin-bottom: 8px;">
+            <label class="status-modifier-label">⚡ 進行ステータス</label>
+            <div class="segmented-control status-segmented" id="edit-task-status-selector">
+              <button type="button" class="segment-btn status-btn-uncompleted" data-status="uncompleted">⏳ 未着手</button>
+              <button type="button" class="segment-btn status-btn-inprogress" data-status="in_progress">● 進行中 (計測中)</button>
+              <button type="button" class="segment-btn status-btn-completed" data-status="completed">✓ 完了</button>
+              <button type="button" class="segment-btn status-btn-skipped" data-status="skipped">✕ スキップ</button>
+            </div>
+          </div>
+
+          <!-- Top Full Width: Task Title -->
+          <div class="modal-form-top-title">
+            <input type="text" id="edit-task-title" required placeholder="例: A社向け見積書ドラフト作成">
+          </div>
+
+          <div class="modal-form-2col">
+            <!-- Left Column: Bucket, Timing, Duration, Cascades -->
+            <div class="modal-form-col">
+              <!-- Bucket / Target Box Selector -->
+              <div class="form-group">
+                <label>📦 所属する箱（GTDバケット）</label>
+                <div class="segmented-control bucket-segmented" id="edit-task-bucket-selector">
+                  <button type="button" class="segment-btn" data-bucket="today">⚡ 今日のToday</button>
+                  <button type="button" class="segment-btn" data-bucket="inbox">📥 Inbox</button>
+                  <button type="button" class="segment-btn" data-bucket="this_week">📅 今週</button>
+                  <button type="button" class="segment-btn" data-bucket="next_week">🗓️ 来週</button>
+                  <button type="button" class="segment-btn genius" data-bucket="genius">💡 Genius</button>
+                  <button type="button" class="segment-btn" data-bucket="someday">⏳ Someday</button>
+                  <button type="button" class="segment-btn" data-bucket="vault">🗄️ Vault</button>
+                </div>
+              </div>
+
+              <!-- Scheduled Date (Date Assignment) -->
+              <div class="form-group" id="edit-task-scheduled-date-group">
+                <label>📅 実施予定日</label>
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                  <input type="date" id="edit-task-scheduled-date" style="background: var(--bg-surface-2); border: 1px solid var(--border-subtle); color: var(--text-main); padding: 5px 8px; border-radius: var(--radius-sm); font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+                  <button type="button" class="btn-date-chip" onclick="setEditTaskDate('today')">⚡ 今日</button>
+                  <button type="button" class="btn-date-chip" onclick="setEditTaskDate('tomorrow')">▶ 明日</button>
+                  <button type="button" class="btn-date-chip" onclick="setEditTaskDate('in_2_days')">⏩ 明後日</button>
+                  <button type="button" class="btn-date-chip" onclick="setEditTaskDate('next_monday')">📅 来週月</button>
+                </div>
+              </div>
+
+              <!-- Timing Selector -->
+              <div class="form-group">
+                <label>⏰ 実行タイミング設定</label>
+                <div class="segmented-control" id="edit-task-timing-type-selector">
+                  <button type="button" class="segment-btn" data-type="anytime">🌐 いつでも (終日)</button>
+                  <button type="button" class="segment-btn active" data-type="section">⏱️ セクション指定</button>
+                  <button type="button" class="segment-btn" data-type="custom">⏰ カスタム時間帯</button>
+                </div>
+              </div>
+
+              <!-- Dynamic Timing Panels -->
+              <div class="form-group timing-subpanel" id="edit-task-panel-timing-section">
+                <select id="edit-task-section">
+                  <option value="第1セッション">🌅 第1セッション (03:00 - 06:00)</option>
+                  <option value="朝オペ">🍳 朝オペ (06:00 - 08:30)</option>
+                  <option value="第2セッション">⚡ 第2セッション (08:30 - 12:00)</option>
+                  <option value="第3セッション">🛠️ 第3セッション (12:00 - 17:00)</option>
+                  <option value="夜オペ">🍲 夜オペ (17:00 - 21:00)</option>
+                  <option value="第4セッション">🌙 第4セッション (21:00 - 23:00)</option>
+                </select>
+              </div>
+
+              <div class="form-group timing-subpanel hidden" id="edit-task-panel-timing-custom">
+                <div class="time-range-inputs">
+                  <input type="time" id="edit-task-custom-start" value="13:00">
+                  <span>〜</span>
+                  <input type="time" id="edit-task-custom-end" value="15:00">
+                </div>
+              </div>
+
+              <!-- Minutes Row -->
+              <div class="form-group">
+                <label>⏱️ 見積もり所要時間 (分)</label>
+                <input type="number" id="edit-task-est-min" required min="1" max="600" value="25">
+              </div>
+
+              <!-- Domain, Dept, Proj Cascades -->
+              <div class="form-group">
+                <label>🏷️ 階層分類（ドメイン・部門・プロジェクト）</label>
+                <div class="cascade-grid cascade-row">
+                  <select id="edit-task-domain-major">
+                    <option value="">ドメイン (大分類)</option>
+                    <option value="PN1">PN1 個人基盤</option>
+                    <option value="PN2">PN2 事業・顧客</option>
+                    <option value="PN3">PN3 組織・チーム</option>
+                    <option value="PN4">PN4 財務・資産</option>
+                    <option value="PN5">PN5 投資・研究開発</option>
+                  </select>
+                  <select id="edit-task-domain-minor">
+                    <option value="">ドメイン (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="edit-task-dept-major">
+                    <option value="">部門 (大分類)</option>
+                    <option value="HONBU">本部 (コア機能)</option>
+                    <option value="CHOKKATSU">直轄・専門機能</option>
+                  </select>
+                  <select id="edit-task-dept-minor">
+                    <option value="">部門 (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="edit-task-proj-major">
+                    <option value="">プロジェクト (大分類)</option>
+                    <option value="BIZ">ビジネス系</option>
+                    <option value="LIFE">プライベート系</option>
+                  </select>
+                  <select id="edit-task-proj-minor">
+                    <option value="">プロジェクト (詳細)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Eisenhower, 6-Axis Matrix, Tags, Notes -->
+            <div class="modal-form-col">
+              <!-- Eisenhower Priority Label Selector -->
+              <div class="form-group">
+                <label>🏷️ アイゼンハワー分類（優先度・重要度）</label>
+                <div class="segmented-control eisenhower-segmented" id="edit-task-label-selector">
+                  <button type="button" class="segment-btn label-iron" data-label="iron_rule" title="センターピン中のセンターピン。何をさしおいてもALL INする最重要タスク">🔥 ALL - IN</button>
+                  <button type="button" class="segment-btn label-frog0" data-label="frog0">🐸 第0</button>
+                  <button type="button" class="segment-btn label-p1" data-label="p1">💼 第1</button>
+                  <button type="button" class="segment-btn label-p2" data-label="p2">🌱 第2</button>
+                  <button type="button" class="segment-btn label-p3" data-label="p3">🧺 第3</button>
+                  <button type="button" class="segment-btn label-p4" data-label="p4">🎮 第4</button>
+                  <button type="button" class="segment-btn" data-label="none">なし</button>
+                </div>
+              </div>
+
+              <!-- 6-Axis Load & Evaluation Smart Matrix -->
+              <div class="load-matrix-card">
+                <div class="load-matrix-title-row">
+                  <span class="load-matrix-title">📊 6軸 負荷・評価マトリクス</span>
+                  <span class="load-matrix-hint">※未設定は Mid (標準)</span>
+                </div>
+                <div class="load-matrix-grid">
+                  <!-- 1. Importance -->
+                  <div class="load-matrix-item" data-matrix="importance">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🎯 重要度</span>
+                      <span class="load-item-val-badge" id="badge-edit-task-importance">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-task-importance">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 2. Urgency -->
+                  <div class="load-matrix-item" data-matrix="urgency">
+                    <div class="load-item-header">
+                      <span class="load-item-name">⏰ 緊急度</span>
+                      <span class="load-item-val-badge" id="badge-edit-task-urgency">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-task-urgency">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 3. Mental Load -->
+                  <div class="load-matrix-item" data-matrix="mentalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🧠 認知負荷</span>
+                      <span class="load-item-val-badge" id="badge-edit-task-mentalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-task-mentalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 4. Physical Load -->
+                  <div class="load-matrix-item" data-matrix="physicalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🏃 体力負荷</span>
+                      <span class="load-item-val-badge" id="badge-edit-task-physicalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-task-physicalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 5. Frog Level -->
+                  <div class="load-matrix-item" data-matrix="frogLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🐸 カエル度</span>
+                      <span class="load-item-val-badge" id="badge-edit-task-frogLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-task-frogLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 6. Interest Level -->
+                  <div class="load-matrix-item" data-matrix="interestLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">💡 興味・関心</span>
+                      <span class="load-item-val-badge" id="badge-edit-task-interestLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-edit-task-interestLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tags (Moved to Right Column Bottom) -->
+              <div class="form-group">
+                <label>🏷️ タグ（例: 食材, サプリ, PC作業, 外出 / カンマ区切り）</label>
+                <input type="text" id="edit-task-tags" placeholder="食材, サプリ, 経理（カンマ区切り）" autocomplete="off" />
+                <div class="tag-suggestions-row" id="edit-task-tag-suggestions"></div>
+              </div>
+
+              <!-- Notes (Moved to Right Column Bottom with Generous Height) -->
+              <div class="form-group">
+                <label>📝 メモ・備考</label>
+                <textarea id="edit-task-notes" rows="3" placeholder="参考リンク、要件など" style="min-height: 64px;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Execution Log & Notes Timeline Card -->
+          <div class="execution-timeline-card">
+            <div class="timeline-header-row">
+              <span class="timeline-title">📜 実行履歴 & メモタイムライン</span>
+              <span class="timeline-count-badge" id="edit-task-timeline-count">全0件の記録</span>
+            </div>
+            <div class="timeline-list" id="edit-task-timeline-list">
+              <!-- Dynamically populated by JS -->
+            </div>
+          </div>
+
+          <div class="form-actions-split full-width" style="margin-top: 10px;">
+            <button type="button" class="btn-danger" id="btn-delete-task">🗑️ タスク削除</button>
+            <div class="form-actions-right">
+              <button type="button" class="btn-secondary" id="btn-cancel-edit-task">キャンセル</button>
+              <button type="submit" class="btn-primary">💾 変更を保存する <span class="kbd-sub">Ctrl+Enter</span></button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Goals (Weekly, Monthly, Half, Phase) -->
+  <div class="modal-overlay" id="modal-edit-goals">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3>🎯 目標ビジョン設定・更新</h3>
+        <button class="modal-close" id="btn-close-edit-goals">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-edit-goals">
+          <!-- 1. Weekly Goal Edit -->
+          <div class="goal-edit-section">
+            <div class="goal-edit-sec-title">週次目標</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>開始日</label>
+                <input type="date" id="input-goal-weekly-start">
+              </div>
+              <div class="form-group">
+                <label>終了日</label>
+                <input type="date" id="input-goal-weekly-end">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>📓 Obsidianノートリンク / ノート名 (任意)</label>
+              <input type="text" id="input-goal-weekly-obsidian" placeholder="例: 週次目標 または [[2026-W34]] または obsidian://open?vault=...">
+            </div>
+            <div class="form-group">
+              <label>目標・コミットメント内容（改行で箇条書き）</label>
+              <textarea id="input-goal-weekly-text" rows="4" placeholder="今週コミットする最重要ゴール..."></textarea>
+            </div>
+          </div>
+
+          <!-- 2. Monthly Goal Edit -->
+          <div class="goal-edit-section" style="margin-top: 16px;">
+            <div class="goal-edit-sec-title">月次目標</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>開始日</label>
+                <input type="date" id="input-goal-monthly-start">
+              </div>
+              <div class="form-group">
+                <label>終了日</label>
+                <input type="date" id="input-goal-monthly-end">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>📓 Obsidianノートリンク / ノート名 (任意)</label>
+              <input type="text" id="input-goal-monthly-obsidian" placeholder="例: 月次目標 または [[2026-08]] または obsidian://open?vault=...">
+            </div>
+            <div class="form-group">
+              <label>目標・達成指標内容</label>
+              <textarea id="input-goal-monthly-text" rows="4" placeholder="今月達成する主要指標・成果物..."></textarea>
+            </div>
+          </div>
+
+          <!-- 3. Half-Year Goal Edit -->
+          <div class="goal-edit-section" style="margin-top: 16px;">
+            <div class="goal-edit-sec-title">ハーフ目標</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>開始日</label>
+                <input type="date" id="input-goal-half-start">
+              </div>
+              <div class="form-group">
+                <label>終了日</label>
+                <input type="date" id="input-goal-half-end">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>📓 Obsidianノートリンク / ノート名 (任意)</label>
+              <input type="text" id="input-goal-half-obsidian" placeholder="例: ハーフ目標 または [[2026-H2]] または obsidian://open?vault=...">
+            </div>
+            <div class="form-group">
+              <label>目標・重要マイルストーン内容</label>
+              <textarea id="input-goal-half-text" rows="4" placeholder="半期のビジョン・重要マイルストーン..."></textarea>
+            </div>
+          </div>
+
+          <!-- 4. Phase Goal Edit -->
+          <div class="goal-edit-section" style="margin-top: 16px;">
+            <div class="goal-edit-sec-title">フェイズ目標</div>
+            <div class="form-grid-3">
+              <div class="form-group">
+                <label>フェイズ名</label>
+                <input type="text" id="input-goal-phase-name" placeholder="第1フェイズ">
+              </div>
+              <div class="form-group">
+                <label>開始日</label>
+                <input type="date" id="input-goal-phase-start">
+              </div>
+              <div class="form-group">
+                <label>終了日</label>
+                <input type="date" id="input-goal-phase-end">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>📓 Obsidianノートリンク / ノート名 (任意)</label>
+              <input type="text" id="input-goal-phase-obsidian" placeholder="例: フェイズ目標 または [[第1フェイズ]] または obsidian://open?vault=...">
+            </div>
+            <div class="form-group">
+              <label>目標・人生ビジョン内容</label>
+              <textarea id="input-goal-phase-text" rows="4" placeholder="3年後に到達している圧倒的境地・人生のビジョン..."></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions-split full-width" style="margin-top: 20px;">
+            <div></div>
+            <div class="form-actions-right">
+              <button type="button" class="btn-secondary" id="btn-cancel-edit-goals">キャンセル</button>
+              <button type="submit" class="btn-primary" style="background: linear-gradient(135deg, #f59e0b, #ef4444); border-color: #f59e0b;">🔥 目標を保存して志を燃やす <span class="kbd-sub">Ctrl+Enter</span></button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Core Manifesto (魂の宣誓・根本決意の編集) -->
+  <div class="modal-overlay" id="modal-edit-manifesto">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <div class="modal-header-left">
+          <span class="modal-header-icon" style="color: #f59e0b;">⚜️</span>
+          <h3>魂の宣誓・根本決意（CORE MANIFESTO）の編集</h3>
+        </div>
+        <button type="button" class="modal-close" id="btn-close-edit-manifesto">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <form id="form-edit-manifesto">
+          <div class="form-grid-2" style="margin-bottom: 12px;">
+            <div class="form-group">
+              <label>📜 宣誓タイトル</label>
+              <input type="text" id="input-manifesto-title" placeholder="例: 我が人生の絶対原則・魂の宣誓">
+            </div>
+            <div class="form-group">
+              <label>🌟 魂のモットー / 署名キャッチコピー</label>
+              <input type="text" id="input-manifesto-motto" placeholder="例: “恐れを突破し、己の真価を解き放て”">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label style="justify-content: space-between;">
+              <span>🔥 決意・理念・原則の本文 <span class="required">*</span></span>
+              <span class="opt-label" style="color: #94a3b8;">※ 改行や箇条書き（1. 2. 3. や - ）、見出し【 】が美しく反映されます</span>
+            </label>
+            <textarea id="input-manifesto-body" rows="12" style="font-family: 'Shippori Mincho', serif; font-size: 14px; line-height: 1.8; padding: 12px 14px;" placeholder="ここにあなたの人生の根本理念、絶対に譲れない信念、恐れに打ち勝つ誓いを刻み込んでください..."></textarea>
+          </div>
+
+          <div class="form-actions-split full-width" style="margin-top: 16px;">
+            <div></div>
+            <div class="form-actions-right">
+              <button type="button" class="btn-secondary" id="btn-cancel-edit-manifesto">キャンセル</button>
+              <button type="submit" class="btn-primary" style="background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b;">💾 魂の誓いを刻印する <span class="kbd-sub">Ctrl+Enter</span></button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Context Menu for Habits -->
+  <div class="custom-context-menu" id="habit-context-menu">
+    <div class="context-menu-header" id="context-menu-habit-name">ハビット名</div>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item primary" id="ctx-toggle-complete">
+      <span class="ctx-icon" id="ctx-toggle-icon">✓</span>
+      <span id="ctx-toggle-text">今日を完了にする</span>
+    </button>
+    <button class="context-menu-item" id="ctx-set-inprogress">
+      <span class="ctx-icon">●</span>
+      <span>いま取り組む（進行中にする）</span>
+    </button>
+    <button class="context-menu-item" id="ctx-set-skip">
+      <span class="ctx-icon">✕</span>
+      <span>今日はスキップする</span>
+    </button>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item" id="ctx-open-profile">
+      <span class="ctx-icon">🛠️</span>
+      <span>詳細プロファイル・設定を開く...</span>
+    </button>
+    <button class="context-menu-item danger" id="ctx-delete-habit">
+      <span class="ctx-icon">🗑️</span>
+      <span>ハビットを削除...</span>
+    </button>
+  </div>
+
+  <!-- Custom Context Menu for Tasks (Quick Defer / Move Dates / Inbox) -->
+  <div class="custom-context-menu" id="task-context-menu">
+    <div class="context-menu-header" id="context-menu-task-name">タスク名</div>
+    <div class="context-menu-section-label" style="font-size: 10px; font-weight: 700; color: #38bdf8; padding: 4px 12px 2px; text-transform: uppercase; letter-spacing: 0.05em;">📅 実行予定日の変更</div>
+    <button class="context-menu-item primary" id="ctx-task-defer-tomorrow">
+      <span class="ctx-icon">🌅</span>
+      <span id="ctx-task-tomorrow-text">明日へ移動</span>
+    </button>
+    <button class="context-menu-item" id="ctx-task-defer-day-after">
+      <span class="ctx-icon">🚀</span>
+      <span id="ctx-task-dayafter-text">明後日へ移動</span>
+    </button>
+    <button class="context-menu-item" id="ctx-task-defer-next-weekday">
+      <span class="ctx-icon">💼</span>
+      <span id="ctx-task-nextweekday-text">次の平日へ移動</span>
+    </button>
+    <button class="context-menu-item" id="ctx-task-defer-custom">
+      <span class="ctx-icon">🗓️</span>
+      <span>指定日を選択...</span>
+    </button>
+    <button class="context-menu-item" id="ctx-task-defer-inbox">
+      <span class="ctx-icon">📥</span>
+      <span>日付なし (Inboxへ移動)</span>
+    </button>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item" id="ctx-task-edit">
+      <span class="ctx-icon">✏️</span>
+      <span>タスクを編集...</span>
+    </button>
+    <button class="context-menu-item danger" id="ctx-task-delete">
+      <span class="ctx-icon">🗑️</span>
+      <span>タスクを削除...</span>
+    </button>
+  </div>
+
+  <!-- Modal: Task Presets (Full-Attribute Quick Execution & Seamless Twin-Modal Editor) -->
+  <div class="modal-overlay" id="modal-task-presets">
+    <div class="modal-card modal-wide">
+      
+      <!-- VIEW 1: Presets Card Grid List View (Default View) -->
+      <div id="preset-list-view">
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <span class="modal-header-icon" style="color: #f59e0b;">⚡</span>
+            <h3>プリセットタスク (ワンクリック即時追加・開始)</h3>
+          </div>
+          <div class="modal-header-actions">
+            <button type="button" class="btn-primary" id="btn-toggle-add-preset" style="font-size: 11.5px; padding: 5px 12px; gap: 6px;">➕ 新規プリセット作成 <span class="kbd-sub">P</span></button>
+            <button type="button" class="modal-close" id="btn-close-task-presets">✕</button>
+          </div>
+        </div>
+
+        <div class="modal-body">
+          <div class="preset-modal-intro">
+            <div class="preset-intro-text">
+              <span>⚡ 頻繁に行う定型業務や突発的な割り込みタスクを、<b>フル属性（優先度・ドメイン・部門・プロジェクト・メモ等）を保持したままワンクリック（または数字キー [1]~[0]）で即座に追加・開始</b>できます。</span>
+              <span style="color: #f59e0b; font-weight: 600;">※ 実行中のタスクがある場合、自動的に「⏸️ 中断（時間積算）」に切り替わります。</span>
+            </div>
+          </div>
+
+          <!-- Presets Grid List (10 Cards Max with Keyboard Shortcuts [1]~[0]) -->
+          <div class="preset-grid-container" id="preset-cards-grid">
+            <!-- Dynamically populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 2: Preset Create / Edit View (Twin layout with Add Task Modal, No Cards List below!) -->
+      <div id="preset-edit-view" class="hidden">
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <span class="modal-header-icon" style="color: #38bdf8;">🎯</span>
+            <h3 id="preset-edit-modal-title">➕ 新規プリセットタスク登録</h3>
+          </div>
+          <div class="modal-header-actions">
+            <button type="button" class="btn-primary btn-header-save" id="btn-save-new-preset" title="プリセット保存 (Ctrl+Enter)">💾 保存する <span class="kbd-sub">Ctrl+Enter</span></button>
+            <button type="button" class="modal-close" id="btn-cancel-preset-form">✕</button>
+          </div>
+        </div>
+
+        <div class="modal-body">
+          <input type="hidden" id="input-preset-id" value="">
+          
+          <!-- Top Full Width: Icon & Task Title -->
+          <div class="modal-form-top-title" style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+            <input type="text" id="input-preset-icon" value="⚡" title="絵文字アイコン (Win + .)" style="width: 46px; height: 38px; text-align: center; font-size: 20px; box-sizing: border-box; background: var(--bg-surface-2); border: 1.5px solid var(--border-subtle); border-radius: var(--radius-sm); color: #fff;">
+            <input type="text" id="input-preset-title" required placeholder="🎯 タスク名を入力... (例: 👶 子どもの緊急対応, 🍲 夕食準備・片付け, 💻 緊急サーバー調査)" style="flex: 1;">
+          </div>
+          
+          <!-- Emoji Quick Picker -->
+          <div class="emoji-quick-picker" id="preset-emoji-picker" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px;">
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('👶')">👶</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('📞')">📞</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('🍲')">🍲</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('💻')">💻</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('🚗')">🚗</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('🧹')">🧹</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('💬')">💬</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('📦')">📦</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('⚡')">⚡</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('🏥')">🏥</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('☕')">☕</button>
+            <button type="button" class="btn-emoji-chip" onclick="setPresetEmoji('🚨')">🚨</button>
+          </div>
+
+          <div class="modal-form-2col">
+            <!-- Left Column: Bucket, Timing, Duration, Cascades, Notes -->
+            <div class="modal-form-col">
+              
+              <!-- Bucket / Target Box Selector -->
+              <div class="form-group">
+                <label>📦 投入する箱（GTDバケット）</label>
+                <div class="segmented-control bucket-segmented" id="preset-bucket-selector">
+                  <button type="button" class="segment-btn active" data-bucket="today">⚡ 今日のToday</button>
+                  <button type="button" class="segment-btn" data-bucket="inbox">📥 Inbox</button>
+                  <button type="button" class="segment-btn" data-bucket="this_week">📅 今週</button>
+                  <button type="button" class="segment-btn" data-bucket="next_week">🗓️ 来週</button>
+                  <button type="button" class="segment-btn genius" data-bucket="genius">💡 Genius</button>
+                  <button type="button" class="segment-btn" data-bucket="someday">⏳ Someday</button>
+                  <button type="button" class="segment-btn" data-bucket="vault">🗄️ Vault</button>
+                </div>
+              </div>
+
+              <!-- Timing Selector -->
+              <div class="form-group">
+                <label>⏰ 実行タイミング設定 *</label>
+                <div class="segmented-control" id="preset-timing-type-selector">
+                  <button type="button" class="segment-btn active" data-timing="current">⚡ 現セクション(自動)</button>
+                  <button type="button" class="segment-btn" data-timing="section">⏱️ セクション指定</button>
+                  <button type="button" class="segment-btn" data-timing="anytime">🌐 いつでも (終日)</button>
+                </div>
+              </div>
+
+              <!-- Section Subpanel (Shown if timing === 'section') -->
+              <div class="form-group timing-subpanel hidden" id="preset-panel-timing-section">
+                <select id="select-preset-section">
+                  <option value="第1セッション">🌅 第1セッション (03:00 - 06:00)</option>
+                  <option value="朝オペ">🍳 朝オペ (06:00 - 08:30)</option>
+                  <option value="第2セッション" selected>⚡ 第2セッション (08:30 - 12:00)</option>
+                  <option value="第3セッション">🛠️ 第3セッション (12:00 - 17:00)</option>
+                  <option value="夜オペ">🍲 夜オペ (17:00 - 21:00)</option>
+                  <option value="第4セッション">🌙 第4セッション (21:00 - 23:00)</option>
+                </select>
+              </div>
+
+              <!-- Estimated Minutes Row -->
+              <div class="form-group">
+                <label>⏱️ 見積もり所要時間 (分) *</label>
+                <input type="number" id="input-preset-est-min" required min="1" max="600" value="15">
+              </div>
+
+              <!-- Domain, Dept, Proj Cascades -->
+              <div class="form-group">
+                <label>🏷️ 階層分類（ドメイン・部門・プロジェクト）</label>
+                <div class="cascade-grid cascade-row">
+                  <select id="select-preset-domain-major">
+                    <option value="">ドメイン (大分類)</option>
+                    <option value="PN1">PN1 個人基盤</option>
+                    <option value="PN2">PN2 事業・顧客</option>
+                    <option value="PN3">PN3 組織・チーム</option>
+                    <option value="PN4">PN4 財務・資産</option>
+                    <option value="PN5" selected>PN5 投資・研究開発/生活</option>
+                  </select>
+                  <select id="select-preset-domain-minor">
+                    <option value="">ドメイン (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="select-preset-dept-major">
+                    <option value="">部門 (大分類)</option>
+                    <option value="HONBU" selected>本部 (コア機能)</option>
+                    <option value="CHOKKATSU">直轄・専門機能</option>
+                  </select>
+                  <select id="select-preset-dept-minor">
+                    <option value="">部門 (詳細)</option>
+                  </select>
+                </div>
+                <div class="cascade-grid cascade-row">
+                  <select id="select-preset-proj-major">
+                    <option value="">プロジェクト (大分類)</option>
+                    <option value="BIZ">ビジネス系</option>
+                    <option value="LIFE" selected>プライベート系</option>
+                  </select>
+                  <select id="select-preset-proj-minor">
+                    <option value="">プロジェクト (詳細)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Eisenhower, 6-Axis Matrix, Tags, Notes -->
+            <div class="modal-form-col">
+              
+              <!-- Eisenhower Priority Label Selector -->
+              <div class="form-group">
+                <label>🏷️ アイゼンハワー分類（優先度・重要度）</label>
+                <div class="segmented-control eisenhower-segmented" id="preset-label-selector">
+                  <button type="button" class="segment-btn label-iron" data-label="iron_rule" title="センターピン中のセンターピン。何をさしおいてもALL INする最重要タスク">🔥 ALL - IN</button>
+                  <button type="button" class="segment-btn label-frog0" data-label="frog0">🐸 第0</button>
+                  <button type="button" class="segment-btn label-p1" data-label="p1">💼 第1</button>
+                  <button type="button" class="segment-btn label-p2" data-label="p2">🌱 第2</button>
+                  <button type="button" class="segment-btn label-p3 active" data-label="p3">🧺 第3</button>
+                  <button type="button" class="segment-btn label-p4" data-label="p4">🎮 第4</button>
+                  <button type="button" class="segment-btn" data-label="none">なし</button>
+                </div>
+              </div>
+
+              <!-- 6-Axis Load & Evaluation Smart Matrix -->
+              <div class="load-matrix-card">
+                <div class="load-matrix-title-row">
+                  <span class="load-matrix-title">📊 6軸 負荷・評価マトリクス</span>
+                  <span class="load-matrix-hint">※未設定は Mid (標準)</span>
+                </div>
+                <div class="load-matrix-grid">
+                  
+                  <!-- 1. Importance -->
+                  <div class="load-matrix-item" data-matrix="importance">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🎯 重要度</span>
+                      <span class="load-item-val-badge" id="badge-preset-importance">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-preset-importance">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 2. Urgency -->
+                  <div class="load-matrix-item" data-matrix="urgency">
+                    <div class="load-item-header">
+                      <span class="load-item-name">⏰ 緊急度</span>
+                      <span class="load-item-val-badge" id="badge-preset-urgency">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-preset-urgency">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 3. Mental Load -->
+                  <div class="load-matrix-item" data-matrix="mentalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🧠 認知負荷</span>
+                      <span class="load-item-val-badge" id="badge-preset-mentalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-preset-mentalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 4. Physical Load -->
+                  <div class="load-matrix-item" data-matrix="physicalLoad">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🏃 体力負荷</span>
+                      <span class="load-item-val-badge" id="badge-preset-physicalLoad">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-preset-physicalLoad">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 5. Frog Level -->
+                  <div class="load-matrix-item" data-matrix="frogLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">🐸 カエル度</span>
+                      <span class="load-item-val-badge" id="badge-preset-frogLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-preset-frogLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+
+                  <!-- 6. Interest Level -->
+                  <div class="load-matrix-item" data-matrix="interestLevel">
+                    <div class="load-item-header">
+                      <span class="load-item-name">💡 興味・関心</span>
+                      <span class="load-item-val-badge" id="badge-preset-interestLevel">Mid</span>
+                    </div>
+                    <div class="load-chips-row" id="chips-preset-interestLevel">
+                      <button type="button" class="matrix-chip" data-val="low">Low</button>
+                      <button type="button" class="matrix-chip active-mid" data-val="mid">Mid</button>
+                      <button type="button" class="matrix-chip" data-val="high">High</button>
+                      <button type="button" class="matrix-chip" data-val="most">Most</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tags (Moved to Right Column Bottom) -->
+              <div class="form-group">
+                <label>🏷️ タグ（例: 食材, サプリ, 運動 / カンマ区切り）</label>
+                <input type="text" id="preset-tags" placeholder="食材, サプリ, 経理（カンマ区切り）" autocomplete="off" />
+                <div class="tag-suggestions-row" id="preset-tag-suggestions"></div>
+              </div>
+
+              <!-- Notes (Moved to Right Column Bottom with Generous Height) -->
+              <div class="form-group">
+                <label>📝 メモ・備考</label>
+                <textarea id="textarea-preset-notes" rows="3" placeholder="参考リンク、要件、チェックリストなど (タスク作成時に自動付与)" style="min-height: 64px;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions full-width" style="margin-top: 10px;">
+            <button type="button" class="btn-secondary" id="btn-cancel-preset-form-bottom">キャンセル</button>
+            <button type="button" class="btn-primary" id="btn-save-new-preset-bottom">💾 プリセットを保存 <span class="kbd-sub">Ctrl+Enter</span></button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal: Quick Complete Note & Count Prompt -->
+  <div class="modal-overlay" id="modal-quick-complete">
+    <div class="modal-card modal-quick-complete-card">
+      <div class="modal-header">
+        <div class="modal-header-left">
+          <span class="modal-header-icon" id="quick-complete-icon" style="color: #10b981;">✨</span>
+          <h3 id="quick-complete-title">完了を記録</h3>
+        </div>
+        <button type="button" class="modal-close" id="btn-close-quick-complete">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-quick-complete">
+          <input type="hidden" id="quick-complete-type" value="habit">
+          <input type="hidden" id="quick-complete-id" value="">
+
+          <div class="quick-complete-item-banner">
+            <div class="qc-target-info">
+              <span class="qc-target-type" id="quick-complete-type-badge">🌿 ハビット</span>
+              <span class="qc-target-name" id="quick-complete-item-name">朝スクワット50回</span>
+            </div>
+            <span class="qc-duration-badge" id="quick-complete-duration-badge">⏱️ 計測: 10分</span>
+          </div>
+
+          <div class="quick-complete-metrics-row">
+            <div class="form-group" id="quick-complete-count-group" style="flex: 1;">
+              <label>🔢 今日の実施回数 / 数量</label>
+              <div class="qc-count-input-wrap">
+                <button type="button" class="qc-stepper-btn" onclick="stepQuickCompleteCount(-1)">−</button>
+                <input type="number" id="quick-complete-count" min="1" max="9999" value="1" style="text-align: center; font-weight: 700; font-family: 'JetBrains Mono', monospace;">
+                <button type="button" class="qc-stepper-btn" onclick="stepQuickCompleteCount(1)">＋</button>
+                <span class="qc-unit-label" id="quick-complete-unit-label">回目</span>
+              </div>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label>⏱️ 実績所要時間 (分)</label>
+              <div class="qc-count-input-wrap">
+                <input type="number" id="quick-complete-duration" min="1" max="999" value="10" style="text-align: center; font-weight: 700; font-family: 'JetBrains Mono', monospace;">
+                <span class="qc-unit-label">分</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 10px;">
+            <label>📝 一言メモ・作業記録（任意）</label>
+            <input type="text" id="quick-complete-note" placeholder="例: 30回×3セット達成！インターバル45秒、腰の調子良好" autocomplete="off" style="font-size: 12.5px; font-weight: 600;">
+          </div>
+
+          <div class="modal-footer" style="margin-top: 16px; padding-top: 0; border-top: none;">
+            <button type="submit" class="btn-primary btn-qc-submit" style="width: 100%; height: 42px; font-size: 13.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">✓ 完了 <span class="kbd-sub" style="font-size: 11px; opacity: 0.85;">Enter</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cloud Sync Configuration (Google Apps Script / Spreadsheet API) -->
+  <div class="modal-overlay" id="modal-cloud-sync">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon">☁️</span>
+          <span class="modal-title">Googleスプレッドシート クラウド同期設定</span>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 20px;">
+        <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 14px; margin-bottom: 18px; font-size: 13px; line-height: 1.6;">
+          <b style="color: var(--accent-cyan);">⚡ PC ⇔ Androidスマホ 完全自動同期</b><br>
+          Google Apps Script (GAS) の「ウェブアプリURL」を設定すると、タスクやハビットの実行状態がGoogleスプレッドシートを介してスマホ版とリアルタイム同期されます。
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="font-weight: 700; font-size: 13px; display: block; margin-bottom: 6px;">🔗 GAS ウェブアプリ URL (Web App URL)</label>
+          <input type="url" id="cloud-sync-gas-url" placeholder="https://script.google.com/macros/s/AKfycbx.../exec" style="width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-main);" autocomplete="off">
+          <span style="font-size: 11px; color: var(--text-dim); display: block; margin-top: 4px;">※「gas_sync_script.js」をApps Scriptに貼り付けてデプロイしたURLです</span>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-primary" onclick="saveCloudSyncSettings()" style="flex: 2; height: 42px; font-weight: 700;">💾 設定を保存して今すぐ同期</button>
+          <button type="button" class="btn-secondary" onclick="testCloudSyncPull()" style="flex: 1; height: 42px;">📥 クラウドから取得</button>
+          <button type="button" class="btn-secondary" onclick="testCloudSyncPush()" style="flex: 1; height: 42px;">📤 クラウドへ送信</button>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 14px;">
+          <span id="cloud-sync-modal-status" style="font-size: 12px; color: var(--text-dim);">ステータス: 未設定</span>
+          <button type="button" class="btn-danger-subtle" onclick="clearCloudSyncSettings()" style="font-size: 12px; padding: 6px 12px;">URL設定を解除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating UNDO Toast (Snackbar) -->
+  <div class="undo-toast-container" id="undo-toast">
+    <div class="undo-toast-message">
+      <span class="undo-toast-icon" id="undo-toast-icon">⚡</span>
+      <span id="undo-toast-text">タスクを移動しました</span>
+    </div>
+    <button type="button" class="btn-undo-action" id="btn-undo-action" title="直前の操作を取り消す (Ctrl+Z)">
+      <span>↩️</span> 元に戻す <span style="font-size: 10px; opacity: 0.8; font-family: 'JetBrains Mono', monospace;">Ctrl+Z</span>
+    </button>
+    <button type="button" class="btn-undo-dismiss" id="btn-undo-dismiss" title="閉じる">✕</button>
+  </div>
+
+  <!-- Floating Top Neon Alert for Timer Completion -->
+  <div class="timer-finish-alert" id="timer-finish-alert">
+    <div class="timer-alert-glow"></div>
+    <div class="timer-alert-content">
+      <span class="timer-alert-icon" id="timer-alert-icon">⏱️</span>
+      <div class="timer-alert-texts">
+        <span class="timer-alert-title" id="timer-alert-title">タイマー完了！</span>
+        <span class="timer-alert-sub" id="timer-alert-sub">25分 全集中セッションが終了しました</span>
+      </div>
+      <button type="button" class="btn-timer-alert-jump" id="btn-timer-alert-jump" onclick="setMode('timer'); dismissTimerAlert();" title="タイマー画面を開く (6)">⏱️ タイマー画面へ <span class="kbd-sub">6</span></button>
+      <button type="button" class="btn-timer-alert-dismiss" onclick="dismissTimerAlert()" title="閉じる">✕</button>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sampleData.js"></script>
+  <script src="js/utils/dateUtils.js"></script>
+  <script src="js/engine/recurrenceEngine.js"></script>
+  <script src="js/engine/statsEngine.js"></script>
+  <script src="js/engine/matrixEngine.js"></script>
+  <script src="js/engine/carryoverEngine.js"></script>
+  <script src="js/engine/keyboardShortcuts.js"></script>
+  <script src="js/services/undoService.js"></script>
+  <script src="js/services/storageService.js"></script>
+  <script src="js/services/taskTimerService.js"></script>
+  <script src="js/components/cardRenderers.js"></script>
+  <script src="js/components/modalService.js"></script>
+  <script src="js/components/taskPresetsService.js"></script>
+  <script src="js/components/dragAndDropService.js"></script>
+  <script src="js/views/calendarView.js"></script>
+  <script src="js/views/sectionView.js"></script>
+  <script src="js/views/focusView.js"></script>
+  <script src="js/views/allView.js"></script>
+  <script src="js/views/tableView.js"></script>
+  <script src="js/views/bucketView.js"></script>
+  <script src="js/views/goalsView.js"></script>
+  <script src="js/views/timerView.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
