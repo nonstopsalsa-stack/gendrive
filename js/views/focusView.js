@@ -173,7 +173,7 @@ function renderFocusView() {
                 ✓ 完了する (Space)
               </button>
             ` : isPaused ? `
-              <button class="btn-focus-action" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-weight: 700;" onclick="startTask('${task.id}')">
+              <button class="btn-focus-action pause" onclick="startTask('${task.id}')">
                 ⏸️ 再開する (Space)
               </button>
               <button class="btn-focus-action success" onclick="completeTask('${task.id}')">
@@ -260,7 +260,7 @@ function renderFocusView() {
                 <span class="timescale-source">(${estInfo.label})</span>
               </div>
               <div class="timescale-live-timer" id="focus-habit-live-timer">
-                ${isInProgress ? `● 経過: <b>${elapsedFormatted}</b>` : `目安: <b>${habit.targetMin || 15}分</b>`}
+                ${isInProgress ? `● 経過: <b>${elapsedFormatted}</b>` : `実働: <b>0分</b>`}
               </div>
             </div>
 
@@ -280,7 +280,7 @@ function renderFocusView() {
                 🎉 完了する (Enter)
               </button>
             ` : `
-              <button class="btn-focus-action primary" onclick="startHabit('${habit.id}')">
+              <button class="btn-focus-action primary habit-btn" onclick="startHabit('${habit.id}')">
                 ▶ 開始する
               </button>
             `}
