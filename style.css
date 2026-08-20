@@ -3950,7 +3950,7 @@ body[data-view-type="habit"] .section-split-container {
   white-space: pre-wrap;
 }
 
-/* Action Buttons Row */
+/* Action Buttons Row (Single Prominent Main Action + Subtle Sub Action) */
 .focus-actions-row {
   display: flex;
   gap: 10px;
@@ -3961,15 +3961,15 @@ body[data-view-type="habit"] .section-split-container {
 }
 
 .btn-focus-action {
-  height: 48px;
-  min-height: 48px;
+  height: 50px;
+  min-height: 50px;
   border-radius: 10px;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   padding: 0 16px;
   white-space: nowrap;
   cursor: pointer;
@@ -3979,11 +3979,23 @@ body[data-view-type="habit"] .section-split-container {
   user-select: none;
 }
 
+.btn-focus-action.main-action {
+  flex: 1;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.btn-focus-action.sub-action {
+  width: 92px;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .btn-focus-action.primary {
-  flex: 2;
   background: linear-gradient(135deg, #0284c7, #38bdf8);
   color: #041122;
-  font-weight: 800;
   border-color: rgba(56, 189, 248, 0.6);
   box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
 }
@@ -3996,26 +4008,20 @@ body[data-view-type="habit"] .section-split-container {
 }
 
 .btn-focus-action.success {
-  flex: 2;
   background: linear-gradient(135deg, #059669, #34d399);
   color: #022013;
-  font-weight: 800;
   border-color: rgba(52, 211, 153, 0.6);
   box-shadow: 0 0 18px rgba(52, 211, 153, 0.35);
 }
 
 .btn-focus-action.pause {
-  flex: 2;
   background: linear-gradient(135deg, #d97706, #fbbf24);
   color: #1e1202;
-  font-weight: 800;
   border-color: rgba(251, 191, 36, 0.6);
   box-shadow: 0 0 18px rgba(251, 191, 36, 0.35);
 }
 
 .btn-focus-action.secondary {
-  flex: 1;
-  min-width: 76px;
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   color: #cbd5e1;

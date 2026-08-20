@@ -169,27 +169,27 @@ function renderFocusView() {
 
           <div class="focus-actions-row">
             ${isInProgress ? `
-              <button class="btn-focus-action success" onclick="completeTask('${task.id}')">
+              <button class="btn-focus-action success main-action" onclick="completeTask('${task.id}')">
                 ✓ 完了する (Space)
               </button>
-            ` : isPaused ? `
-              <button class="btn-focus-action pause" onclick="startTask('${task.id}')">
-                ⏸️ 再開する (Space)
+              <button class="btn-focus-action secondary sub-action" onclick="pauseTask('${task.id}')" title="一時中断">
+                ⏸ 中断
               </button>
-              <button class="btn-focus-action success" onclick="completeTask('${task.id}')">
-                ✓ 完了する
+            ` : isPaused ? `
+              <button class="btn-focus-action pause main-action" onclick="startTask('${task.id}')">
+                ▶ 再開する (Space)
+              </button>
+              <button class="btn-focus-action secondary sub-action" onclick="openEditTaskModal('${task.id}')" title="タスクを編集">
+                ⚙️ 編集
               </button>
             ` : `
-              <button class="btn-focus-action primary" onclick="startTask('${task.id}')">
+              <button class="btn-focus-action primary main-action" onclick="startTask('${task.id}')">
                 ▶ 開始する (Space)
               </button>
+              <button class="btn-focus-action secondary sub-action" onclick="openEditTaskModal('${task.id}')" title="タスクを編集">
+                ⚙️ 編集
+              </button>
             `}
-            <button class="btn-focus-action secondary" onclick="skipTask('${task.id}')">
-              スキップ
-            </button>
-            <button class="btn-focus-action secondary" onclick="openEditTaskModal('${task.id}')">
-              ⚙️ 編集
-            </button>
           </div>
         </div>
       `;
@@ -276,20 +276,20 @@ function renderFocusView() {
 
           <div class="focus-actions-row">
             ${isInProgress ? `
-              <button class="btn-focus-action success" onclick="completeHabit('${habit.id}')">
+              <button class="btn-focus-action success main-action" onclick="completeHabit('${habit.id}')">
                 🎉 完了する (Enter)
               </button>
+              <button class="btn-focus-action secondary sub-action" onclick="pauseHabit('${habit.id}')" title="一時中断">
+                ⏸ 中断
+              </button>
             ` : `
-              <button class="btn-focus-action primary habit-btn" onclick="startHabit('${habit.id}')">
+              <button class="btn-focus-action primary habit-btn main-action" onclick="startHabit('${habit.id}')">
                 ▶ 開始する
               </button>
+              <button class="btn-focus-action secondary sub-action" onclick="openEditModal('${habit.id}')" title="ハビットを編集">
+                ⚙️ 編集
+              </button>
             `}
-            <button class="btn-focus-action secondary" onclick="skipHabit('${habit.id}')">
-              スキップ (S)
-            </button>
-            <button class="btn-focus-action secondary" onclick="openEditModal('${habit.id}')">
-              ⚙️ 編集
-            </button>
           </div>
         </div>
       `;

@@ -177,27 +177,7 @@ function getSectionOrder(secStr) {
 }
 
 function autoCarryoverPastSessionTasks() {
-  if (mState.selectedDateOffset !== 0) return; // Only for today
-  const currentSecId = detectCurrentSectionId();
-  const currentOrder = parseInt(currentSecId.replace('sec_', '')) || 4;
-  const currentSecObj = SECTIONS.find(s => s.id === currentSecId);
-  const currentSecName = currentSecObj ? currentSecObj.match[0] : '第3セッション';
-
-  let carried = false;
-  mState.tasks.forEach(t => {
-    if (t.status !== 'completed' && t.status !== 'skipped' && t.bucket !== 'someday' && t.bucket !== 'vault') {
-      const taskOrder = getSectionOrder(t.section);
-      if (taskOrder < currentOrder) {
-        // Carry forward to current active session
-        t.section = currentSecName;
-        carried = true;
-      }
-    }
-  });
-
-  if (carried) {
-    saveLocalTasks();
-  }
+  // Pure non-destructive function: do not mutate task.section so that section/daily/task/habit modes work accurately.
 }
 
 // =========================================================================
@@ -562,16 +542,16 @@ function renderHeaderDateAndETA() {
   const sectionTasks = todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
   const sectionHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
 
-  // Update 4-Button Counts
+  // Update 4-Button Counts (Pure numbers for sleek pill badge)
   const sectionCountEl = document.getElementById('m-section-count');
   const dailyCountEl = document.getElementById('m-daily-count');
   const taskCountEl = document.getElementById('m-task-count');
   const habitCountEl = document.getElementById('m-habit-count');
 
-  if (sectionCountEl) sectionCountEl.textContent = `(${sectionTasks.length + sectionHabits.length})`;
-  if (dailyCountEl) dailyCountEl.textContent = `(${todayTasks.length + todayHabits.length})`;
-  if (taskCountEl) taskCountEl.textContent = `(${todayTasks.length})`;
-  if (habitCountEl) habitCountEl.textContent = `(${todayHabits.length})`;
+  if (sectionCountEl) sectionCountEl.textContent = sectionTasks.length + sectionHabits.length;
+  if (dailyCountEl) dailyCountEl.textContent = todayTasks.length + todayHabits.length;
+  if (taskCountEl) taskCountEl.textContent = todayTasks.length;
+  if (habitCountEl) habitCountEl.textContent = todayHabits.length;
 
   // Calculate ETA for Tasks
   let remainingMinutes = 0;
@@ -649,8 +629,16 @@ function renderList() {
     const secTasks = todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
     const secHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
 
+    const secHeaderHtml = `
+      <div class="m-section-indicator">
+        <span class="m-sec-left">⚡ <b>${currentSecObj.name}</b> (現在セクション)</span>
+        <span class="m-sec-count-tag">${secTasks.length + secHabits.length}件</span>
+      </div>
+    `;
+
     if (secTasks.length === 0 && secHabits.length === 0) {
       container.innerHTML = `
+        ${secHeaderHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">✨</span>
           <b style="color: var(--text-muted); font-size: 14px;">現在セクション（${currentSecObj.name}）の未完了項目はありません</b>
@@ -662,7 +650,7 @@ function renderList() {
 
     const tasksHtml = secTasks.map(t => renderSlimTaskCard(t)).join('');
     const habitsHtml = secHabits.map(h => renderSlimHabitCard(h)).join('');
-    container.innerHTML = tasksHtml + habitsHtml;
+    container.innerHTML = secHeaderHtml + tasksHtml + habitsHtml;
 
   } else if (mode === 'daily') {
     // All Today Tasks + Habits (Flat list, no section partitions)
@@ -731,7 +719,7 @@ function secSortedHabits(habits) {
 function renderSlimHabitCard(habit) {
   return `
     <div class="m-card-slim" id="h-card-${habit.id}">
-      <div class="m-card-left">
+      <div class="m-card-left" onclick="toggleHabit('${habit.id}')" style="cursor:pointer;">
         <span class="m-slim-icon">🌿</span>
         <span class="m-slim-title">${habit.name}</span>
       </div>
@@ -757,21 +745,15 @@ function renderSlimTaskCard(task) {
       </div>
       <div class="m-card-actions-slim">
         ${isInProgress ? `
-          <button class="btn-slim btn-slim-pause" onclick="pauseTask('${task.id}')" title="一時中断">
-            ⏸
-          </button>
           <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
             ✔ 完了
           </button>
         ` : isPaused ? `
-          <button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">
+          <button class="btn-slim btn-slim-pause-resume" onclick="startTask('${task.id}')">
             ▶ 再開
           </button>
-          <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
-            ✔ 完了
-          </button>
         ` : `
-          <button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')" style="min-width: 68px;">
+          <button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">
             ▶ 開始
           </button>
         `}
