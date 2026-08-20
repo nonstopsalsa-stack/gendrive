@@ -15,12 +15,12 @@ const STORAGE_KEYS = {
 
 const SECTIONS = [
   { id: 'all', name: '今日全体' },
-  { id: 'sec_1', name: '第1セッション', match: ['第1セッション', '第1', '早朝', '朝'] },
-  { id: 'sec_2', name: '朝オペ', match: ['朝オペ', '家事', '育児'] },
-  { id: 'sec_3', name: '第2セッション', match: ['第2セッション', '第2', '午前'] },
-  { id: 'sec_4', name: '第3セッション', match: ['第3セッション', '第3', '午後'] },
-  { id: 'sec_5', name: '夜オペ', match: ['夜オペ', '夕食', '団らん'] },
-  { id: 'sec_6', name: '第4セッション', match: ['第4セッション', '第4', '夜'] }
+  { id: 'sec_1', name: '🌅 第1', match: ['第1セッション', '第1', '早朝', '朝'] },
+  { id: 'sec_2', name: '🍳 朝オペ', match: ['朝オペ', '家事', '育児'] },
+  { id: 'sec_3', name: '⚡ 第2', match: ['第2セッション', '第2', '午前'] },
+  { id: 'sec_4', name: '🛠️ 第3', match: ['第3セッション', '第3', '午後'] },
+  { id: 'sec_5', name: '🍲 夜オペ', match: ['夜オペ', '夕食', '団らん'] },
+  { id: 'sec_6', name: '🌙 第4', match: ['第4セッション', '第4', '夜'] }
 ];
 
 let mState = {
@@ -139,16 +139,18 @@ function loadLocalData() {
   mState.activeTaskId = activeTask ? activeTask.id : null;
 }
 
-function saveLocalTasks() {
+function saveLocalTasks(instant = true) {
   localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
-  updateMetadata();
-  triggerCloudPush();
+  updateMetadata({ lastUpdatedDevice: 'MOBILE' });
+  if (instant) pushToCloud();
+  else triggerCloudPush();
 }
 
-function saveLocalHabits() {
+function saveLocalHabits(instant = true) {
   localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(mState.habits));
-  updateMetadata();
-  triggerCloudPush();
+  updateMetadata({ lastUpdatedDevice: 'MOBILE' });
+  if (instant) pushToCloud();
+  else triggerCloudPush();
 }
 
 // =========================================================================
@@ -160,8 +162,6 @@ function checkAndRunDayRollover() {
   const meta = getMetadata();
 
   if (meta.lastProcessedDate !== todayKey) {
-    // A new day has arrived while phone was open or just opened
-    // 1. Auto carryover past incomplete tasks to today
     let carriedCount = 0;
     mState.tasks.forEach(t => {
       if (t.type !== 'recurring' && !['someday', 'vault'].includes(t.bucket)) {
@@ -173,7 +173,6 @@ function checkAndRunDayRollover() {
       }
     });
 
-    // 2. Reset daily habit statuses
     mState.habits.forEach(h => {
       if (h.status !== 'in_progress') {
         const todayCount = (h.history && h.history[todayKey]) ? (h.history[todayKey].count || 0) : 0;
@@ -185,7 +184,7 @@ function checkAndRunDayRollover() {
     updateMetadata({ lastProcessedDate: todayKey });
     localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
     localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(mState.habits));
-    triggerCloudPush();
+    pushToCloud();
   }
 }
 
@@ -200,7 +199,7 @@ function triggerCloudPush() {
   if (cloudDebounceTimeout) clearTimeout(cloudDebounceTimeout);
   cloudDebounceTimeout = setTimeout(() => {
     pushToCloud();
-  }, 1000);
+  }, 500);
 }
 
 async function pushToCloud() {
@@ -657,15 +656,15 @@ function renderSlimTaskCard(task) {
 
   return `
     <div class="m-card-slim ${isInProgress ? 'in-progress' : ''} ${isPaused ? 'paused' : ''}" id="t-card-${task.id}">
-      <div class="m-card-left">
+      <div class="m-card-left" onclick="${isInProgress ? `completeTask('${task.id}')` : `startTask('${task.id}')`}" style="cursor:pointer;">
         <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🎯'}</span>
         <span class="m-slim-title">${task.title}</span>
         ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : ''}
       </div>
       <div class="m-card-actions-slim">
         ${isInProgress ? `
-          <button class="btn-slim btn-slim-pause" onclick="pauseTask('${task.id}')">
-            ⏸ 中断
+          <button class="btn-slim btn-slim-pause" onclick="pauseTask('${task.id}')" title="一時中断">
+            ⏸
           </button>
           <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
             ✔ 完了
@@ -678,11 +677,8 @@ function renderSlimTaskCard(task) {
             ✔ 完了
           </button>
         ` : `
-          <button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">
+          <button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')" style="min-width: 68px;">
             ▶ 開始
-          </button>
-          <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
-            ✔ 完了
           </button>
         `}
       </div>
