@@ -3,7 +3,7 @@
  * Offline Cache & High-Speed Launch Engine
  */
 
-const CACHE_NAME = 'gendrive-lite-v8';
+const CACHE_NAME = 'gendrive-lite-v11';
 const ASSETS_TO_CACHE = [
   './mobile.html',
   './mobile.css',
@@ -12,10 +12,11 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -34,25 +35,25 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Google Apps Script API calls should bypass cache (always fresh network)
+  // Google Apps Script API calls should bypass cache
   if (event.request.url.includes('script.google.com') || event.request.url.includes('google.com')) {
     return;
   }
 
+  // Network First with Cache Fallback strategy
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch fresh copy in background
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, networkResponse);
-            });
-          }
-        }).catch(() => {});
-        return cachedResponse;
-      }
-      return fetch(event.request);
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });

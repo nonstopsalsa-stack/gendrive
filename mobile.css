@@ -271,13 +271,9 @@ body {
 .mode-switcher-container {
   display: flex;
   gap: 4px;
-  padding: 6px 8px;
-  background: rgba(7, 11, 20, 0.95);
-  border-bottom: 1px solid var(--border-subtle);
-  position: sticky;
-  top: 77px;
-  z-index: 90;
-  backdrop-filter: blur(14px);
+  padding: 6px 0 0 0;
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .mode-switch-btn {
@@ -299,6 +295,11 @@ body {
   text-overflow: clip;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
+  -webkit-user-select: none;
+}
+
+.mode-switch-btn * {
+  pointer-events: none;
 }
 
 .mode-switch-btn .btn-icon {
@@ -483,14 +484,37 @@ body.theme-habit .m-card-slim {
   color: #fff;
 }
 
-.m-sec-count-tag {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 800;
+.m-section-indicator.daily-indicator {
+  background: rgba(168, 85, 247, 0.09);
+  border-color: rgba(192, 132, 252, 0.25);
+  color: #c084fc;
+}
+
+.m-section-indicator.daily-indicator .m-sec-count-tag {
+  background: rgba(192, 132, 252, 0.2);
+  color: #c084fc;
+}
+
+.m-section-indicator.task-indicator {
+  background: rgba(2, 132, 199, 0.09);
+  border-color: rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+}
+
+.m-section-indicator.task-indicator .m-sec-count-tag {
   background: rgba(56, 189, 248, 0.2);
   color: #38bdf8;
-  padding: 1.5px 6px;
-  border-radius: 10px;
+}
+
+.m-section-indicator.habit-indicator {
+  background: rgba(16, 185, 129, 0.09);
+  border-color: rgba(52, 211, 153, 0.25);
+  color: #34d399;
+}
+
+.m-section-indicator.habit-indicator .m-sec-count-tag {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
 }
 
 /* Card Slim Inner & Action Buttons */

@@ -36,7 +36,10 @@ let activeTimerInterval = null;
 let cloudDebounceTimeout = null;
 
 function switchMode(mode) {
-  haptic(12);
+  try {
+    haptic(12);
+  } catch (e) {}
+
   mState.activeMode = mode;
   document.body.className = `theme-${mode}`;
 
@@ -657,8 +660,16 @@ function renderList() {
     const sortedTasks = secSortedTasks(todayTasks);
     const sortedHabits = secSortedHabits(todayHabits);
 
+    const dailyHeaderHtml = `
+      <div class="m-section-indicator daily-indicator">
+        <span class="m-sec-left">📅 <b>本日の全アイテム</b> (フラット表示)</span>
+        <span class="m-sec-count-tag">${sortedTasks.length + sortedHabits.length}件</span>
+      </div>
+    `;
+
     if (sortedTasks.length === 0 && sortedHabits.length === 0) {
       container.innerHTML = `
+        ${dailyHeaderHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">🎉</span>
           <b style="color: var(--text-muted); font-size: 14px;">本日のタスク・習慣はすべて完了しました！</b>
@@ -670,14 +681,22 @@ function renderList() {
 
     const tasksHtml = sortedTasks.map(t => renderSlimTaskCard(t)).join('');
     const habitsHtml = sortedHabits.map(h => renderSlimHabitCard(h)).join('');
-    container.innerHTML = tasksHtml + habitsHtml;
+    container.innerHTML = dailyHeaderHtml + tasksHtml + habitsHtml;
 
   } else if (mode === 'task') {
     // Today's Tasks Only (Flat list)
     const sortedTasks = secSortedTasks(todayTasks);
 
+    const taskHeaderHtml = `
+      <div class="m-section-indicator task-indicator">
+        <span class="m-sec-left">🎯 <b>本日のタスク一覧</b></span>
+        <span class="m-sec-count-tag">${sortedTasks.length}件</span>
+      </div>
+    `;
+
     if (sortedTasks.length === 0) {
       container.innerHTML = `
+        ${taskHeaderHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">⚡</span>
           <b style="color: var(--text-muted); font-size: 14px;">未完了のタスクはありません</b>
@@ -687,14 +706,22 @@ function renderList() {
       return;
     }
 
-    container.innerHTML = sortedTasks.map(t => renderSlimTaskCard(t)).join('');
+    container.innerHTML = taskHeaderHtml + sortedTasks.map(t => renderSlimTaskCard(t)).join('');
 
   } else if (mode === 'habit') {
     // Today's Habits Only (Flat list)
     const sortedHabits = secSortedHabits(todayHabits);
 
+    const habitHeaderHtml = `
+      <div class="m-section-indicator habit-indicator">
+        <span class="m-sec-left">🌿 <b>本日のハビット一覧</b></span>
+        <span class="m-sec-count-tag">${sortedHabits.length}件</span>
+      </div>
+    `;
+
     if (sortedHabits.length === 0) {
       container.innerHTML = `
+        ${habitHeaderHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">🌿</span>
           <b style="color: var(--text-muted); font-size: 14px;">未完了のハビットはありません</b>
@@ -704,7 +731,7 @@ function renderList() {
       return;
     }
 
-    container.innerHTML = sortedHabits.map(h => renderSlimHabitCard(h)).join('');
+    container.innerHTML = habitHeaderHtml + sortedHabits.map(h => renderSlimHabitCard(h)).join('');
   }
 }
 
@@ -931,14 +958,22 @@ function saveSettings() {
   closeSettingsModal();
 }
 
-// =========================================================================
-// 8. Initialization & Lifecycle
-// =========================================================================
-
 window.addEventListener('DOMContentLoaded', () => {
   loadLocalData();
   checkAndRunDayRollover();
   renderMobileApp();
+
+  // Attach safe explicit listeners to the 4 mode switch buttons
+  ['section', 'daily', 'task', 'habit'].forEach(m => {
+    const btn = document.getElementById(`btn-mode-${m}`);
+    if (btn) {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        switchMode(m);
+      });
+    }
+  });
 
   // Pull fresh cloud data on startup
   if (getGasUrl()) {

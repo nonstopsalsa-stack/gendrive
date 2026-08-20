@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="mobile.css?v=20260820_11">
 </head>
 <body>
 
@@ -43,7 +43,7 @@
       </div>
     </div>
 
-    <!-- Date & ETA Info Bar -->
+  <!-- Date & ETA Info Bar -->
     <div class="header-info-bar">
       <div class="date-selector-group">
         <button class="btn-date-nav" onclick="changeDate(-1)">◀</button>
@@ -55,6 +55,22 @@
         <b class="eta-time" id="m-eta-time-val">--:--</b>
         <span id="m-eta-remain-info" style="font-size: 11px; opacity: 0.85;">(残 --)</span>
       </div>
+    </div>
+
+    <!-- 4-Mode Switcher Bar (Section / Daily / Task / Habit) -->
+    <div class="mode-switcher-container" id="m-mode-switcher">
+      <button class="mode-switch-btn active" id="btn-mode-section" onclick="switchMode('section')" title="現在セクション">
+        <span class="btn-icon">⚡</span><span class="btn-text">セクション</span><span class="mode-count" id="m-section-count">0</span>
+      </button>
+      <button class="mode-switch-btn" id="btn-mode-daily" onclick="switchMode('daily')" title="今日の全未完タスク・ハビット">
+        <span class="btn-icon">📅</span><span class="btn-text">デイリー</span><span class="mode-count" id="m-daily-count">0</span>
+      </button>
+      <button class="mode-switch-btn" id="btn-mode-task" onclick="switchMode('task')" title="今日の全未完タスク">
+        <span class="btn-icon">🎯</span><span class="btn-text">タスク</span><span class="mode-count" id="m-task-count">0</span>
+      </button>
+      <button class="mode-switch-btn" id="btn-mode-habit" onclick="switchMode('habit')" title="今日の全未完ハビット">
+        <span class="btn-icon">🌿</span><span class="btn-text">ハビット</span><span class="mode-count" id="m-habit-count">0</span>
+      </button>
     </div>
   </header>
 
@@ -72,22 +88,6 @@
       <button class="btn-touch btn-touch-pause" onclick="pauseTask(mState.activeTaskId)">⏸ 中断</button>
       <button class="btn-touch btn-touch-success" onclick="completeTask(mState.activeTaskId)">✔ 完了</button>
     </div>
-  </div>
-
-  <!-- 4-Mode Switcher Bar (Section / Daily / Task / Habit) -->
-  <div class="mode-switcher-container" id="m-mode-switcher">
-    <button class="mode-switch-btn active" id="btn-mode-section" onclick="switchMode('section')" title="現在セクション">
-      <span class="btn-icon">⚡</span><span class="btn-text">セクション</span><span class="mode-count" id="m-section-count">0</span>
-    </button>
-    <button class="mode-switch-btn" id="btn-mode-daily" onclick="switchMode('daily')" title="今日の全未完タスク・ハビット">
-      <span class="btn-icon">📅</span><span class="btn-text">デイリー</span><span class="mode-count" id="m-daily-count">0</span>
-    </button>
-    <button class="mode-switch-btn" id="btn-mode-task" onclick="switchMode('task')" title="今日の全未完タスク">
-      <span class="btn-icon">🎯</span><span class="btn-text">タスク</span><span class="mode-count" id="m-task-count">0</span>
-    </button>
-    <button class="mode-switch-btn" id="btn-mode-habit" onclick="switchMode('habit')" title="今日の全未完ハビット">
-      <span class="btn-icon">🌿</span><span class="btn-text">ハビット</span><span class="mode-count" id="m-habit-count">0</span>
-    </button>
   </div>
 
   <!-- Mobile Main Content -->
@@ -165,6 +165,6 @@
     <button class="m-undo-btn" id="m-undo-action-btn" onclick="executeMobileUndo()">↩️ 元に戻す</button>
   </div>
 
-  <script src="mobile.js"></script>
+  <script src="mobile.js?v=20260820_11"></script>
 </body>
 </html>
