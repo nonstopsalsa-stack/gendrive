@@ -378,7 +378,16 @@ function setupKeyboardShortcuts() {
 
       case 'f':
       case 'F':
-        if (typeof openCascadeFilterModal === 'function') openCascadeFilterModal('proj', 'プロジェクト', PROJECTS_DATA);
+        e.preventDefault();
+        if (state.currentMode === 'all') {
+          if (typeof toggleDailyFlatView === 'function') {
+            toggleDailyFlatView();
+          }
+        } else {
+          if (typeof setMode === 'function') {
+            setMode('all');
+          }
+        }
         break;
 
       case 'n':

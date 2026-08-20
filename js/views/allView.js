@@ -1,16 +1,39 @@
-/**
- * Gendrive - All / Today Full Scroll View Renderer
- * 哲生 (AI Company OS & Personal OS Engine)
- */
+// =========================================================================
+// 1. Render All View (Today Screen with Robust Flat Mode & Section Groups)
+// =========================================================================
 
-// =========================================================================
-// 1. Render All View (Today Screen with Section Groups for both Tasks & Habits)
-// =========================================================================
+function isFlatDailyViewActive() {
+  if (typeof state.isFlatDailyView === 'undefined') {
+    state.isFlatDailyView = localStorage.getItem('gendrive_flat_daily_view') === 'true';
+  }
+  return state.isFlatDailyView;
+}
+
+function toggleDailyFlatView() {
+  state.isFlatDailyView = !isFlatDailyViewActive();
+  localStorage.setItem('gendrive_flat_daily_view', state.isFlatDailyView ? 'true' : 'false');
+  if (typeof renderApp === 'function') {
+    renderApp();
+  }
+  if (typeof showFloatingUndoToast === 'function') {
+    showFloatingUndoToast(state.isFlatDailyView ? '📑 デイリー: セクションバー非表示（フラット表示）' : '📑 デイリー: セクションバー表示（通常）');
+  }
+}
 
 function renderAllView() {
-  renderAnytimeBlock();
+  const isFlat = isFlatDailyViewActive();
+  const anytimeDailyBlock = document.getElementById('anytime-daily-block');
+
+  if (anytimeDailyBlock) {
+    anytimeDailyBlock.style.display = isFlat ? 'none' : 'block';
+  }
+  if (!isFlat) {
+    renderAnytimeBlock();
+  }
 
   const container = document.getElementById('all-today-groups');
+  if (!container) return;
+
   const todayTasks = state.tasks.filter(isTaskForSelectedDate);
   const allHabits = state.habits;
 
@@ -21,19 +44,109 @@ function renderAllView() {
   const totalDoneAll = doneTasks + doneHabits;
   const totalRate = totalAll ? Math.round((totalDoneAll / totalAll) * 100) : 0;
 
-  document.getElementById('stat-tasks-summary').textContent = `${doneTasks} / ${todayTasks.length}`;
-  document.getElementById('stat-habits-summary').textContent = `${doneHabits} / ${allHabits.length}`;
-  document.getElementById('stat-rate-text').textContent = `${totalRate}%`;
+  const statTasksEl = document.getElementById('stat-tasks-summary');
+  const statHabitsEl = document.getElementById('stat-habits-summary');
+  const statRateEl = document.getElementById('stat-rate-text');
+  if (statTasksEl) statTasksEl.textContent = `${doneTasks} / ${todayTasks.length}`;
+  if (statHabitsEl) statHabitsEl.textContent = `${doneHabits} / ${allHabits.length}`;
+  if (statRateEl) statRateEl.textContent = `${totalRate}%`;
 
   const showTasks = state.viewType === 'all' || state.viewType === 'task';
   const showHabits = state.viewType === 'all' || state.viewType === 'habit';
 
-  let html = '';
+  // Toolbar Banner with Flat Mode Toggle Button
+  const toolbarHtml = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 8px 14px; background: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid var(--border-subtle);">
+      <div style="font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+        <span>📅 <b>1日全体フルビュー</b></span>
+        <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: ${isFlat ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.06)'}; color: ${isFlat ? 'var(--accent-cyan)' : 'var(--text-muted)'}; font-weight: 700;">
+          ${isFlat ? '📑 フラット表示 (バーOFF)' : '🗂️ セクション別表示 (バーON)'}
+        </span>
+      </div>
+      <button type="button" class="btn-secondary" onclick="toggleDailyFlatView()" style="font-size: 11.5px; height: 30px; padding: 0 12px; font-weight: 700; color: ${isFlat ? 'var(--accent-cyan)' : 'var(--text-main)'}; border-color: ${isFlat ? 'var(--accent-cyan)' : 'var(--border-subtle)'}; display: flex; align-items: center; gap: 6px; cursor: pointer;" title="セクションの区切りバーの表示/非表示を切り替えます (ショートカット: F)">
+        <span>${isFlat ? '📑 セクションバー: OFF' : '🗂️ セクションバー: ON'}</span>
+        <kbd style="font-size: 10px; padding: 2px 5px; background: rgba(255,255,255,0.12); border-radius: 3px; font-family: monospace;">F</kbd>
+      </button>
+    </div>
+  `;
+
+  // =========================================================================
+  // CASE A: FLAT MODE (All Tasks & Habits Cleanly Listed Without Section Bars)
+  // =========================================================================
+  if (isFlat) {
+    // 1. Collect ALL Today's Tasks in Section Order (第1 ➔ 朝オペ ➔ 第2 ➔ 第3 ➔ 夜オペ ➔ 第4 ➔ 未設定)
+    const allTodayTasksRaw = state.tasks.filter(isTaskForSelectedDate);
+    
+    // Sort tasks by section order
+    const sectionOrderMap = {
+      '第1セッション': 1, '第1': 1, '早朝': 1,
+      '朝オペ': 2, '家事': 2, '育児': 2,
+      '第2セッション': 3, '第2': 3, '午前': 3,
+      '第3セッション': 4, '第3': 4, '午後': 4,
+      '夜オペ': 5, '夕食': 5, '団らん': 5,
+      '第4セッション': 6, '第4': 6, '夜': 6
+    };
+
+    const sortedTasks = [...allTodayTasksRaw].sort((a, b) => {
+      const orderA = sectionOrderMap[a.section] || 99;
+      const orderB = sectionOrderMap[b.section] || 99;
+      return orderA - orderB;
+    });
+
+    const flatTasks = sortedTasks.filter(t => {
+      if (state.filters.status === 'uncompleted') return t.status !== 'completed' && t.status !== 'skipped';
+      if (state.filters.status === 'completed') return t.status === 'completed';
+      if (state.filters.domain && t.domainMajor !== state.filters.domain && t.domainMinor !== state.filters.domain) return false;
+      if (state.filters.dept && t.deptMajor !== state.filters.dept && t.deptMinor !== state.filters.dept) return false;
+      if (state.filters.proj && t.projMajor !== state.filters.proj && t.projMinor !== state.filters.proj) return false;
+      if (!matchesTagFilters(t)) return false;
+      return true;
+    });
+
+    // 2. Collect ALL Habits
+    const flatHabits = getFilteredHabits('all');
+
+    let flatContentHtml = `
+      ${toolbarHtml}
+      <div class="section-group" style="margin-bottom: 20px; border: 1px solid rgba(56, 189, 248, 0.2); background: rgba(15, 23, 42, 0.45); padding: 14px; border-radius: 10px;">
+        <div class="section-split-container ${showTasks && showHabits ? '' : 'grid-single'}">
+          ${showTasks ? `
+            <div class="section-subgroup">
+              <div style="font-size: 13px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding-bottom: 6px;">
+                <span>🎯 今日の全タスク (${flatTasks.length}件)</span>
+                <button class="btn-banner-add btn-banner-add-task" onclick="openAddTaskModal()" style="font-size: 11px; padding: 3px 8px;">＋ タスク追加</button>
+              </div>
+              <div class="cards-list">
+                ${flatTasks.length > 0 ? flatTasks.map(renderTaskCardHtml).join('') : '<p style="font-size: 12px; color: var(--text-dim); padding: 12px;">🎯 未完了のタスクはありません</p>'}
+              </div>
+            </div>
+          ` : ''}
+          ${showHabits ? `
+            <div class="section-subgroup">
+              <div style="font-size: 13px; font-weight: 700; color: var(--accent-emerald); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(52, 211, 153, 0.2); padding-bottom: 6px;">
+                <span>🌿 今日の全ハビット (${flatHabits.length}件)</span>
+                <button class="btn-banner-add btn-banner-add-habit" onclick="openAddModal()" style="font-size: 11px; padding: 3px 8px;">＋ ハビット追加</button>
+              </div>
+              <div class="cards-list">
+                ${flatHabits.length > 0 ? flatHabits.map(renderHabitCardHtml).join('') : '<p style="font-size: 12px; color: var(--text-dim); padding: 12px;">🌿 未完了のハビットはありません</p>'}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = flatContentHtml;
+    return;
+  }
+
+  // =========================================================================
+  // CASE B: STANDARD SECTIONED MODE (With Section Bars)
+  // =========================================================================
+  let html = toolbarHtml;
 
   for (const s of SECTIONS_CONFIG) {
-    // 1. Filter Tasks for this Section
     const secTasksAll = getTasksForSection(s.name);
-
     const secTasks = secTasksAll.filter(t => {
       if (state.filters.status === 'uncompleted') return t.status !== 'completed' && t.status !== 'skipped';
       if (state.filters.status === 'completed') return t.status === 'completed';
@@ -44,18 +157,12 @@ function renderAllView() {
       return true;
     });
 
-    // 2. Filter Habits for this Section
     const secHabits = getFilteredHabits('all').filter(h => isHabitInDailySection(h, s.name));
 
-    const hasTasks = showTasks && (secTasks.length > 0 || (state.filters.status === 'all' && secTasksAll.length > 0) || state.filters.status === 'uncompleted');
-    const hasHabits = showHabits && secHabits.length > 0;
-
-    // In filtered mode, skip empty sections entirely
     if (state.filters.status !== 'all' && secTasks.length === 0 && secHabits.length === 0) {
       continue;
     }
 
-    // Calculate Section Remaining Minutes & Dynamic ETA for this section (Date-Aware)
     const isToday = state.selectedDateOffset === 0;
     const isPast = state.selectedDateOffset > 0;
     const isFuture = state.selectedDateOffset < 0;

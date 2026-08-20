@@ -74,19 +74,20 @@
     </div>
   </div>
 
-  <!-- Task / Habit Dual Mode Switcher (Deep-Blue vs Deep-Green) -->
-  <div class="mode-switcher-container">
-    <button class="mode-switch-btn active" id="btn-mode-task" onclick="switchItemType('task')">
-      ⚡ タスク <span class="mode-count" id="m-task-count">(0)</span>
+  <!-- 4-Mode Switcher Bar (Section / Daily / Task / Habit) -->
+  <div class="mode-switcher-container" id="m-mode-switcher">
+    <button class="mode-switch-btn active" id="btn-mode-section" onclick="switchMode('section')" title="現在セクション">
+      ⚡ セクション <span class="mode-count" id="m-section-count">(0)</span>
     </button>
-    <button class="mode-switch-btn" id="btn-mode-habit" onclick="switchItemType('habit')">
+    <button class="mode-switch-btn" id="btn-mode-daily" onclick="switchMode('daily')" title="今日の全未完タスク・ハビット">
+      📅 デイリー <span class="mode-count" id="m-daily-count">(0)</span>
+    </button>
+    <button class="mode-switch-btn" id="btn-mode-task" onclick="switchMode('task')" title="今日の全未完タスク">
+      🎯 タスク <span class="mode-count" id="m-task-count">(0)</span>
+    </button>
+    <button class="mode-switch-btn" id="btn-mode-habit" onclick="switchMode('habit')" title="今日の全未完ハビット">
       🌿 ハビット <span class="mode-count" id="m-habit-count">(0)</span>
     </button>
-  </div>
-
-  <!-- Section Tabs (Horizontally Scrollable) -->
-  <div class="section-tabs-container" id="m-section-tabs">
-    <!-- Rendered Dynamically -->
   </div>
 
   <!-- Mobile Main Content -->
@@ -96,6 +97,44 @@
       <!-- Rendered Dynamically -->
     </div>
   </main>
+
+  <!-- Floating Action Button: Quick Add (Thumb Reachable) -->
+  <button class="m-fab-add" id="m-fab-add" onclick="openQuickAddModal()" title="タスクを追加">
+    <span>⚡＋</span>
+  </button>
+
+  <!-- Quick Add Task Bottom Sheet Modal -->
+  <div class="m-modal-overlay" id="m-quick-add-modal" onclick="closeQuickAddModal()">
+    <div class="m-modal-sheet" onclick="event.stopPropagation()">
+      <div class="sheet-handle"></div>
+      <h3 class="sheet-title">⚡ クイックタスク追加</h3>
+      <form onsubmit="handleQuickAddTask(event)">
+        <div style="margin-bottom: 12px;">
+          <input type="text" id="m-quick-task-title" placeholder="タスク名を入力..." required style="width: 100%; font-size: 15px; font-weight: 600; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--accent-cyan); color: #fff;">
+        </div>
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+          <select id="m-quick-task-section" style="flex: 1; font-size: 12.5px; padding: 10px; border-radius: 8px; background: rgba(15,23,42,0.9); border: 1px solid var(--border-subtle); color: #fff;">
+            <option value="第1セッション">🌅 第1セッション</option>
+            <option value="朝オペ">🍳 朝オペ</option>
+            <option value="第2セッション">⚡ 第2セッション</option>
+            <option value="第3セッション" selected>🛠️ 第3セッション</option>
+            <option value="夜オペ">🍲 夜オペ</option>
+            <option value="第4セッション">🌙 第4セッション</option>
+          </select>
+          <select id="m-quick-task-est" style="width: 85px; font-size: 12.5px; padding: 10px; border-radius: 8px; background: rgba(15,23,42,0.9); border: 1px solid var(--border-subtle); color: #fff;">
+            <option value="15">15分</option>
+            <option value="25" selected>25分</option>
+            <option value="45">45分</option>
+            <option value="60">60分</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="submit" class="btn-touch btn-touch-primary" style="flex: 2;">⚡ 追加する</button>
+          <button type="button" class="btn-touch btn-touch-subtle" onclick="closeQuickAddModal()" style="flex: 1;">閉じる</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Settings Bottom Sheet Modal -->
   <div class="m-modal-overlay" id="m-settings-modal" onclick="closeSettingsModal()">

@@ -27,8 +27,7 @@ let mState = {
   tasks: [],
   habits: [],
   selectedDateOffset: 0,
-  activeType: 'task', // 'task' | 'habit'
-  activeSectionId: 'all',
+  activeMode: 'section', // 'section' | 'daily' | 'task' | 'habit'
   activeTaskId: null,
   isSyncing: false
 };
@@ -36,19 +35,32 @@ let mState = {
 let activeTimerInterval = null;
 let cloudDebounceTimeout = null;
 
-function switchItemType(type) {
+function switchMode(mode) {
   haptic(12);
-  mState.activeType = type;
-  document.body.className = type === 'task' ? 'theme-task' : 'theme-habit';
+  mState.activeMode = mode;
+  document.body.className = `theme-${mode}`;
 
-  const btnTask = document.getElementById('btn-mode-task');
-  const btnHabit = document.getElementById('btn-mode-habit');
-  if (btnTask && btnHabit) {
-    btnTask.classList.toggle('active', type === 'task');
-    btnHabit.classList.toggle('active', type === 'habit');
+  // Dynamically update Android status bar theme-color
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) {
+    let barColor = '#070b14';
+    if (mode === 'daily') barColor = '#0a0817';
+    else if (mode === 'task') barColor = '#060b17';
+    else if (mode === 'habit') barColor = '#04120b';
+    metaTheme.setAttribute('content', barColor);
   }
 
+  const modes = ['section', 'daily', 'task', 'habit'];
+  modes.forEach(m => {
+    const btn = document.getElementById(`btn-mode-${m}`);
+    if (btn) btn.classList.toggle('active', mode === m);
+  });
+
   renderMobileApp();
+}
+
+function switchItemType(type) {
+  switchMode(type);
 }
 
 // =========================================================================
@@ -517,10 +529,9 @@ function toggleHabit(habitId) {
 
 function renderMobileApp() {
   autoCarryoverPastSessionTasks();
-  document.body.className = mState.activeType === 'task' ? 'theme-task' : 'theme-habit';
+  document.body.className = `theme-${mState.activeMode || 'section'}`;
   renderHeaderDateAndETA();
   renderStickyActiveBar();
-  renderSectionTabs();
   renderList();
 }
 
@@ -536,24 +547,35 @@ function renderHeaderDateAndETA() {
     dateEl.textContent = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]}) ${isToday ? '今日' : ''}`;
   }
 
-  // Count Uncompleted for Today
-  const todayTasks = mState.tasks.filter(t => (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.bucket !== 'someday' && t.bucket !== 'vault');
-  const uncompletedTasks = todayTasks.filter(t => t.status !== 'completed' && t.status !== 'skipped');
+  // Today's Uncompleted Tasks
+  const todayTasks = mState.tasks.filter(t => (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.bucket !== 'someday' && t.bucket !== 'vault' && t.status !== 'completed' && t.status !== 'skipped');
 
-  const uncompletedHabits = mState.habits.filter(h => {
+  // Today's Uncompleted Habits
+  const todayHabits = mState.habits.filter(h => {
     const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
     return !(entry && entry.done);
   });
 
-  // Update Switcher Counts
+  // Current Section Tasks & Habits
+  const currentSecId = detectCurrentSectionId();
+  const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
+  const sectionTasks = todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
+  const sectionHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
+
+  // Update 4-Button Counts
+  const sectionCountEl = document.getElementById('m-section-count');
+  const dailyCountEl = document.getElementById('m-daily-count');
   const taskCountEl = document.getElementById('m-task-count');
   const habitCountEl = document.getElementById('m-habit-count');
-  if (taskCountEl) taskCountEl.textContent = `(${uncompletedTasks.length})`;
-  if (habitCountEl) habitCountEl.textContent = `(${uncompletedHabits.length})`;
+
+  if (sectionCountEl) sectionCountEl.textContent = `(${sectionTasks.length + sectionHabits.length})`;
+  if (dailyCountEl) dailyCountEl.textContent = `(${todayTasks.length + todayHabits.length})`;
+  if (taskCountEl) taskCountEl.textContent = `(${todayTasks.length})`;
+  if (habitCountEl) habitCountEl.textContent = `(${todayHabits.length})`;
 
   // Calculate ETA for Tasks
   let remainingMinutes = 0;
-  uncompletedTasks.forEach(t => {
+  todayTasks.forEach(t => {
     remainingMinutes += (t.estMin || 25);
   });
 
@@ -561,13 +583,13 @@ function renderHeaderDateAndETA() {
   const etaRemainEl = document.getElementById('m-eta-remain-info');
 
   if (etaTimeEl && etaRemainEl) {
-    if (uncompletedTasks.length === 0) {
+    if (todayTasks.length === 0) {
       etaTimeEl.textContent = 'ALL DONE! ⚡';
       etaRemainEl.textContent = '全完了';
     } else {
       const finishTime = new Date(Date.now() + remainingMinutes * 60000);
       etaTimeEl.textContent = `${String(finishTime.getHours()).padStart(2, '0')}:${String(finishTime.getMinutes()).padStart(2, '0')}`;
-      etaRemainEl.textContent = `残 ${Math.round(remainingMinutes / 60 * 10) / 10}h (${uncompletedTasks.length}件)`;
+      etaRemainEl.textContent = `残 ${Math.round(remainingMinutes / 60 * 10) / 10}h (${todayTasks.length}件)`;
     }
   }
 }
@@ -599,96 +621,91 @@ function updateActiveTimerDisplay(task) {
   if (badgeEl) badgeEl.textContent = timeFormatted;
 }
 
-function renderSectionTabs() {
-  const container = document.getElementById('m-section-tabs');
-  if (!container) return;
-
-  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
-
-  container.innerHTML = SECTIONS.map(sec => {
-    let count = 0;
-    if (mState.activeType === 'task') {
-      if (sec.id === 'all') {
-        count = mState.tasks.filter(t => (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.status !== 'completed' && t.status !== 'skipped' && t.bucket !== 'someday' && t.bucket !== 'vault').length;
-      } else {
-        count = mState.tasks.filter(t => {
-          if (t.scheduledDate !== targetDateKey && (t.scheduledDate || mState.selectedDateOffset !== 0)) return false;
-          if (t.status === 'completed' || t.status === 'skipped' || t.bucket === 'someday' || t.bucket === 'vault') return false;
-          return sec.match.some(m => (t.section || '').includes(m));
-        }).length;
-      }
-    } else {
-      // Habits count
-      if (sec.id === 'all') {
-        count = mState.habits.filter(h => {
-          const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
-          return !(entry && entry.done);
-        }).length;
-      } else {
-        count = mState.habits.filter(h => {
-          const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
-          if (entry && entry.done) return false;
-          return sec.match.some(m => (h.section || '').includes(m));
-        }).length;
-      }
-    }
-
-    const isActive = mState.activeSectionId === sec.id;
-    return `
-      <button class="sec-tab-btn ${isActive ? 'active' : ''}" onclick="selectSectionTab('${sec.id}')">
-        ${sec.name} <span class="tab-count">(${count})</span>
-      </button>
-    `;
-  }).join('');
-}
-
-function selectSectionTab(secId) {
-  haptic(10);
-  mState.activeSectionId = secId;
-  renderMobileApp();
-}
-
 function renderList() {
   const container = document.getElementById('m-cards-list');
   if (!container) return;
 
   const targetDateKey = getTodayDateString(mState.selectedDateOffset);
-  const currentSecObj = SECTIONS.find(s => s.id === mState.activeSectionId);
+  const currentSecId = detectCurrentSectionId();
+  const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
 
-  if (mState.activeType === 'task') {
-    // 1. Filter Tasks (Uncompleted Only)
-    let filteredTasks = mState.tasks.filter(t => {
-      if (t.bucket === 'someday' || t.bucket === 'vault') return false;
-      if (t.status === 'completed' || t.status === 'skipped') return false; // Hide Completed
-      const isDateMatch = (t.scheduledDate === targetDateKey) || (!t.scheduledDate && mState.selectedDateOffset === 0);
-      if (!isDateMatch) return false;
+  // 1. Get Today's Uncompleted Tasks
+  const todayTasks = mState.tasks.filter(t => {
+    if (t.bucket === 'someday' || t.bucket === 'vault') return false;
+    if (t.status === 'completed' || t.status === 'skipped') return false;
+    return (t.scheduledDate === targetDateKey) || (!t.scheduledDate && mState.selectedDateOffset === 0);
+  });
 
-      if (mState.activeSectionId === 'all') return true;
-      return currentSecObj.match.some(m => (t.section || '').includes(m));
-    });
+  // 2. Get Today's Uncompleted Habits
+  const todayHabits = mState.habits.filter(h => {
+    const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
+    return !(entry && entry.done);
+  });
 
-    if (filteredTasks.length === 0) {
+  const mode = mState.activeMode || 'section';
+
+  if (mode === 'section') {
+    // Current Section Tasks + Habits
+    const secTasks = todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
+    const secHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
+
+    if (secTasks.length === 0 && secHabits.length === 0) {
       container.innerHTML = `
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">✨</span>
-          <b style="color: var(--text-muted); font-size: 14px;">未完了のタスクはありません</b>
-          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">このセクションのタスクは全完了です！</p>
+          <b style="color: var(--text-muted); font-size: 14px;">現在セクション（${currentSecObj.name}）の未完了項目はありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">このセクションのタスク・ハビットは全完了です！</p>
         </div>
       `;
-    } else {
-      container.innerHTML = filteredTasks.map(t => renderSlimTaskCard(t)).join('');
+      return;
     }
-  } else {
-    // 2. Filter Habits (Uncompleted Only)
-    let filteredHabits = mState.habits.filter(h => {
-      const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
-      if (entry && entry.done) return false; // Hide Completed
 
-      if (mState.activeSectionId === 'all') return true;
-      return currentSecObj.match.some(m => (h.section || '').includes(m));
-    });
+    const tasksHtml = secTasks.map(t => renderSlimTaskCard(t)).join('');
+    const habitsHtml = secHabits.map(h => renderSlimHabitCard(h)).join('');
+    container.innerHTML = tasksHtml + habitsHtml;
 
-    if (filteredHabits.length === 0) {
+  } else if (mode === 'daily') {
+    // All Today Tasks + Habits (Flat list, no section partitions)
+    const sortedTasks = secSortedTasks(todayTasks);
+    const sortedHabits = secSortedHabits(todayHabits);
+
+    if (sortedTasks.length === 0 && sortedHabits.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">🎉</span>
+          <b style="color: var(--text-muted); font-size: 14px;">本日のタスク・習慣はすべて完了しました！</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">素晴らしい一日です⚡</p>
+        </div>
+      `;
+      return;
+    }
+
+    const tasksHtml = sortedTasks.map(t => renderSlimTaskCard(t)).join('');
+    const habitsHtml = sortedHabits.map(h => renderSlimHabitCard(h)).join('');
+    container.innerHTML = tasksHtml + habitsHtml;
+
+  } else if (mode === 'task') {
+    // Today's Tasks Only (Flat list)
+    const sortedTasks = secSortedTasks(todayTasks);
+
+    if (sortedTasks.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">⚡</span>
+          <b style="color: var(--text-muted); font-size: 14px;">未完了のタスクはありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">本日のタスクは全完了です！</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = sortedTasks.map(t => renderSlimTaskCard(t)).join('');
+
+  } else if (mode === 'habit') {
+    // Today's Habits Only (Flat list)
+    const sortedHabits = secSortedHabits(todayHabits);
+
+    if (sortedHabits.length === 0) {
       container.innerHTML = `
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">🌿</span>
@@ -696,10 +713,19 @@ function renderList() {
           <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">今日の習慣はすべて達成済みです！</p>
         </div>
       `;
-    } else {
-      container.innerHTML = filteredHabits.map(h => renderSlimHabitCard(h)).join('');
+      return;
     }
+
+    container.innerHTML = sortedHabits.map(h => renderSlimHabitCard(h)).join('');
   }
+}
+
+function secSortedTasks(tasks) {
+  return tasks.slice().sort((a, b) => getSectionOrder(a.section) - getSectionOrder(b.section));
+}
+
+function secSortedHabits(habits) {
+  return habits.slice().sort((a, b) => getSectionOrder(a.section) - getSectionOrder(b.section));
 }
 
 function renderSlimHabitCard(habit) {
@@ -790,7 +816,6 @@ function changeDate(delta) {
 function resetToToday() {
   haptic(10);
   mState.selectedDateOffset = 0;
-  mState.activeSectionId = detectCurrentSectionId();
   renderMobileApp();
 }
 
@@ -802,18 +827,117 @@ function toggleCompletedAccordion() {
   acc.classList.toggle('open', mState.isCompletedAccordionOpen);
 }
 
+function openQuickAddModal() {
+  haptic(10);
+  const modal = document.getElementById('m-quick-add-modal');
+  const titleInput = document.getElementById('m-quick-task-title');
+  const secSelect = document.getElementById('m-quick-task-section');
+
+  // Set current active section as default in select
+  const currentSecId = detectCurrentSectionId();
+  const currentSecObj = SECTIONS.find(s => s.id === currentSecId);
+  if (secSelect && currentSecObj) {
+    secSelect.value = currentSecObj.match[0];
+  }
+
+  if (modal) {
+    modal.classList.add('active');
+    try {
+      history.pushState({ modalOpen: 'quickAdd' }, '');
+    } catch (e) {}
+    if (titleInput) {
+      titleInput.value = '';
+      setTimeout(() => titleInput.focus(), 150);
+    }
+  }
+}
+
+function closeQuickAddModal(fromHistory = false) {
+  const modal = document.getElementById('m-quick-add-modal');
+  if (modal && modal.classList.contains('active')) {
+    modal.classList.remove('active');
+    if (!fromHistory && history.state && history.state.modalOpen) {
+      try { history.back(); } catch (e) {}
+    }
+  }
+}
+
+function handleQuickAddTask(e) {
+  if (e) e.preventDefault();
+  haptic([15, 30]);
+
+  const titleInput = document.getElementById('m-quick-task-title');
+  const secSelect = document.getElementById('m-quick-task-section');
+  const estSelect = document.getElementById('m-quick-task-est');
+
+  const title = (titleInput ? titleInput.value : '').trim();
+  if (!title) return;
+
+  const section = secSelect ? secSelect.value : '第3セッション';
+  const estMin = parseInt(estSelect ? estSelect.value : '25', 10) || 25;
+
+  const newTask = {
+    id: `m_task_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    title: title,
+    status: 'uncompleted',
+    section: section,
+    estMin: estMin,
+    actMin: 0,
+    scheduledDate: getTodayDateString(mState.selectedDateOffset),
+    timingType: 'scheduled',
+    bucket: 'today',
+    label: 'p1',
+    createdAt: new Date().toISOString()
+  };
+
+  mState.tasks.push(newTask);
+  saveLocalTasks(true); // Save & Push to Cloud immediately!
+  closeQuickAddModal();
+  renderMobileApp();
+
+  showMobileUndoToast(`⚡ 「${title}」を追加しました`, () => {
+    mState.tasks = mState.tasks.filter(t => t.id !== newTask.id);
+    saveLocalTasks(true);
+    renderMobileApp();
+  });
+}
+
 function openSettingsModal() {
   haptic(10);
   const modal = document.getElementById('m-settings-modal');
   const input = document.getElementById('m-gas-url-input');
   if (input) input.value = getGasUrl();
-  if (modal) modal.classList.add('active');
+  if (modal) {
+    modal.classList.add('active');
+    // Android Back Stack Push
+    try {
+      history.pushState({ modalOpen: 'settings' }, '');
+    } catch (e) {}
+  }
 }
 
-function closeSettingsModal() {
+function closeSettingsModal(fromHistory = false) {
   const modal = document.getElementById('m-settings-modal');
-  if (modal) modal.classList.remove('active');
+  if (modal && modal.classList.contains('active')) {
+    modal.classList.remove('active');
+    if (!fromHistory && history.state && history.state.modalOpen) {
+      try { history.back(); } catch (e) {}
+    }
+  }
 }
+
+// Android Hardware Back Button & Gesture Navigation Listener
+window.addEventListener('popstate', (e) => {
+  const settingsModal = document.getElementById('m-settings-modal');
+  const quickAddModal = document.getElementById('m-quick-add-modal');
+
+  if (quickAddModal && quickAddModal.classList.contains('active')) {
+    closeQuickAddModal(true);
+  }
+  if (settingsModal && settingsModal.classList.contains('active')) {
+    closeSettingsModal(true);
+  }
+});
 
 function saveSettings() {
   haptic(15);
@@ -831,7 +955,6 @@ function saveSettings() {
 
 window.addEventListener('DOMContentLoaded', () => {
   loadLocalData();
-  mState.activeSectionId = detectCurrentSectionId();
   checkAndRunDayRollover();
   renderMobileApp();
 
