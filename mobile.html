@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="mobile.css?v=20260821_22">
+  <link rel="stylesheet" href="mobile.css?v=20260821_23">
 </head>
 <body>
 
@@ -56,8 +56,34 @@
         <span id="m-eta-remain-info" style="font-size: 11px; opacity: 0.85;">(残 --)</span>
       </div>
     </div>
+  </header>
 
-    <!-- 2x2 Matrix Switcher Bar (Scope: Section/Daily × Type: Task/Habit) in 1 Single Line -->
+  <!-- Sticky Top Active Task Bar (Shown when task is running) -->
+  <div class="sticky-active-bar hidden" id="sticky-active-bar">
+    <div class="active-bar-info">
+      <div class="active-bar-tag">
+        <span class="active-bar-pulse"></span>
+        <span>RUNNING</span>
+        <span class="active-bar-timer" id="active-bar-timer">00:00</span>
+      </div>
+      <div class="active-bar-title" id="active-bar-title">タスクタイトル</div>
+    </div>
+    <div class="active-bar-actions">
+      <button class="btn-touch btn-touch-pause" onclick="pauseTask(mState.activeTaskId)">⏸ 中断</button>
+      <button class="btn-touch btn-touch-success" onclick="completeTask(mState.activeTaskId)">✔ 完了</button>
+    </div>
+  </div>
+
+  <!-- Mobile Main Content -->
+  <main class="mobile-content">
+    <!-- Uncompleted Slim Cards List -->
+    <div class="cards-container" id="m-cards-list">
+      <!-- Rendered Dynamically -->
+    </div>
+  </main>
+
+  <!-- Fixed Bottom Navigation Bar (Thumb Reachable Matrix Switcher) -->
+  <nav class="mobile-bottom-nav" id="m-bottom-nav">
     <div class="mode-switcher-container" id="m-mode-switcher">
       <div class="segmented-group scope-group">
         <button class="mode-switch-btn active" id="btn-scope-section" onclick="setScope('section')" title="現在セクション">
@@ -93,33 +119,9 @@
         </button>
       </div>
     </div>
-  </header>
+  </nav>
 
-  <!-- Sticky Top Active Task Bar (Shown when task is running) -->
-  <div class="sticky-active-bar hidden" id="sticky-active-bar">
-    <div class="active-bar-info">
-      <div class="active-bar-tag">
-        <span class="active-bar-pulse"></span>
-        <span>RUNNING</span>
-        <span class="active-bar-timer" id="active-bar-timer">00:00</span>
-      </div>
-      <div class="active-bar-title" id="active-bar-title">タスクタイトル</div>
-    </div>
-    <div class="active-bar-actions">
-      <button class="btn-touch btn-touch-pause" onclick="pauseTask(mState.activeTaskId)">⏸ 中断</button>
-      <button class="btn-touch btn-touch-success" onclick="completeTask(mState.activeTaskId)">✔ 完了</button>
-    </div>
-  </div>
-
-  <!-- Mobile Main Content -->
-  <main class="mobile-content">
-    <!-- Uncompleted Slim Cards List -->
-    <div class="cards-container" id="m-cards-list">
-      <!-- Rendered Dynamically -->
-    </div>
-  </main>
-
-  <!-- Floating Action Button: Quick Add (Thumb Reachable) -->
+  <!-- Floating Action Button: Quick Add (Thumb Reachable Above Bottom Nav) -->
   <button class="m-fab-add" id="m-fab-add" onclick="openQuickAddModal()" title="タスクを追加">
     <span>⚡＋</span>
   </button>

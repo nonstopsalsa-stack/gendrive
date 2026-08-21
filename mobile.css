@@ -265,23 +265,36 @@ body {
 }
 
 /* =========================================================================
-   3. Dual Matrix Switcher (Scope: Section/Daily × Type: Task/Habit)
+   3. Fixed Bottom Navigation Bar (Thumb Reachable Matrix Switcher)
    ========================================================================= */
+
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 950;
+  background: rgba(11, 19, 36, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px 10px calc(6px + var(--safe-bottom, 8px)) 10px;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.5);
+}
 
 .mode-switcher-container {
   display: flex;
   gap: 5px;
   align-items: center;
-  padding: 6px 0 0 0;
-  margin-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 0 auto;
+  max-width: 480px;
 }
 
 .segmented-group {
   display: flex;
   flex: 1;
   gap: 3px;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.45);
   padding: 2.5px;
   border-radius: 9px;
   border: 1px solid var(--border-subtle);
@@ -440,7 +453,7 @@ body.theme-habit {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-bottom: 20px;
+  padding-bottom: calc(78px + var(--safe-bottom, 12px));
 }
 
 /* Slim Card */
@@ -692,10 +705,10 @@ body.theme-habit .m-card-slim {
 .m-fab-add {
   position: fixed;
   right: 18px;
-  bottom: calc(var(--safe-bottom) + 20px);
-  width: 54px;
-  height: 54px;
-  border-radius: 27px;
+  bottom: calc(var(--safe-bottom, 8px) + 68px);
+  width: 52px;
+  height: 52px;
+  border-radius: 26px;
   background: linear-gradient(135deg, #0284c7, #38bdf8);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.25);
