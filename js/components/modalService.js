@@ -792,11 +792,16 @@ function openCloudSyncModal() {
   if (!modal) return;
 
   const urlInput = document.getElementById('cloud-sync-gas-url');
+  const folderInput = document.getElementById('cloud-sync-drive-folder-id');
   const statusEl = document.getElementById('cloud-sync-modal-status');
   const curUrl = getGasApiUrl();
+  const curFolderId = getDriveFolderId();
 
   if (urlInput) {
     urlInput.value = curUrl;
+  }
+  if (folderInput) {
+    folderInput.value = curFolderId;
   }
   if (statusEl) {
     if (curUrl) {
@@ -809,7 +814,127 @@ function openCloudSyncModal() {
     }
   }
 
+  // もしフォルダIDがあればバックアップ一覧も自動読み込み
+  if (curUrl && curFolderId) {
+    handleLoadDriveBackups(true);
+  }
+
   modal.classList.add('active');
+}
+
+function saveDriveFolderIdSettings() {
+  const folderInput = document.getElementById('cloud-sync-drive-folder-id');
+  if (!folderInput) return;
+  const val = folderInput.value.trim();
+  setDriveFolderId(val);
+  alert('✅ Google Driveバックアップ先フォルダIDを保存しました！');
+  if (val && getGasApiUrl()) {
+    handleLoadDriveBackups(false);
+  }
+}
+
+async function handleExportToDrive() {
+  const folderId = getDriveFolderId();
+  if (!folderId) {
+    alert('⚠️ 先に「バックアップ先 Google Drive フォルダID」を入力・保存してください。');
+    return;
+  }
+  if (!getGasApiUrl()) {
+    alert('⚠️ 先に「GAS ウェブアプリ URL」を設定してください。');
+    return;
+  }
+
+  const btn = event?.target;
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.textContent = '⏳ エクスポート中...';
+    btn.disabled = true;
+  }
+
+  try {
+    const res = await exportToDriveFolder(false);
+    alert(`✅ Google Driveへエクスポート成功！\nファイル名: ${res.fileName}\nスプレッドシート（5シート完全網羅）が作成されました。`);
+    await handleLoadDriveBackups(true);
+  } catch (err) {
+    alert('⚠️ エクスポート中にエラーが発生しました: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  }
+}
+
+async function handleLoadDriveBackups(silent = false) {
+  const selectEl = document.getElementById('drive-backup-select');
+  if (!selectEl) return;
+
+  if (!getGasApiUrl() || !getDriveFolderId()) {
+    if (!silent) alert('⚠️ GAS URL と Drive フォルダID の両方を設定してください。');
+    return;
+  }
+
+  selectEl.innerHTML = '<option value="">⏳ 世代バックアップ一覧を取得中...</option>';
+
+  try {
+    const backups = await fetchDriveBackupsList();
+    if (backups.length === 0) {
+      selectEl.innerHTML = '<option value="">(バックアップファイルがまだありません)</option>';
+      return;
+    }
+
+    let html = '';
+    backups.forEach(b => {
+      const isAuto = b.name.startsWith('AUTO_BACKUP_');
+      const prefixIcon = isAuto ? '🛡️ [自動退避]' : '📤 [手動保存]';
+      const dStr = new Date(b.updated).toLocaleString();
+      html += `<option value="${b.id}">${prefixIcon} ${b.name} (${dStr})</option>`;
+    });
+
+    selectEl.innerHTML = html;
+    if (!silent) {
+      alert(`✅ ${backups.length} 件の世代バックアップを取得しました！`);
+    }
+  } catch (err) {
+    console.error(err);
+    selectEl.innerHTML = '<option value="">⚠️ 一覧の取得に失敗しました</option>';
+    if (!silent) alert('⚠️ バックアップ一覧の取得に失敗しました: ' + err.message);
+  }
+}
+
+async function handleImportFromDriveSelect() {
+  const selectEl = document.getElementById('drive-backup-select');
+  if (!selectEl || !selectEl.value) {
+    alert('⚠️ 復元するバックアップファイルを選択してください。');
+    return;
+  }
+
+  const fileId = selectEl.value;
+  const fileName = selectEl.options[selectEl.selectedIndex].text;
+
+  const msg = `【タイムマシン復元確認】\n\n選択したバックアップ：\n${fileName}\n\n⚠️ 現在のPC内データは、安全のためにDrive上に「AUTO_BACKUP_...」として即座に自動退避された上で、選択したデータで完全に置き換わります。\n\n復元を実行しますか？`;
+  if (!confirm(msg)) return;
+
+  const btn = event?.target;
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.textContent = '⏳ 復元中...';
+    btn.disabled = true;
+  }
+
+  try {
+    const result = await importFromDriveBackup(fileId, fileName);
+    alert(`🎉 タイムマシン復元が完了しました！\n\n・タスク: ${result.tasksCount} 件\n・ハビット: ${result.habitsCount} 件\n（直前データもDrive上に自動退避されました）`);
+    closeModal();
+    if (typeof setMode === 'function') setMode('all');
+  } catch (err) {
+    alert('⚠️ 復元中にエラーが発生しました: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  }
 }
 
 function saveCloudSyncSettings() {

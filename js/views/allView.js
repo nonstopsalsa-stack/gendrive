@@ -74,8 +74,31 @@ function renderAllView() {
   // CASE A: FLAT MODE (All Tasks & Habits Cleanly Listed Without Section Bars)
   // =========================================================================
   if (isFlat) {
-    // 1. Collect ALL Today's Tasks in Section Order (第1 ➔ 朝オペ ➔ 第2 ➔ 第3 ➔ 夜オペ ➔ 第4 ➔ 未設定)
-    const allTodayTasksRaw = state.tasks.filter(isTaskForSelectedDate);
+    // 1. Collect ALL Today's Tasks (All Sections + Carried-Over + Anytime)
+    const collectedTasks = [];
+    const seenTaskIds = new Set();
+
+    for (const s of SECTIONS_CONFIG) {
+      const secTasks = getTasksForSection(s.name);
+      secTasks.forEach(t => {
+        if (!seenTaskIds.has(t.id)) {
+          seenTaskIds.add(t.id);
+          collectedTasks.push(t);
+        }
+      });
+    }
+
+    // Also include Anytime / Unassigned tasks scheduled for today
+    const todayKeyStr = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().split('T')[0];
+    state.tasks.forEach(t => {
+      const isCarriedOver = !t.isDisabled && t.type !== 'recurring' && t.status !== 'completed' && t.status !== 'skipped' && t.scheduledDate && t.scheduledDate < todayKeyStr;
+      if ((isTaskForSelectedDate(t) || isCarriedOver) && (!t.section || t.timingType === 'anytime')) {
+        if (!seenTaskIds.has(t.id)) {
+          seenTaskIds.add(t.id);
+          collectedTasks.push(t);
+        }
+      }
+    });
     
     // Sort tasks by section order
     const sectionOrderMap = {
@@ -87,15 +110,16 @@ function renderAllView() {
       '第4セッション': 6, '第4': 6, '夜': 6
     };
 
-    const sortedTasks = [...allTodayTasksRaw].sort((a, b) => {
+    const sortedTasks = [...collectedTasks].sort((a, b) => {
       const orderA = sectionOrderMap[a.section] || 99;
       const orderB = sectionOrderMap[b.section] || 99;
       return orderA - orderB;
     });
 
     const flatTasks = sortedTasks.filter(t => {
-      if (state.filters.status === 'uncompleted') return t.status !== 'completed' && t.status !== 'skipped';
-      if (state.filters.status === 'completed') return t.status === 'completed';
+      const st = getTaskStatusForSelectedDate(t);
+      if (state.filters.status === 'uncompleted') return st !== 'completed' && st !== 'skipped';
+      if (state.filters.status === 'completed') return st === 'completed';
       if (state.filters.domain && t.domainMajor !== state.filters.domain && t.domainMinor !== state.filters.domain) return false;
       if (state.filters.dept && t.deptMajor !== state.filters.dept && t.deptMinor !== state.filters.dept) return false;
       if (state.filters.proj && t.projMajor !== state.filters.proj && t.projMinor !== state.filters.proj) return false;
@@ -148,8 +172,9 @@ function renderAllView() {
   for (const s of SECTIONS_CONFIG) {
     const secTasksAll = getTasksForSection(s.name);
     const secTasks = secTasksAll.filter(t => {
-      if (state.filters.status === 'uncompleted') return t.status !== 'completed' && t.status !== 'skipped';
-      if (state.filters.status === 'completed') return t.status === 'completed';
+      const st = getTaskStatusForSelectedDate(t);
+      if (state.filters.status === 'uncompleted') return st !== 'completed' && st !== 'skipped';
+      if (state.filters.status === 'completed') return st === 'completed';
       if (state.filters.domain && t.domainMajor !== state.filters.domain && t.domainMinor !== state.filters.domain) return false;
       if (state.filters.dept && t.deptMajor !== state.filters.dept && t.deptMinor !== state.filters.dept) return false;
       if (state.filters.proj && t.projMajor !== state.filters.proj && t.projMinor !== state.filters.proj) return false;

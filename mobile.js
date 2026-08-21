@@ -546,10 +546,11 @@ function renderHeaderDateAndETA() {
   }
 
   // Today's Uncompleted Tasks
-  const todayTasks = mState.tasks.filter(t => (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.bucket !== 'someday' && t.bucket !== 'vault' && t.status !== 'completed' && t.status !== 'skipped');
+  const todayTasks = mState.tasks.filter(t => !t.isDisabled && (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.bucket !== 'someday' && t.bucket !== 'vault' && t.status !== 'completed' && t.status !== 'skipped');
 
   // Today's Uncompleted Habits
   const todayHabits = mState.habits.filter(h => {
+    if (h.isDisabled) return false;
     const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
     return !(entry && entry.done);
   });
@@ -629,6 +630,7 @@ function renderList() {
 
   // 1. Get Today's Uncompleted Tasks
   const todayTasks = mState.tasks.filter(t => {
+    if (t.isDisabled) return false;
     if (t.bucket === 'someday' || t.bucket === 'vault') return false;
     if (t.status === 'completed' || t.status === 'skipped') return false;
     return (t.scheduledDate === targetDateKey) || (!t.scheduledDate && mState.selectedDateOffset === 0);
@@ -636,6 +638,7 @@ function renderList() {
 
   // 2. Get Today's Uncompleted Habits
   const todayHabits = mState.habits.filter(h => {
+    if (h.isDisabled) return false;
     const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
     return !(entry && entry.done);
   });

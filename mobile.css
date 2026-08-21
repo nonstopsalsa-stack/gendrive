@@ -289,7 +289,7 @@ body {
 
 .segmented-divider {
   width: 1px;
-  height: 22px;
+  height: 28px;
   background: rgba(255, 255, 255, 0.12);
   flex-shrink: 0;
 }
@@ -297,20 +297,20 @@ body {
 .mode-switch-btn {
   flex: 1 1 0;
   min-width: 0;
-  height: 33px;
+  height: 40px;
   border-radius: 7px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-dim);
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 0 3px;
+  gap: 1px;
+  padding: 2px 2px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: clip;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
   -webkit-user-select: none;
@@ -320,29 +320,38 @@ body {
   pointer-events: none;
 }
 
+.mode-switch-btn .btn-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  line-height: 1;
+}
+
 .mode-switch-btn .btn-icon {
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.mode-switch-btn .mode-count {
+  font-size: 9px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  padding: 1px 4.5px;
+  border-radius: 8px;
   line-height: 1;
   flex-shrink: 0;
 }
 
 .mode-switch-btn .btn-text {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.2px;
+  line-height: 1.1;
   white-space: nowrap;
-}
-
-.mode-switch-btn .mode-count {
-  font-size: 9.5px;
-  font-weight: 800;
-  font-family: var(--font-mono);
-  background: rgba(255, 255, 255, 0.08);
-  color: inherit;
-  padding: 1.5px 4.5px;
-  border-radius: 10px;
-  line-height: 1;
-  flex-shrink: 0;
 }
 
 .mode-switch-btn:active {

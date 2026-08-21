@@ -22,7 +22,7 @@ function getWeeklyCompletionCount(habit, targetDate) {
 }
 
 function isHabitScheduledForDate(habit, dateObj) {
-  if (!habit) return false;
+  if (!habit || habit.isDisabled) return false;
   const rec = habit.recurrence || { type: 'everyday' };
   const d = dateObj ? new Date(dateObj) : new Date();
   const dayOfWeek = d.getDay(); // 0(日) - 6(土)
@@ -199,7 +199,27 @@ function getRecurrenceInfo(recurrence) {
   }
 }
 
-function getRecurrenceBadgeHtml(recurrence) {
-  const info = getRecurrenceInfo(recurrence);
+function getRecurrenceBadgeHtml(target) {
+  if (!target) return '<span class="rec-badge everyday" title="定期設定: 毎日">🌐 毎日</span>';
+  let rec = target.recurrence;
+  if (!rec) {
+    if (target.recType) {
+      rec = {
+        type: target.recType,
+        timesPerDay: target.dailyTimes,
+        timesPerWeek: target.weeklyTimes,
+        intervalDays: target.intervalDays,
+        monthInterval: target.monthInterval,
+        timingType: target.monthTiming,
+        monthDay: target.monthDay,
+        days: target.weekdays
+      };
+    } else if (typeof target.type === 'string' && target.type !== 'single' && target.type !== 'recurring') {
+      rec = target;
+    } else {
+      rec = { type: 'everyday' };
+    }
+  }
+  const info = getRecurrenceInfo(rec);
   return `<span class="rec-badge ${info.cls}" title="定期設定: ${info.label}">${info.icon} ${info.label}</span>`;
 }

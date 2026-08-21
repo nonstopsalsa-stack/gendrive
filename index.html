@@ -444,12 +444,36 @@
           </div>
         </section>
 
-        <!-- 4. Master Management Table View (Habits & Recurring Tasks) -->
+        <!-- 4. Master Management Table View (Habits & Recurring Tasks & Single Tasks) -->
         <section class="view-container" id="view-table">
-          <div class="table-tab-switch">
-            <button class="table-subtab active" data-subtab="habits" id="subtab-habits">🌿 ハビット一覧 (習慣マスター)</button>
-            <button class="table-subtab" data-subtab="tasks" id="subtab-tasks">🎯 定期タスク一覧 (定期配信マスター)</button>
-            <button class="table-subtab" data-subtab="single_tasks" id="subtab-single-tasks">📋 単発タスク一覧 (全履歴・予定)</button>
+          <div class="table-top-control-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap;">
+            <div class="table-tab-switch" style="margin-bottom: 0;">
+              <button class="table-subtab active" data-subtab="habits" id="subtab-habits" onclick="switchMasterSubtab('habits')">🌿 定期ハビット一覧 (習慣マスター)</button>
+              <button class="table-subtab" data-subtab="tasks" id="subtab-tasks" onclick="switchMasterSubtab('tasks')">🎯 定期タスク一覧 (定期配信マスター)</button>
+              <button class="table-subtab" data-subtab="single_tasks" id="subtab-single-tasks" onclick="switchMasterSubtab('single_tasks')">📋 単発タスク一覧 (全履歴・予定)</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <label style="font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                <input type="checkbox" id="toggle-show-disabled" onchange="toggleShowDisabledItems(this.checked)" style="cursor: pointer;">
+                <span>🚫 無効データを表示</span>
+              </label>
+              <button class="btn-add-primary" id="btn-master-add-item" onclick="handleMasterAddNewItem()" style="font-size: 12px; height: 32px; padding: 0 12px;">＋ 新規登録</button>
+            </div>
+          </div>
+
+          <!-- Floating Bulk Action Bar (Visible when 1+ rows selected) -->
+          <div class="master-bulk-bar hidden" id="master-bulk-bar">
+            <div class="bulk-bar-left">
+              <span class="bulk-count-badge">✓ <b id="bulk-selected-count">0</b> 件選択中</span>
+            </div>
+            <div class="bulk-bar-actions">
+              <button type="button" class="btn-bulk-action primary" onclick="openBulkEditModal()">✏️ 一括変更</button>
+              <button type="button" class="btn-bulk-action" onclick="applyBulkToggleDisabled(false)">⚡ 有効化</button>
+              <button type="button" class="btn-bulk-action" onclick="applyBulkToggleDisabled(true)">🚫 無効化</button>
+              <button type="button" class="btn-bulk-action" onclick="applyBulkDuplicate()">📋 複製</button>
+              <button type="button" class="btn-bulk-action danger" onclick="applyBulkDelete()">🗑️ 削除</button>
+              <button type="button" class="btn-bulk-action subtle" onclick="clearTableSelection()">✕ 解除</button>
+            </div>
           </div>
 
           <!-- 4-A. Habits Master Table -->
@@ -2912,41 +2936,121 @@
           <span style="font-size: 11px; color: var(--text-dim); display: block; margin-top: 4px;">※「gas_sync_script.js」をApps Scriptに貼り付けてデプロイしたURLです</span>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-          <button type="button" class="btn-primary" onclick="saveCloudSyncSettings()" style="flex: 2; height: 42px; font-weight: 700;">💾 設定を保存して今すぐ同期</button>
-          <button type="button" class="btn-secondary" onclick="testCloudSyncPull()" style="flex: 1; height: 42px;">📥 クラウドから取得</button>
-          <button type="button" class="btn-secondary" onclick="testCloudSyncPush()" style="flex: 1; height: 42px;">📤 クラウドへ送信</button>
+        <div style="display: flex; gap: 10px; margin-top: 14px;">
+          <button type="button" class="btn-primary" onclick="saveCloudSyncSettings()" style="flex: 2; height: 40px; font-weight: 700;">💾 設定を保存して今すぐ同期</button>
+          <button type="button" class="btn-secondary" onclick="testCloudSyncPull()" style="flex: 1; height: 40px;">📥 クラウドから取得</button>
+          <button type="button" class="btn-secondary" onclick="testCloudSyncPush()" style="flex: 1; height: 40px;">📤 クラウドへ送信</button>
+        </div>
+
+        <!-- Google Drive Time-Machine & 5-Sheet Backup Section -->
+        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border-color);">
+          <div style="font-size: 12px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <span>⏳ Google Drive タイムマシン・世代バックアップ（5シート完全網羅）</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="font-weight: 600; font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">📁 バックアップ先 Google Drive フォルダID</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="cloud-sync-drive-folder-id" placeholder="例: 1abcXYZ123456789... (URLのfolders/以降の英数字)" style="flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-main);" autocomplete="off">
+              <button type="button" class="btn-secondary" onclick="saveDriveFolderIdSettings()" style="font-size: 11px; padding: 4px 10px;">保存</button>
+            </div>
+            <span style="font-size: 10px; color: var(--text-dim); display: block; margin-top: 3px;">※Googleドライブで作成したバックアップ用フォルダのURL末尾IDを入力</span>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button type="button" class="btn-primary" onclick="handleExportToDrive()" style="flex: 1; font-size: 11px; height: 34px; background: linear-gradient(135deg, #0284c7, #0369a1);" title="Google Driveのフォルダに日時付き5シートスプレッドシートを作成・保存します">
+              📤 Driveへ新規エクスポート (HABIT_EXPORT_...)
+            </button>
+            <button type="button" class="btn-secondary" onclick="handleLoadDriveBackups()" style="flex: 0.8; font-size: 11px; height: 34px;" title="Driveフォルダ内の世代バックアップ一覧を取得します">
+              🔄 世代一覧を取得
+            </button>
+          </div>
+
+          <!-- Rollback Select Section -->
+          <div id="drive-rollback-container" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+            <label style="font-weight: 600; font-size: 11px; color: var(--accent-cyan); display: block; margin-bottom: 4px;">⏪ 世代バックアップから復元（タイムマシン）</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="drive-backup-select" style="flex: 1; font-size: 11px; padding: 6px; border-radius: 4px; background: #0f172a; border: 1px solid var(--border-color); color: var(--text-main);">
+                <option value="">-- 「世代一覧を取得」を押してください --</option>
+              </select>
+              <button type="button" class="btn-secondary" onclick="handleImportFromDriveSelect()" style="font-size: 11px; padding: 4px 12px; color: #fb923c;" title="選択した過去のスプレッドシートデータで完全復元します（直前に現在データが自動退避されます）">
+                ⏪ 復元実行
+              </button>
+            </div>
+            <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 4px;">※復元前に現在のデータは「AUTO_BACKUP_...」としてDriveに自動退避されます</span>
+          </div>
         </div>
 
         <!-- Local Backup & Safety Vault Section -->
-        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border-color);">
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color);">
           <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
-            <span>🛡️ データ保護・ローカルバックアップ</span>
+            <span>🛡️ ローカル緊急バックアップ & Vault</span>
             <span style="font-size: 11px; color: var(--accent-cyan);">※10世代自動保存中</span>
           </div>
 
           <!-- Auto Vault File Sync -->
-          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <b style="font-size: 12px; color: var(--accent-emerald);">📁 Obsidian Vault自動ファイル同期</b>
-              <div id="vault-sync-status-badge" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">⚪ 未設定 (クリックして設定)</div>
+              <b style="font-size: 11px; color: var(--accent-emerald);">📁 Obsidian Vault自動ファイル同期</b>
+              <div id="vault-sync-status-badge" style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">⚪ 未設定 (クリックして設定)</div>
             </div>
-            <button type="button" class="btn-secondary" onclick="setupVaultAutoSyncFile()" style="font-size: 11px; padding: 4px 10px; color: var(--accent-emerald);">⚙️ 保存先を指定</button>
+            <button type="button" class="btn-secondary" onclick="setupVaultAutoSyncFile()" style="font-size: 10px; padding: 4px 8px; color: var(--accent-emerald);">⚙️ 保存先を指定</button>
           </div>
 
           <div style="display: flex; gap: 8px;">
-            <button type="button" class="btn-secondary" onclick="exportFullBackupJSON()" style="flex: 1; font-size: 12px; height: 36px;" title="PCに全データのバックアップJSONファイルを保存します">💾 JSONバックアップ保存</button>
-            <label class="btn-secondary" style="flex: 1; font-size: 12px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin: 0;" title="過去のバックアップファイルからデータを復元します">
+            <button type="button" class="btn-secondary" onclick="exportFullBackupJSON()" style="flex: 1; font-size: 11px; height: 32px;" title="PCに全データのバックアップJSONファイルを保存します">💾 JSON保存</button>
+            <label class="btn-secondary" style="flex: 1; font-size: 11px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin: 0;" title="過去のバックアップファイルからデータを復元します">
               📂 JSON復元
               <input type="file" accept=".json" onchange="importFullBackupJSON(this.files[0])" style="display: none;">
             </label>
-            <button type="button" class="btn-secondary" onclick="restoreFromSnapshot(0)" style="flex: 1; font-size: 12px; height: 36px; color: #fb923c;" title="直前の自動保存スナップショットへ巻き戻します">⏪ 直前復元</button>
+            <button type="button" class="btn-secondary" onclick="restoreFromSnapshot(0)" style="flex: 1; font-size: 11px; height: 32px; color: #fb923c;" title="直前の自動保存スナップショットへ巻き戻します">⏪ 直前復元</button>
           </div>
         </div>
 
-        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 14px; gap: 8px;">
-          <button type="button" class="btn-secondary" onclick="restoreDefaultMasterData()" style="font-size: 12px; padding: 6px 12px; color: var(--accent-cyan);" title="消えてしまったタスクやハビットを初期マスターデータから一発復元します">⚡ マスターデータを復元</button>
-          <button type="button" class="btn-danger-subtle" onclick="clearCloudSyncSettings()" style="font-size: 12px; padding: 6px 12px;">URL設定を解除</button>
+        <div style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px; gap: 8px;">
+          <button type="button" class="btn-secondary" onclick="restoreDefaultMasterData()" style="font-size: 11px; padding: 4px 10px; color: var(--accent-cyan);" title="消えてしまったタスクやハビットを初期マスターデータから一発復元します">⚡ 初期マスター復元</button>
+          <button type="button" class="btn-danger-subtle" onclick="clearCloudSyncSettings()" style="font-size: 11px; padding: 4px 10px;">URL解除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Bulk Edit for Table Master View -->
+  <div class="modal-overlay" id="modal-bulk-edit">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon">✏️</span>
+          <span class="modal-title">選択アイテムの一括変更</span>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 20px;">
+        <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 13px;">
+          <span>🎯 現在 <b><span id="bulk-modal-target-count">0</span></b> 件のアイテムが選択されています。</span><br>
+          <span style="font-size: 11px; color: var(--text-dim);">※変更を指定した属性のみが一括で上書きされます。他の属性は維持されます。</span>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="font-weight: 700; font-size: 13px; display: block; margin-bottom: 6px;">1. 一括変更する項目を選択</label>
+          <select id="bulk-edit-field-select" onchange="renderBulkEditFormFields(this.value)" style="width: 100%; padding: 10px; border-radius: 6px; background: #0f172a; border: 1px solid var(--border-color); color: var(--text-main); font-weight: 600;">
+            <option value="section">⏱️ セクション (時間帯)</option>
+            <option value="duration">⌛ 目標時間 / 見積時間 (分)</option>
+            <option value="domain">🌐 ドメイン (大分類 / 小分類)</option>
+            <option value="proj">💼 プロジェクト (大分類 / 小分類)</option>
+            <option value="dept">🏢 部門 (大分類 / 小分類)</option>
+            <option value="tags">🏷️ タグ (追加 / 置換)</option>
+            <option value="name">📝 名前・タイトル (連番リネーム対応)</option>
+          </select>
+        </div>
+
+        <div id="bulk-edit-dynamic-inputs" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+          <!-- Dynamically populated based on selected field -->
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 18px;">
+          <button type="button" class="btn-primary" onclick="executeBulkApply()" style="flex: 2; height: 42px; font-weight: 700;">✅ 一括適用して保存</button>
+          <button type="button" class="btn-secondary" onclick="closeModal()" style="flex: 1; height: 42px;">キャンセル</button>
         </div>
       </div>
     </div>

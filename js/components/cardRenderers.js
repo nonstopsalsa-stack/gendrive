@@ -19,6 +19,12 @@ function getEisenhowerLabelBadge(labelKey) {
   return map[labelKey] || null;
 }
 
+function getEisenhowerBadgeHtml(labelKey) {
+  const badge = getEisenhowerLabelBadge(labelKey);
+  if (!badge) return '<span class="badge-eisenhower p1" title="優先度: 第1 (緊急×重要)">💼 第1</span>';
+  return `<span class="badge-eisenhower ${badge.cls}" title="優先度: ${badge.text}">${badge.text}</span>`;
+}
+
 function getTimingBadgeHtml(habit) {
   const type = habit.displayType || 'section';
   if (type === 'anytime') {

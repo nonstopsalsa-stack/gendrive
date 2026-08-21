@@ -130,7 +130,9 @@ let state = {
   tableSort: {
     key: 'default',
     order: 'asc'
-  }
+  },
+  selectedTableItemIds: new Set(),
+  showDisabledInTable: false
 };
 
 // =========================================================================
@@ -363,7 +365,7 @@ function getTaskStatusForSelectedDate(task) {
 }
 
 function isTaskForSelectedDate(task, dateObj = null) {
-  if (!task) return false;
+  if (!task || task.isDisabled) return false;
   const d = dateObj ? new Date(dateObj) : (() => {
     const dt = new Date();
     dt.setDate(dt.getDate() - state.selectedDateOffset);
@@ -1084,7 +1086,7 @@ function updateFilterPillsUI() {
 function updateSidebarBadges() {
   const buckets = ['inbox', 'this_week', 'next_week', 'genius', 'someday', 'vault'];
   buckets.forEach(b => {
-    const count = state.tasks.filter(t => t.bucket === b && t.status !== 'completed').length;
+    const count = state.tasks.filter(t => !t.isDisabled && t.bucket === b && t.status !== 'completed').length;
     const badge = document.getElementById(`badge-count-${b}`);
     if (badge) badge.textContent = count;
   });
@@ -1098,7 +1100,7 @@ function updateSidebarBadges() {
     { key: 'p4', id: 'p4' }
   ];
   labels.forEach(l => {
-    const count = state.tasks.filter(t => t.label === l.key && t.status !== 'completed').length;
+    const count = state.tasks.filter(t => !t.isDisabled && t.label === l.key && t.status !== 'completed').length;
     const badge = document.getElementById(`badge-count-${l.id}`);
     if (badge) badge.textContent = count;
   });
@@ -2440,6 +2442,8 @@ function setupTaskFormHandlers() {
       const timingType = state.selectedAddTaskTimingType || 'section';
       const bucket = state.selectedAddTaskBucket || 'today';
       const scheduledDate = document.getElementById('add-task-scheduled-date')?.value || (bucket === 'today' ? getSelectedDateKey() : null);
+      const actualTaskType = state.selectedAddTaskType || 'single';
+      const recType = actualTaskType === 'recurring' ? (state.selectedAddTaskRecType || 'everyday') : null;
 
       // Load Matrix Values
       const matrixVals = getMatrixValues('add-task');
@@ -2454,10 +2458,12 @@ function setupTaskFormHandlers() {
       const newTask = {
         id: newId,
         title,
-        scheduledDate,
+        scheduledDate: bucket === 'today' ? (scheduledDate || getSelectedDateKey()) : scheduledDate,
         bucket,
         label: state.selectedAddTaskLabel === 'none' ? null : (state.selectedAddTaskLabel || 'p1'),
-        type: state.selectedAddTaskType || 'single',
+        type: actualTaskType,
+        taskType: actualTaskType,
+        recType: recType,
         timingType,
         section: timingType === 'section' ? section : null,
         customStart: timingType === 'custom' ? customStart : null,
@@ -2483,13 +2489,13 @@ function setupTaskFormHandlers() {
       lastTaskDefaults = {
         bucket,
         label: state.selectedAddTaskLabel || 'p1',
-        taskType: state.selectedAddTaskType || 'single',
+        taskType: actualTaskType,
         timingType,
         section,
         customStart,
         customEnd,
         estMin,
-        recType: state.selectedAddTaskRecType || 'everyday',
+        recType: recType || 'everyday',
         domainMajor,
         domainMinor,
         deptMajor,
@@ -2512,6 +2518,9 @@ function setupTaskFormHandlers() {
 
       if (state.currentMode === 'section' && timingType === 'section' && section) {
         state.currentSection = section;
+      }
+      if (state.currentMode === 'table') {
+        state.masterSubtab = actualTaskType === 'recurring' ? 'tasks' : 'single_tasks';
       }
 
       closeModal();

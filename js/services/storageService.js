@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   MANIFESTO: 'habit_flow_manifesto_v1',
   PRESETS: 'habit_flow_task_presets_v1',
   GAS_URL: 'gendrive_gas_api_url',
+  DRIVE_FOLDER_ID: 'gendrive_drive_folder_id',
   METADATA: 'gendrive_sync_metadata_v1',
   SNAPSHOTS: 'gendrive_snapshots_v1'
 };
@@ -329,13 +330,14 @@ function loadTasks() {
     }
   }
 
-  // Sanitize task IDs to prevent collision
+  // Sanitize task IDs to prevent collision and ensure isDisabled is boolean
   const seenIds = new Set();
   list.forEach((t, idx) => {
     if (!t.id || seenIds.has(t.id)) {
       t.id = `T_${Date.now()}_${idx}`;
     }
     seenIds.add(t.id);
+    t.isDisabled = !!t.isDisabled;
   });
 
   return list;
@@ -462,6 +464,7 @@ function migrateHabit(h) {
   if (!h.createdAt || h.createdAt.startsWith('2026-05') || h.createdAt.startsWith('2026-06') || h.createdAt.startsWith('2026-07')) {
     h.createdAt = '2026-08-18T00:00:00.000Z';
   }
+  h.isDisabled = !!h.isDisabled;
   if (!h.stats) h.stats = {};
 
   if (h.section === '早朝') h.section = '第1セッション';
@@ -782,3 +785,149 @@ setInterval(() => {
     pullDataFromCloud(false);
   }
 }, 120000);
+
+// =========================================================================
+// 7. Google Drive Time-Machine Backup & Rollback Engine (5-Sheet Full Export)
+// =========================================================================
+
+function getDriveFolderId() {
+  return localStorage.getItem(STORAGE_KEYS.DRIVE_FOLDER_ID) || '';
+}
+
+function setDriveFolderId(id) {
+  if (id) {
+    localStorage.setItem(STORAGE_KEYS.DRIVE_FOLDER_ID, id.trim());
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.DRIVE_FOLDER_ID);
+  }
+}
+
+/**
+ * Google Driveの指定フォルダへタイムスタンプ付き5シートスプレッドシートを新規エクスポート
+ */
+async function exportToDriveFolder(isAutoBackup = false) {
+  const gasUrl = getGasApiUrl();
+  const folderId = getDriveFolderId();
+
+  if (!gasUrl) {
+    throw new Error('GASのウェブアプリURLが未設定です。「クラウド同期設定」でURLを入力してください。');
+  }
+  if (!folderId) {
+    throw new Error('Google Driveのバックアップ先フォルダIDが未設定です。');
+  }
+
+  const d = new Date();
+  const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+  const prefix = isAutoBackup ? 'AUTO_BACKUP_' : 'HABIT_EXPORT_';
+  const fileName = `${prefix}${dateStr}`;
+
+  const payload = {
+    action: 'export_to_folder',
+    folderId: folderId,
+    fileName: fileName,
+    data: {
+      habits: state.habits || [],
+      tasks: state.tasks || [],
+      goals: state.goals || {},
+      manifesto: state.manifesto || {},
+      taskPresets: state.taskPresets || []
+    }
+  };
+
+  const response = await fetch(gasUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+
+  const resJson = await response.json();
+  if (resJson.status !== 'success') {
+    throw new Error(resJson.message || 'エクスポートに失敗しました');
+  }
+
+  return resJson;
+}
+
+/**
+ * Google Driveフォルダ内のバックアップスプレッドシート一覧を取得
+ */
+async function fetchDriveBackupsList() {
+  const gasUrl = getGasApiUrl();
+  const folderId = getDriveFolderId();
+
+  if (!gasUrl || !folderId) return [];
+
+  const response = await fetch(`${gasUrl}?action=list_backups&folderId=${folderId}&t=${Date.now()}`);
+  const resJson = await response.json();
+
+  if (resJson.status === 'success' && Array.isArray(resJson.backups)) {
+    return resJson.backups;
+  }
+  return [];
+}
+
+/**
+ * Google Driveの指定スプレッドシートから5シート全データを完全復元（インポート前に自動退避）
+ */
+async function importFromDriveBackup(fileId, fileName = '選択したバックアップ') {
+  const gasUrl = getGasApiUrl();
+  if (!gasUrl) throw new Error('GASのURLが設定されていません');
+
+  // 1. 安全のための直前自動退避（DriveへのAUTO_BACKUP保存 & ローカルスナップショット）
+  createAutoBackupSnapshot();
+  try {
+    if (getDriveFolderId()) {
+      await exportToDriveFolder(true); // 自動バックアップ
+    }
+  } catch (backupErr) {
+    console.warn('インポート直前Drive自動退避に失敗しましたが、ローカルスナップショットは保存されました:', backupErr);
+  }
+
+  // 2. 指定スプレッドシートからデータを取得
+  const response = await fetch(`${gasUrl}?action=import_sheet&fileId=${fileId}&t=${Date.now()}`);
+  const resJson = await response.json();
+
+  if (resJson.status !== 'success' || !resJson.data) {
+    throw new Error(resJson.message || 'データの読み込みに失敗しました');
+  }
+
+  const restored = resJson.data;
+
+  // 3. データリプレース & サニタイズ
+  if (Array.isArray(restored.tasks)) {
+    const seenIds = new Set();
+    restored.tasks.forEach((t, idx) => {
+      if (!t.id || seenIds.has(t.id)) {
+        t.id = `T_${Date.now()}_${idx}`;
+      }
+      seenIds.add(t.id);
+      t.isDisabled = !!t.isDisabled;
+    });
+    state.tasks = restored.tasks;
+    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+  }
+
+  if (Array.isArray(restored.habits)) {
+    state.habits = restored.habits.map(migrateHabit);
+    localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+  }
+
+  updateSyncMetadata({
+    lastUpdatedDevice: 'PC_DRIVE_ROLLBACK',
+    lastUpdatedAt: new Date().toISOString()
+  });
+
+  // 4. 再描画 & 通常同期
+  if (typeof renderApp === 'function') {
+    renderApp();
+  }
+  if (getGasApiUrl()) {
+    pushDataToCloud();
+  }
+
+  return {
+    tasksCount: (state.tasks || []).length,
+    habitsCount: (state.habits || []).length
+  };
+}
+
