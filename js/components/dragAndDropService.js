@@ -204,47 +204,41 @@ function reorderItems(sourceId, sourceType, targetId, targetType, isAbove) {
     saveTasks();
     renderApp();
   } else if (sourceType === 'habit' && targetType === 'habit') {
-    const sourceIdx = state.habits.findIndex(h => String(h.id) === String(sourceId));
-    const targetIdx = state.habits.findIndex(h => String(h.id) === String(targetId));
-    if (sourceIdx === -1 || targetIdx === -1) return;
+    // 日次実行画面（セクション・デイリー画面等）でのハビット並び替え：
+    // マスターの sortOrder や正本データは一切破壊せず、「当日限りの実行順序 (dailyHabitOrder)」として保持
+    const sourceHabit = state.habits.find(h => String(h.id) === String(sourceId));
+    const targetHabit = state.habits.find(h => String(h.id) === String(targetId));
+    if (!sourceHabit || !targetHabit) return;
 
-    const sourceHabit = state.habits[sourceIdx];
-    const targetHabit = state.habits[targetIdx];
+    // 現在の当日順序またはマスター全ハビットID配列を取得
+    const activeDailyOrder = (typeof loadDailyHabitOrder === 'function' && loadDailyHabitOrder()) || state.habits.map(h => String(h.id));
+    const currentIds = [...activeDailyOrder];
+    const prevOrderSnapshot = [...currentIds];
 
-    const prevHabitsSnapshot = [...state.habits];
-    const prevHabitProps = {
-      section: sourceHabit.section,
-      displayType: sourceHabit.displayType
-    };
+    const sIndex = currentIds.indexOf(String(sourceId));
+    const tIndex = currentIds.indexOf(String(targetId));
+    if (sIndex !== -1 && tIndex !== -1) {
+      const [movedId] = currentIds.splice(sIndex, 1);
+      const newTIndex = currentIds.indexOf(String(targetId));
+      const insertIndex = isAbove ? newTIndex : newTIndex + 1;
+      currentIds.splice(insertIndex, 0, movedId);
 
-    // Sync section & displayType if dropped onto a habit in a different section
-    if (targetHabit.section) {
-      sourceHabit.section = targetHabit.section;
-    }
-    if (targetHabit.displayType) {
-      sourceHabit.displayType = targetHabit.displayType;
-    }
-
-    // Remove source habit from array
-    state.habits.splice(sourceIdx, 1);
-
-    // Calculate new insertion index
-    const newTargetIdx = state.habits.findIndex(h => String(h.id) === String(targetId));
-    const insertIdx = isAbove ? newTargetIdx : newTargetIdx + 1;
-    state.habits.splice(insertIdx, 0, sourceHabit);
-
-    pushUndoAction({
-      description: `ハビット「${sourceHabit.name}」の並び順を変更`,
-      undo: () => {
-        state.habits = prevHabitsSnapshot;
-        Object.assign(sourceHabit, prevHabitProps);
-        saveHabits();
-        renderApp();
+      if (typeof saveDailyHabitOrder === 'function') {
+        saveDailyHabitOrder(currentIds);
       }
-    });
 
-    saveHabits();
-    renderApp();
+      pushUndoAction({
+        description: `ハビット「${sourceHabit.name}」の当日実行順を変更`,
+        undo: () => {
+          if (typeof saveDailyHabitOrder === 'function') {
+            saveDailyHabitOrder(prevOrderSnapshot);
+          }
+          renderApp();
+        }
+      });
+
+      renderApp();
+    }
   }
 }
 

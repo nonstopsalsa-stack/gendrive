@@ -180,10 +180,10 @@ function createAndExportSpreadsheetToFolder(folderId, fileName, data) {
   const habitHeaders = [
     'ID', '名前', '無効(Disabled)', '状態(Status)', 'セクション', '時間種別', '開始時刻', '終了時刻',
     '目標分', '頻度種別', '回数/日', '回数/週', '間隔(日)', '月間隔', '月指定種別', '指定日', '曜日配列',
-    'ドメイン大', 'ドメイン小', '部門大', '部門小', 'PJ大', 'PJ小', 'タグ', 'マトリクス(JSON)', '作成日時'
+    'ドメイン大', 'ドメイン小', '部門大', '部門小', 'PJ大', 'PJ小', 'タグ', 'マトリクス(JSON)', '作成日時', '表示順(sortOrder)'
   ];
   const habitRows = [habitHeaders];
-  habits.forEach(h => {
+  habits.forEach((h, idx) => {
     habitRows.push([
       h.id || '',
       h.name || '',
@@ -210,7 +210,8 @@ function createAndExportSpreadsheetToFolder(folderId, fileName, data) {
       h.projMinor || '',
       Array.isArray(h.tags) ? h.tags.join(', ') : (h.tags || ''),
       JSON.stringify(h.matrix || {}),
-      h.createdAt || ''
+      h.createdAt || '',
+      typeof h.sortOrder === 'number' ? h.sortOrder : (idx + 1)
     ]);
   });
   sheetHabits.getRange(1, 1, habitRows.length, habitHeaders.length).setValues(habitRows);
@@ -298,7 +299,15 @@ function createAndExportSpreadsheetToFolder(folderId, fileName, data) {
   const habitLogHeaders = ['Habit_ID', 'ハビット名', '実行日付', '状態', '実績分', '完了日時', 'メモ'];
   const habitLogRows = [habitLogHeaders];
   habits.forEach(h => {
-    const history = Array.isArray(h.history) ? h.history : [];
+    let history = [];
+    if (Array.isArray(h.history)) {
+      history = h.history;
+    } else if (h.history && typeof h.history === 'object') {
+      history = Object.keys(h.history).map(d => {
+        const item = h.history[d];
+        return typeof item === 'object' && item !== null ? { date: d, ...item } : { date: d };
+      });
+    }
     const executionLogs = Array.isArray(h.executionLogs) ? h.executionLogs : [];
     
     // 合成ログ
@@ -426,7 +435,8 @@ function loadDataFromExportSpreadsheet(fileId) {
           tags: tags,
           matrix: matrix,
           createdAt: row[25] ? new Date(row[25]).toISOString() : new Date().toISOString(),
-          history: [],
+          sortOrder: row[26] ? Number(row[26]) : i,
+          history: {},
           executionLogs: []
         });
       }
@@ -541,21 +551,48 @@ function loadDataFromExportSpreadsheet(fileId) {
     const data = sheetHabitLogs.getDataRange().getValues();
     if (data.length > 1) {
       for (let i = 1; i < data.length; i++) {
-        const [hid, hname, date, status, actMin, completedAt, note] = data[i];
-        if (!hid || !date) continue;
+        const [hid, hname, rawDate, status, actMin, completedAt, note] = data[i];
+        if (!hid || !rawDate) continue;
+
+        let dateStr = '';
+        if (rawDate instanceof Date) {
+          dateStr = Utilities.formatDate(rawDate, Session.getScriptTimeZone() || 'Asia/Tokyo', 'yyyy-MM-dd');
+        } else {
+          const s = String(rawDate).trim();
+          if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+            dateStr = s.substring(0, 10);
+          } else {
+            try {
+              dateStr = Utilities.formatDate(new Date(s), Session.getScriptTimeZone() || 'Asia/Tokyo', 'yyyy-MM-dd');
+            } catch (e) {
+              dateStr = s;
+            }
+          }
+        }
+
         const targetHabit = habits.find(h => String(h.id) === String(hid) || h.name === hname);
         if (targetHabit) {
           targetHabit.executionLogs = targetHabit.executionLogs || [];
           targetHabit.executionLogs.push({
-            dateKey: String(date),
+            dateKey: dateStr,
             status: String(status || 'completed'),
             actMin: Number(actMin) || targetHabit.targetMin || 0,
             completedAt: completedAt ? new Date(completedAt).toISOString() : '',
             note: String(note || '')
           });
-          targetHabit.history = targetHabit.history || [];
-          if (String(status) === 'completed' && !targetHabit.history.includes(String(date))) {
-            targetHabit.history.push(String(date));
+          targetHabit.history = targetHabit.history || {};
+          if (Array.isArray(targetHabit.history)) {
+            const arr = targetHabit.history;
+            targetHabit.history = {};
+            arr.forEach(d => { targetHabit.history[d] = { done: true, count: 1 }; });
+          }
+          if (String(status) === 'completed') {
+            targetHabit.history[dateStr] = {
+              done: true,
+              count: 1,
+              completedAt: completedAt ? new Date(completedAt).toISOString() : '',
+              durationMin: Number(actMin) || targetHabit.targetMin || 0
+            };
           }
         }
       }

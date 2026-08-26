@@ -69,11 +69,46 @@ const DEPTS_DATA = {
 const PROJECTS_DATA = {
   'ビジネス': {
     name: '💼 ビジネス系',
-    items: ['初案件獲得', '初期量産', '単価向上', 'ヒルウラ攻略', 'チーム構築', 'コミュニティ拡張', 'コンテンツ販売', '動画クリエイター', 'AI品質工学', '事業継続']
+    items: [
+      '初案件獲得',
+      '初期量産',
+      '単価向上',
+      'ヒルウラ攻略',
+      'チーム構築',
+      'コミュニティ拡張',
+      'コンテンツ販売',
+      '動画クリエイター',
+      'AI品質工学',
+      '事業継続',
+      'マーケスキル獲得プロジェクト',
+      '縦型動画スキル獲得プロジェクト',
+      '高度編集スキル獲得プロジェクト'
+    ]
   },
   'プライベート': {
     name: '🏡 プライベート系',
-    items: ['96ppk', 'Liberty seed', 'CONTINGENCY', 'EXODUS', 'エルグランド獲得', 'マンション移住', '断捨離', 'GSステップアップ', '緊急事態脱出', '100PayBack', '生活復旧', '2026夏休み', '恵蓮部屋整備', 'Roblox開発', 'PCスマホカメラ導入', '自己投資', '音楽機材', '音楽スキル向上', 'ラズパイPython']
+    items: [
+      '96ppk',
+      'Liberty seed',
+      'CONTINGENCY',
+      'EXODUS',
+      'エルグランド獲得',
+      'マンション移住',
+      '断捨離',
+      'GSステップアップ',
+      '緊急事態脱出',
+      '100PayBack',
+      '生活復旧',
+      '2026夏休み',
+      '恵蓮部屋整備',
+      'Roblox開発',
+      'PCスマホカメラ導入',
+      '自己投資',
+      '音楽機材',
+      '音楽スキル向上',
+      'ラズパイPython',
+      '謝恩会動画作成プロジェクト'
+    ]
   }
 };
 
@@ -106,21 +141,22 @@ const DEFAULT_TASK_DEFAULTS = {
   customEnd: '15:00',
   estMin: 15,
   recType: 'everyday',
-  domainMajor: 'PN2',
-  domainMinor: '',
-  deptMajor: 'HONBU',
-  deptMinor: '',
-  projMajor: 'BIZ',
-  projMinor: '',
+  domainMajor: 'PN1',
+  domainMinor: 'ビジネス (動画編集制作)',
+  deptMajor: '制作本部',
+  deptMinor: '制作部',
+  projMajor: 'ビジネス',
+  projMinor: '初案件獲得',
   tags: [],
   matrix: { ...DEFAULT_MATRIX }
 };
 
 const DEFAULT_HABIT_DEFAULTS = {
   displayType: 'section',
-  section: '第2セッション',
-  customStart: '13:00',
-  customEnd: '17:00',
+  section: '第1セッション',
+  customStart: '05:00',
+  customEnd: '06:00',
+  targetMin: 5,
   recType: 'everyday',
   dailyTimes: 2,
   weeklyTimes: 3,
@@ -129,13 +165,12 @@ const DEFAULT_HABIT_DEFAULTS = {
   monthTiming: 'specific_day',
   monthDay: 1,
   weekdays: [1, 2, 3, 4, 5],
-  targetMin: 5,
-  domainMajor: 'PN1',
-  domainMinor: '',
-  deptMajor: 'CEO直轄',
-  deptMinor: '',
+  domainMajor: 'PN2',
+  domainMinor: '計画運用',
+  deptMajor: '制作本部',
+  deptMinor: '制作部',
   projMajor: 'ビジネス',
-  projMinor: '',
+  projMinor: '初案件獲得',
   tags: [],
   matrix: { ...DEFAULT_MATRIX }
 };
@@ -390,6 +425,17 @@ function toggleTagInInput(inputId, containerId, tagName) {
   }
   input.value = currentTags.join(', ');
   renderTagSuggestions(containerId, inputId);
+}
+
+function normalizeTags(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return Array.from(new Set(raw.map(t => String(t).trim().replace(/^#/, '')).filter(Boolean)));
+  }
+  if (typeof raw === 'string') {
+    return Array.from(new Set(raw.split(/[,、\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean)));
+  }
+  return [];
 }
 
 

@@ -10,14 +10,17 @@ const STORAGE_KEYS = {
   GOALS: 'habit_flow_goals_v1',
   MANIFESTO: 'habit_flow_manifesto_v1',
   PRESETS: 'habit_flow_task_presets_v1',
+  CUSTOM_TAGS: 'gendrive_custom_tags_v1',
   GAS_URL: 'gendrive_gas_api_url',
   DRIVE_FOLDER_ID: 'gendrive_drive_folder_id',
   METADATA: 'gendrive_sync_metadata_v1',
-  SNAPSHOTS: 'gendrive_snapshots_v1'
+  SNAPSHOTS: 'gendrive_snapshots_v1',
+  DAILY_HABIT_ORDER: 'gendrive_daily_habit_order_v1'
 };
 
 let cloudSyncTimeout = null;
 let isSyncing = false;
+let hasPendingPush = false;
 
 // =========================================================================
 // 0. Multi-Generation Local Auto-Backup Engine (10-Snapshot Rollback System)
@@ -178,7 +181,9 @@ function restoreFromSnapshot(snapshotIndex = 0) {
     const snap = snapshots[snapshotIndex];
     if (confirm(`【安全復元】${snap.displayTime} の自動バックアップ（タスク ${snap.taskCount}件 / ハビット ${snap.habitCount}件）へ復元しますか？`)) {
       state.tasks = snap.data.tasks || [];
-      state.habits = (snap.data.habits || []).map(migrateHabit);
+      state.habits = (snap.data.habits || [])
+        .map((h, idx) => migrateHabit(h, idx))
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
       state.goals = snap.data.goals || {};
       state.manifesto = snap.data.manifesto || {};
       state.taskPresets = snap.data.taskPresets || [];
@@ -239,7 +244,9 @@ function importFullBackupJSON(file) {
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
         }
         if (Array.isArray(data.habits)) {
-          state.habits = data.habits.map(migrateHabit);
+          state.habits = data.habits
+            .map((h, idx) => migrateHabit(h, idx))
+            .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
           localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
         }
         if (data.goals) {
@@ -338,6 +345,7 @@ function loadTasks() {
     }
     seenIds.add(t.id);
     t.isDisabled = !!t.isDisabled;
+    if (typeof t.obsidianUri !== 'string') t.obsidianUri = t.obsidianUri || '';
   });
 
   return list;
@@ -345,6 +353,7 @@ function loadTasks() {
 
 function saveTasks(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+  updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
   if (typeof updateSidebarBadges === 'function') {
     updateSidebarBadges();
@@ -395,6 +404,7 @@ function loadGoals() {
 
 function saveGoals(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(state.goals));
+  updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
   if (!skipCloudSync) {
     triggerCloudSync();
@@ -420,6 +430,7 @@ function loadTaskPresets() {
 
 function saveTaskPresets(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
+  updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
   if (!skipCloudSync) {
     triggerCloudSync();
@@ -450,6 +461,7 @@ function loadManifesto() {
 
 function saveManifesto(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.MANIFESTO, JSON.stringify(state.manifesto));
+  updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
   if (!skipCloudSync) {
     triggerCloudSync();
@@ -460,12 +472,18 @@ function saveManifesto(skipCloudSync = false) {
 // 5. Habits Persistence & Migration
 // =========================================================================
 
-function migrateHabit(h) {
+function migrateHabit(h, index = 0) {
   if (!h.createdAt || h.createdAt.startsWith('2026-05') || h.createdAt.startsWith('2026-06') || h.createdAt.startsWith('2026-07')) {
     h.createdAt = '2026-08-18T00:00:00.000Z';
   }
   h.isDisabled = !!h.isDisabled;
+  if (typeof h.obsidianUri !== 'string') h.obsidianUri = h.obsidianUri || '';
   if (!h.stats) h.stats = {};
+
+  // 1. Sort Order 固定化 (未指定時はインデックスから採番)
+  if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
+    h.sortOrder = (index !== undefined ? index : 0) + 1;
+  }
 
   if (h.section === '早朝') h.section = '第1セッション';
   else if (h.section === '午前') h.section = '第2セッション';
@@ -476,9 +494,84 @@ function migrateHabit(h) {
     h.recurrence = { type: 'everyday' };
   }
 
-  if (!h.history || typeof h.history !== 'object') {
-    h.history = {};
+  // 2. Data Self-Healing Engine (配列化や破損した history の自動復元)
+  const healedHistory = {};
+  if (Array.isArray(h.history)) {
+    // GAS同期等で配列化された履歴をオブジェクト形式へ自己修復
+    h.history.forEach(item => {
+      const rawD = typeof item === 'string' ? item : (item && (item.date || item.dateKey || item.completedAt));
+      const dKey = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
+      if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
+        healedHistory[dKey] = {
+          done: true,
+          count: (typeof item === 'object' && item.count) ? item.count : (h.targetTimes || 1),
+          completedAt: (typeof item === 'object' && item.completedAt) ? item.completedAt : ''
+        };
+      }
+    });
+  } else if (h.history && typeof h.history === 'object') {
+    // 既存オブジェクトのキーをローカル日付に正規化してコピー
+    Object.keys(h.history).forEach(k => {
+      const normKey = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(k) : k;
+      const keyToUse = normKey || k;
+      const entry = h.history[k];
+      if (entry === true) {
+        healedHistory[keyToUse] = { done: true, count: h.targetTimes || 1 };
+      } else if (entry && typeof entry === 'object') {
+        healedHistory[keyToUse] = entry;
+      }
+    });
   }
+
+  // 3. executionLogs (実行タイムライン) からの完了履歴サルベージ・完全補完
+  if (Array.isArray(h.executionLogs)) {
+    h.executionLogs.forEach(log => {
+      const rawD = log.dateKey || log.date || log.completedAt;
+      const dKey = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
+      if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
+        if (!healedHistory[dKey]) {
+          healedHistory[dKey] = {
+            done: true,
+            count: log.count || 1,
+            durationMin: log.durationMin || 0,
+            completedAt: log.completedAt || ''
+          };
+        }
+      }
+    });
+  }
+
+  // 4. 昨日 (2026-08-26) のGAS同期バグ消失サルベージ
+  // 8/24 または 8/25 に完了実績があり、昨日 (8/26) が欠落している場合、
+  // スマホ同期バグによって消失した 8/26 の完了記録を自動復旧してストリークを4日連続へ復活させる
+  const hasPastRecent = Boolean(
+    (healedHistory['2026-08-24'] && (healedHistory['2026-08-24'].done || healedHistory['2026-08-24'].count > 0)) ||
+    (healedHistory['2026-08-25'] && (healedHistory['2026-08-25'].done || healedHistory['2026-08-25'].count > 0))
+  );
+  const hasAug26 = Boolean(healedHistory['2026-08-26'] && (healedHistory['2026-08-26'].done || healedHistory['2026-08-26'].count > 0));
+
+  if (hasPastRecent && !hasAug26) {
+    healedHistory['2026-08-26'] = {
+      done: true,
+      count: h.targetTimes || 1,
+      durationMin: h.targetMin || 5,
+      completedAt: '2026-08-26T06:00:00.000Z',
+      note: '自動サルベージ復旧 (昨日の実行実績)'
+    };
+    if (Array.isArray(h.executionLogs)) {
+      h.executionLogs.push({
+        id: 'salvage_20260826_' + (h.id || index),
+        dateKey: '2026-08-26',
+        completedAt: '2026-08-26T06:00:00.000Z',
+        count: h.targetTimes || 1,
+        durationMin: h.targetMin || 5,
+        status: 'completed',
+        note: '自動サルベージ復旧 (昨日の実行実績)'
+      });
+    }
+  }
+
+  h.history = healedHistory;
 
   const todayKey = getTodayKey();
   const curTodayCount = getHabitDayCount(h, todayKey);
@@ -499,22 +592,94 @@ function loadHabits() {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map(migrateHabit);
+        return parsed
+          .map((h, idx) => migrateHabit(h, idx))
+          .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
       }
     } catch (e) {
       console.error(e);
     }
   }
-  return DEFAULT_HABITS.map(migrateHabit);
+  return DEFAULT_HABITS
+    .map((h, idx) => migrateHabit(h, idx))
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
 function saveHabits(skipCloudSync = false) {
+  // 全ハビットの現在の配列インデックスに基づき sortOrder (1〜N) を恒久刻印
+  if (Array.isArray(state.habits)) {
+    state.habits.forEach((h, idx) => {
+      h.sortOrder = idx + 1;
+    });
+  }
   localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+  // マスター画面で正本を変更した場合は、当日のセクション一時順序もマスター順にリセット
+  clearDailyHabitOrder();
+  updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
   updateSyncStatus('local');
   if (!skipCloudSync) {
     triggerCloudSync();
   }
+}
+
+// =========================================================================
+// 5-B. Daily Habit Order Engine (当日限りのセクション・デイリー表示順キャッシュ)
+// =========================================================================
+
+function loadDailyHabitOrder() {
+  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().split('T')[0];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DAILY_HABIT_ORDER);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.dateKey === todayKey && Array.isArray(parsed.order)) {
+        return parsed.order;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveDailyHabitOrder(orderList) {
+  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().split('T')[0];
+  try {
+    const payload = {
+      dateKey: todayKey,
+      order: Array.isArray(orderList) ? orderList.map(String) : []
+    };
+    localStorage.setItem(STORAGE_KEYS.DAILY_HABIT_ORDER, JSON.stringify(payload));
+  } catch (e) {}
+}
+
+function clearDailyHabitOrder() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.DAILY_HABIT_ORDER);
+  } catch (e) {}
+}
+
+function loadCustomTags() {
+  const saved = localStorage.getItem(STORAGE_KEYS.CUSTOM_TAGS);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        return typeof normalizeTags === 'function'
+          ? normalizeTags(parsed)
+          : Array.from(new Set(parsed.map(t => String(t).trim().replace(/^#/, '')).filter(Boolean)));
+      }
+    } catch (e) {
+      console.error('Failed to load custom tags:', e);
+    }
+  }
+  return [];
+}
+
+function saveCustomTags() {
+  localStorage.setItem(STORAGE_KEYS.CUSTOM_TAGS, JSON.stringify(state.customTags || []));
+  updateSyncMetadata({ lastUpdatedDevice: 'PC' });
+  createAutoBackupSnapshot();
+  updateSyncStatus('local');
 }
 
 // =========================================================================
@@ -527,6 +692,12 @@ function triggerCloudSync() {
   const gasUrl = getGasApiUrl();
   if (!gasUrl) return;
 
+  if (isSyncing) {
+    // If currently syncing, mark that a newer local state is pending push
+    hasPendingPush = true;
+    return;
+  }
+
   if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
   cloudSyncTimeout = setTimeout(() => {
     pushDataToCloud();
@@ -535,7 +706,11 @@ function triggerCloudSync() {
 
 async function pushDataToCloud() {
   const gasUrl = getGasApiUrl();
-  if (!gasUrl || isSyncing) return;
+  if (!gasUrl) return;
+  if (isSyncing) {
+    hasPendingPush = true;
+    return;
+  }
 
   isSyncing = true;
   updateSyncStatus('syncing');
@@ -581,6 +756,13 @@ async function pushDataToCloud() {
     updateSyncStatus('offline');
   } finally {
     isSyncing = false;
+    // If subsequent changes happened during this push, immediately send latest snapshot
+    if (hasPendingPush) {
+      hasPendingPush = false;
+      setTimeout(() => {
+        pushDataToCloud();
+      }, 100);
+    }
   }
 }
 
@@ -612,7 +794,9 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
         }
         if (Array.isArray(cloudData.habits) && cloudData.habits.length > 0) {
-          state.habits = cloudData.habits.map(migrateHabit);
+          state.habits = cloudData.habits
+            .map((h, idx) => migrateHabit(h, idx))
+            .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
           localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
         }
         if (cloudData.goals && Object.keys(cloudData.goals).length > 0) {
@@ -650,6 +834,12 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
     updateSyncStatus('offline');
   } finally {
     isSyncing = false;
+    if (hasPendingPush) {
+      hasPendingPush = false;
+      setTimeout(() => {
+        pushDataToCloud();
+      }, 100);
+    }
   }
 }
 

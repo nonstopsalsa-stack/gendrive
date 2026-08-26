@@ -74,11 +74,11 @@ function showPresetEditView(isNew = true, preset = null) {
     updateMinorSelectOptions('select-preset-domain-major', 'select-preset-domain-minor', DOMAINS_DATA);
 
     const deptMaj = document.getElementById('select-preset-dept-major');
-    if (deptMaj) deptMaj.value = 'HONBU';
+    if (deptMaj) deptMaj.value = '制作本部';
     updateMinorSelectOptions('select-preset-dept-major', 'select-preset-dept-minor', DEPTS_DATA);
 
     const projMaj = document.getElementById('select-preset-proj-major');
-    if (projMaj) projMaj.value = 'LIFE';
+    if (projMaj) projMaj.value = 'プライベート';
     updateMinorSelectOptions('select-preset-proj-major', 'select-preset-proj-minor', PROJECTS_DATA);
 
     // Notes & Tags
@@ -143,11 +143,11 @@ function showPresetEditView(isNew = true, preset = null) {
     updateMinorSelectOptions('select-preset-domain-major', 'select-preset-domain-minor', DOMAINS_DATA, preset.domainMinor || '');
 
     const deptMaj = document.getElementById('select-preset-dept-major');
-    if (deptMaj) deptMaj.value = preset.deptMajor || 'HONBU';
+    if (deptMaj) deptMaj.value = preset.deptMajor || '制作本部';
     updateMinorSelectOptions('select-preset-dept-major', 'select-preset-dept-minor', DEPTS_DATA, preset.deptMinor || '');
 
     const projMaj = document.getElementById('select-preset-proj-major');
-    if (projMaj) projMaj.value = preset.projMajor || 'LIFE';
+    if (projMaj) projMaj.value = preset.projMajor || 'プライベート';
     updateMinorSelectOptions('select-preset-proj-major', 'select-preset-proj-minor', PROJECTS_DATA, preset.projMinor || '');
 
     // Notes & Tags
@@ -252,9 +252,9 @@ function savePresetFromForm() {
 
   const domainMajor = document.getElementById('select-preset-domain-major')?.value || 'PN5';
   const domainMinor = document.getElementById('select-preset-domain-minor')?.value || '';
-  const deptMajor = document.getElementById('select-preset-dept-major')?.value || 'HONBU';
+  const deptMajor = document.getElementById('select-preset-dept-major')?.value || '制作本部';
   const deptMinor = document.getElementById('select-preset-dept-minor')?.value || '';
-  const projMajor = document.getElementById('select-preset-proj-major')?.value || 'LIFE';
+  const projMajor = document.getElementById('select-preset-proj-major')?.value || 'プライベート';
   const projMinor = document.getElementById('select-preset-proj-minor')?.value || '';
   const notes = document.getElementById('textarea-preset-notes')?.value || '';
   const tags = normalizeTags(document.getElementById('preset-tags')?.value);
@@ -358,13 +358,14 @@ function executePresetTask(presetId) {
     ...matrixVals,
     domainMajor: preset.domainMajor || 'PN5',
     domainMinor: preset.domainMinor || '',
-    deptMajor: preset.deptMajor || 'HONBU',
+    deptMajor: preset.deptMajor || '制作本部',
     deptMinor: preset.deptMinor || '',
-    projMajor: preset.projMajor || 'LIFE',
+    projMajor: preset.projMajor || 'プライベート',
     projMinor: preset.projMinor || '',
     tags: normalizeTags(preset.tags),
     status: 'uncompleted',
     notes: preset.notes || '⚡ プリセットタスクから即時実行',
+    obsidianUri: '',
     createdAt: now.toISOString()
   };
 

@@ -71,8 +71,9 @@ function renderSectionView() {
     }
   }
 
+  const isToday = state.selectedDateOffset === 0;
   const showTasks = state.viewType === 'all' || state.viewType === 'task';
-  const showHabits = state.viewType === 'all' || state.viewType === 'habit';
+  const showHabits = isToday && (state.viewType === 'all' || state.viewType === 'habit');
 
   const splitContainer = document.querySelector('#view-section .section-split-container');
   if (splitContainer) {
@@ -116,17 +117,17 @@ function renderSectionView() {
     }
   }
 
-  // 1-B. Habits for this section
+  // 1-B. Habits for this section (Active only on Today)
   const targetDate = new Date();
   targetDate.setDate(targetDate.getDate() - state.selectedDateOffset);
-  const currentWindowHabits = state.habits.filter(h => isHabitScheduledForDate(h, targetDate) && isHabitInCurrentTimeWindow(h));
-  const completedHabits = currentWindowHabits.filter(h => getHabitStatusForSelectedDate(h) === 'completed').length;
+  const currentWindowHabits = isToday ? state.habits.filter(h => isHabitScheduledForDate(h, targetDate) && isHabitInCurrentTimeWindow(h)) : [];
+  const completedHabits = isToday ? currentWindowHabits.filter(h => getHabitStatusForSelectedDate(h) === 'completed').length : 0;
   const secHabitProgEl = document.getElementById('section-habit-progress');
   if (secHabitProgEl) secHabitProgEl.textContent = `${completedHabits} / ${currentWindowHabits.length}`;
   const countHabitsEl = document.getElementById('count-section-habits');
   if (countHabitsEl) countHabitsEl.textContent = `${currentWindowHabits.length}件`;
 
-  const totalItems = allSectionTasks.length + currentWindowHabits.length;
+  const totalItems = allSectionTasks.length + (isToday ? currentWindowHabits.length : 0);
   const totalDone = completedTasks + completedHabits;
   const progressPercent = totalItems ? Math.round((totalDone / totalItems) * 100) : 0;
   const secProgBarEl = document.getElementById('section-progress-bar');

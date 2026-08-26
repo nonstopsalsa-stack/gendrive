@@ -311,7 +311,19 @@ function setupKeyboardShortcuts() {
       case 'v':
       case 'V':
         e.preventDefault();
-        if (typeof cycleViewType === 'function') cycleViewType();
+        if (state.currentMode === 'table' && state.masterSubtab === 'analytics') {
+          if (typeof toggleAnalyticsVisualMode === 'function') toggleAnalyticsVisualMode();
+        } else {
+          if (typeof cycleViewType === 'function') cycleViewType();
+        }
+        break;
+
+      case 's':
+      case 'S':
+        if (state.currentMode === 'table' && state.masterSubtab === 'analytics') {
+          e.preventDefault();
+          if (typeof toggleAnalyticsVisualMode === 'function') toggleAnalyticsVisualMode();
+        }
         break;
 
       case 'p':

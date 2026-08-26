@@ -34,8 +34,9 @@ function renderAllView() {
   const container = document.getElementById('all-today-groups');
   if (!container) return;
 
+  const isToday = state.selectedDateOffset === 0;
   const todayTasks = state.tasks.filter(isTaskForSelectedDate);
-  const allHabits = state.habits;
+  const allHabits = isToday ? state.habits : [];
 
   const doneTasks = todayTasks.filter(t => t.status === 'completed').length;
   const doneHabits = allHabits.filter(h => h.status === 'completed').length;
@@ -48,11 +49,18 @@ function renderAllView() {
   const statHabitsEl = document.getElementById('stat-habits-summary');
   const statRateEl = document.getElementById('stat-rate-text');
   if (statTasksEl) statTasksEl.textContent = `${doneTasks} / ${todayTasks.length}`;
-  if (statHabitsEl) statHabitsEl.textContent = `${doneHabits} / ${allHabits.length}`;
+  if (statHabitsEl) {
+    if (isToday) {
+      if (statHabitsEl.parentElement) statHabitsEl.parentElement.style.display = '';
+      statHabitsEl.textContent = `${doneHabits} / ${allHabits.length}`;
+    } else {
+      if (statHabitsEl.parentElement) statHabitsEl.parentElement.style.display = 'none';
+    }
+  }
   if (statRateEl) statRateEl.textContent = `${totalRate}%`;
 
   const showTasks = state.viewType === 'all' || state.viewType === 'task';
-  const showHabits = state.viewType === 'all' || state.viewType === 'habit';
+  const showHabits = isToday && (state.viewType === 'all' || state.viewType === 'habit');
 
   // Toolbar Banner with Flat Mode Toggle Button
   const toolbarHtml = `
@@ -127,8 +135,8 @@ function renderAllView() {
       return true;
     });
 
-    // 2. Collect ALL Habits
-    const flatHabits = getFilteredHabits('all');
+    // 2. Collect ALL Habits (Active only on Today)
+    const flatHabits = isToday ? getFilteredHabits('all') : [];
 
     let flatContentHtml = `
       ${toolbarHtml}
@@ -137,7 +145,7 @@ function renderAllView() {
           ${showTasks ? `
             <div class="section-subgroup">
               <div style="font-size: 13px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding-bottom: 6px;">
-                <span>🎯 今日の全タスク (${flatTasks.length}件)</span>
+                <span>🎯 ${isToday ? '今日の全タスク' : '対象日の全タスク'} (${flatTasks.length}件)</span>
                 <button class="btn-banner-add btn-banner-add-task" onclick="openAddTaskModal()" style="font-size: 11px; padding: 3px 8px;">＋ タスク追加</button>
               </div>
               <div class="cards-list">
@@ -182,7 +190,7 @@ function renderAllView() {
       return true;
     });
 
-    const secHabits = getFilteredHabits('all').filter(h => isHabitInDailySection(h, s.name));
+    const secHabits = isToday ? getFilteredHabits('all').filter(h => isHabitInDailySection(h, s.name)) : [];
 
     if (state.filters.status !== 'all' && secTasks.length === 0 && secHabits.length === 0) {
       continue;

@@ -26,14 +26,48 @@ function getEisenhowerBadgeHtml(labelKey) {
 }
 
 function getTimingBadgeHtml(habit) {
-  const type = habit.displayType || 'section';
+  const type = habit.displayType || habit.timingType || 'section';
   if (type === 'anytime') {
-    return `<span class="meta-tag" style="color: #38bdf8;">🌐 終日</span>`;
+    return `<span class="meta-tag timing anytime" title="タイミング: 終日">🌐 終日</span>`;
   }
   if (type === 'custom') {
-    return `<span class="meta-tag" style="color: #f59e0b;">⏰ ${habit.customStart || ''}〜${habit.customEnd || ''}</span>`;
+    return `<span class="meta-tag timing custom" title="指定時間: ${habit.customStart || ''}〜${habit.customEnd || ''}">⏰ ${habit.customStart || ''}〜${habit.customEnd || ''}</span>`;
   }
-  return `<span class="meta-tag">${habit.section || '未定'}</span>`;
+  const secName = habit.section || '未定';
+  const secIconMap = {
+    '第1セッション': '🌅',
+    '朝オペ': '🍳',
+    '第2セッション': '⚡',
+    '第3セッション': '🛠️',
+    '夜オペ': '🍲',
+    '第4セッション': '🌙'
+  };
+  const icon = secIconMap[secName] || '⏱️';
+  const hasIcon = /^[\p{Emoji}\u2600-\u27BF]/u.test(secName);
+  const displayLabel = hasIcon ? secName : `${icon} ${secName}`;
+  return `<span class="meta-tag timing section" title="セクション: ${secName}">${displayLabel}</span>`;
+}
+
+function getObsidianButtonHtml(uri, itemId, itemType) {
+  const hasLink = Boolean(uri && String(uri).trim());
+  const safeUri = hasLink ? String(uri).trim().replace(/"/g, '&quot;') : '';
+  const clickAction = hasLink
+    ? `openObsidianLink('${safeUri}', event)`
+    : `event.stopPropagation(); ${itemType === 'habit' ? `openEditModal('${itemId}')` : `openEditTaskModal('${itemId}')`}`;
+  const titleText = hasLink
+    ? `Obsidianノートを開く: ${safeUri}`
+    : `Obsidianリンク未設定（クリックして設定）`;
+
+  return `
+    <button type="button" 
+            class="btn-card-obsidian ${hasLink ? 'active' : 'disabled'}"
+            onclick="${clickAction}"
+            title="${titleText}">
+      <svg class="obsidian-svg-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+        <path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.5L18 8l-6 3.5L6 8l6-3.5zm-6.5 5.5l5.5 3.2v6.8L5.5 16V10zm13 6l-5.5 3.5v-6.8l5.5-3.2v6.5z"/>
+      </svg>
+    </button>
+  `;
 }
 
 // =========================================================================
@@ -276,7 +310,7 @@ function renderHabitCardHtml(habit, index = 0) {
       <div class="habit-card-header">
         <div class="habit-labels-row">
           ${getTimingBadgeHtml(habit)}
-          ${habit.domain ? `<span class="meta-tag domain">${habit.domain}</span>` : ''}
+          ${habit.domain ? `<span class="meta-tag domain" title="ドメイン: ${habit.domain}">${habit.domain}</span>` : ''}
           ${progressBadge}
           ${getRecurrenceBadgeHtml(habit.recurrence)}
           ${normalizeTags(habit.tags).map(t => `<span class="badge-custom-tag" onclick="handleTagBadgeClick(event, '${t}')" title="#${t} で絞込/除外">#${t}</span>`).join('')}
@@ -287,6 +321,7 @@ function renderHabitCardHtml(habit, index = 0) {
           </div>
           <div class="habit-actions" onclick="event.stopPropagation()">
             ${actionBtnHtml}
+            ${getObsidianButtonHtml(habit.obsidianUri, habit.id, 'habit')}
             <button class="btn-habit-action" onclick="openEditModal('${habit.id}')" title="設定・編集">⚙️</button>
           </div>
         </div>
@@ -405,8 +440,8 @@ function renderTaskCardHtml(task) {
           ${task._carriedOverFrom ? `<span class="badge-carryover" title="${task._carriedOverFrom}から自動繰越">⏪ 繰越 (${task._carriedOverFrom}より)</span>` : ''}
           ${labelBadge ? `<span class="badge-eisenhower ${labelBadge.cls}">${labelBadge.text}</span>` : ''}
           <span class="badge-frog">🐸 ${task.frog || 3}</span>
-          ${task.domainMinor ? `<span class="meta-tag domain">${task.domainMinor}</span>` : ''}
-          ${task.timingType === 'anytime' ? `<span class="meta-tag timing" style="color: #38bdf8;">🌐 終日</span>` : ''}
+          ${task.domainMinor ? `<span class="meta-tag domain" title="ドメイン: ${task.domainMinor}">${task.domainMinor}</span>` : ''}
+          ${task.timingType === 'anytime' ? `<span class="meta-tag timing anytime" title="タイミング: 終日">🌐 終日</span>` : ''}
           ${normalizeTags(task.tags).map(t => `<span class="badge-custom-tag" onclick="handleTagBadgeClick(event, '${t}')" title="#${t} で絞込/除外">#${t}</span>`).join('')}
         </div>
         <div class="task-header-right">
@@ -415,6 +450,7 @@ function renderTaskCardHtml(task) {
           </div>
           <div class="task-actions" onclick="event.stopPropagation()">
             ${actionsHtml}
+            ${getObsidianButtonHtml(task.obsidianUri, task.id, 'task')}
             <button class="btn-task-action" onclick="openEditTaskModal('${task.id}')" title="設定・編集">⚙️</button>
           </div>
         </div>

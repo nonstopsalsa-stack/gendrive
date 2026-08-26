@@ -18,6 +18,18 @@
 
 
 // 2-Step Cascade Select Helpers
+function openObsidianLink(rawUri, event) {
+  if (event) event.stopPropagation();
+  if (!rawUri || !String(rawUri).trim()) return;
+  const uri = String(rawUri).trim();
+  let targetUrl = uri;
+  if (!uri.startsWith('obsidian://') && !uri.startsWith('http://') && !uri.startsWith('https://')) {
+    const cleanPath = uri.replace(/\.md$/i, '');
+    targetUrl = `obsidian://open?vault=obsidian%20folder&file=${encodeURIComponent(cleanPath)}`;
+  }
+  window.open(targetUrl, '_blank');
+}
+
 function updateMinorSelectOptions(majorSelectId, minorSelectId, dataSource, selectedVal = null) {
   const majorSelect = document.getElementById(majorSelectId);
   const minorSelect = document.getElementById(minorSelectId);
@@ -100,6 +112,7 @@ let state = {
   manifesto: loadManifesto(),
   goalsSubmode: 'front', // 'front' (4大目標グリッド) | 'back' (魂の宣誓マニフェスト)
   taskPresets: loadTaskPresets(),
+  customTags: typeof loadCustomTags === 'function' ? loadCustomTags() : [],
   activeHabitId: null,
   activeTaskId: null,
   selectedIndex: 0,
@@ -163,6 +176,16 @@ function getAllRegisteredTags() {
   if (Array.isArray(state.habits)) state.habits.forEach(addTags);
   if (Array.isArray(state.taskPresets)) state.taskPresets.forEach(addTags);
 
+  // ユーザーが作成したカスタムタグ（タスク未登録でも保持）
+  if (Array.isArray(state.customTags)) {
+    state.customTags.forEach(t => {
+      const clean = String(t).trim().replace(/^#/, '');
+      if (clean && !tagCounts.hasOwnProperty(clean)) {
+        tagCounts[clean] = 0;
+      }
+    });
+  }
+
   return Object.entries(tagCounts)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([name, count]) => ({ name, count }));
@@ -214,21 +237,281 @@ function handleTagBadgeClick(e, tag) {
   toggleTagFilter(tag);
 }
 
+// -------------------------------------------------------------------------
+// Tag Management Actions: Create, Rename, Delete & Right-Click Context Menu
+// -------------------------------------------------------------------------
+
+function updateAllItemsTag(oldTag, newTag, mode) {
+  const cleanOld = oldTag ? String(oldTag).trim().replace(/^#/, '') : '';
+  const cleanNew = newTag ? String(newTag).trim().replace(/^#/, '') : '';
+
+  let affectedCount = 0;
+
+  const updateItemTags = (item) => {
+    if (!item) return;
+    let tags = normalizeTags(item.tags);
+
+    if (mode === 'rename') {
+      if (tags.includes(cleanOld)) {
+        tags = tags.map(t => (t === cleanOld ? cleanNew : t));
+        tags = Array.from(new Set(tags));
+        affectedCount++;
+      }
+    } else if (mode === 'delete') {
+      if (tags.includes(cleanOld)) {
+        tags = tags.filter(t => t !== cleanOld);
+        affectedCount++;
+      }
+    } else if (mode === 'add') {
+      if (!tags.includes(cleanNew)) {
+        tags.push(cleanNew);
+        affectedCount++;
+      }
+    }
+
+    item.tags = tags;
+  };
+
+  if (Array.isArray(state.tasks)) state.tasks.forEach(updateItemTags);
+  if (Array.isArray(state.habits)) state.habits.forEach(updateItemTags);
+  if (Array.isArray(state.taskPresets)) state.taskPresets.forEach(updateItemTags);
+
+  // カスタムタグプールの更新
+  if (Array.isArray(state.customTags)) {
+    if (mode === 'rename') {
+      state.customTags = state.customTags.map(t => (t === cleanOld ? cleanNew : t));
+    } else if (mode === 'delete') {
+      state.customTags = state.customTags.filter(t => t !== cleanOld);
+    } else if (mode === 'add') {
+      if (!state.customTags.includes(cleanNew)) state.customTags.push(cleanNew);
+    }
+  }
+
+  // フィルタ状態の同期
+  if (state.filters) {
+    if (state.filters.includeTags) {
+      if (mode === 'rename') {
+        state.filters.includeTags = state.filters.includeTags.map(t => (t === cleanOld ? cleanNew : t));
+      } else if (mode === 'delete') {
+        state.filters.includeTags = state.filters.includeTags.filter(t => t !== cleanOld);
+      }
+    }
+    if (state.filters.excludeTags) {
+      if (mode === 'rename') {
+        state.filters.excludeTags = state.filters.excludeTags.map(t => (t === cleanOld ? cleanNew : t));
+      } else if (mode === 'delete') {
+        state.filters.excludeTags = state.filters.excludeTags.filter(t => t !== cleanOld);
+      }
+    }
+  }
+
+  // 永続化保存
+  if (typeof saveTasks === 'function') saveTasks();
+  if (typeof saveHabits === 'function') saveHabits();
+  if (typeof saveTaskPresets === 'function') saveTaskPresets();
+  if (typeof saveCustomTags === 'function') saveCustomTags();
+
+  return affectedCount;
+}
+
+function promptCreateNewTag(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  closeTagContextMenu();
+
+  const rawName = window.prompt('🏷️ 新しいタグ名を入力してください（例: 英語学習, 経理）:');
+  if (!rawName) return;
+
+  const cleanName = rawName.trim().replace(/^#/, '');
+  if (!cleanName) return;
+
+  if (!state.customTags) state.customTags = [];
+  if (!state.customTags.includes(cleanName)) {
+    state.customTags.push(cleanName);
+  }
+  if (typeof saveCustomTags === 'function') saveCustomTags();
+
+  // もしマスター画面でアイテムが選択されていれば、それらに一括付与するか確認
+  const selectedIds = state.selectedTableItemIds ? Array.from(state.selectedTableItemIds) : [];
+  if (selectedIds.length > 0) {
+    const shouldApply = window.confirm(`現在選択中の ${selectedIds.length} 件のデータに「#${cleanName}」を一括付与しますか？`);
+    if (shouldApply) {
+      selectedIds.forEach(id => {
+        const item = (state.tasks && state.tasks.find(t => String(t.id) === String(id))) ||
+                     (state.habits && state.habits.find(h => String(h.id) === String(id)));
+        if (item) {
+          const current = normalizeTags(item.tags);
+          if (!current.includes(cleanName)) {
+            current.push(cleanName);
+            item.tags = current;
+          }
+        }
+      });
+      if (typeof saveTasks === 'function') saveTasks();
+      if (typeof saveHabits === 'function') saveHabits();
+    }
+  }
+
+  renderApp();
+  if (typeof showUndoToast === 'function') {
+    showUndoToast(`🏷️ タグ「#${cleanName}」を作成しました`, true);
+  }
+}
+
+function promptRenameTag(tagName) {
+  closeTagContextMenu();
+  const cleanOld = tagName.trim().replace(/^#/, '');
+  const rawNew = window.prompt(`✏️ タグ「#${cleanOld}」の新しい名前を入力してください:`, cleanOld);
+  if (!rawNew) return;
+
+  const cleanNew = rawNew.trim().replace(/^#/, '');
+  if (!cleanNew || cleanNew === cleanOld) return;
+
+  const affectedCount = updateAllItemsTag(cleanOld, cleanNew, 'rename');
+
+  renderApp();
+  if (typeof showUndoToast === 'function') {
+    showUndoToast(`✏️ タグ「#${cleanOld}」を「#${cleanNew}」に変更しました（${affectedCount}件反映）`, true);
+  }
+}
+
+function promptDeleteTag(tagName) {
+  closeTagContextMenu();
+  const cleanTag = tagName.trim().replace(/^#/, '');
+
+  let count = 0;
+  const countInItem = (item) => {
+    if (normalizeTags(item?.tags).includes(cleanTag)) count++;
+  };
+  if (Array.isArray(state.tasks)) state.tasks.forEach(countInItem);
+  if (Array.isArray(state.habits)) state.habits.forEach(countInItem);
+  if (Array.isArray(state.taskPresets)) state.taskPresets.forEach(countInItem);
+
+  const confirmMsg = count > 0
+    ? `🗑️ タグ「#${cleanTag}」を登録中の全データ (${count}件) から削除しますか？\n（※タスク自体は消去されず、タグのみ外れます）`
+    : `🗑️ タグ「#${cleanTag}」を削除しますか？`;
+
+  if (!window.confirm(confirmMsg)) return;
+
+  updateAllItemsTag(cleanTag, '', 'delete');
+
+  renderApp();
+  if (typeof showUndoToast === 'function') {
+    showUndoToast(`🗑️ タグ「#${cleanTag}」を削除しました`, true);
+  }
+}
+
+function showTagContextMenu(e, tagName) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  let menu = document.getElementById('tag-context-menu');
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.id = 'tag-context-menu';
+    menu.className = 'tag-context-menu';
+    document.body.appendChild(menu);
+  }
+
+  if (tagName) {
+    menu.innerHTML = `
+      <div class="tag-menu-header">🏷️ #${tagName}</div>
+      <div class="tag-menu-item" onclick="promptRenameTag('${tagName}')">
+        <span class="tag-menu-icon">✏️</span> タグ名を変更 (リネーム)
+      </div>
+      <div class="tag-menu-item danger" onclick="promptDeleteTag('${tagName}')">
+        <span class="tag-menu-icon">🗑️</span> タグを一括削除 (全データから外す)
+      </div>
+      <div class="tag-menu-divider"></div>
+      <div class="tag-menu-item" onclick="filterBySingleTag('${tagName}', 'include')">
+        <span class="tag-menu-icon">🎯</span> このタグのみで絞り込み
+      </div>
+      <div class="tag-menu-item" onclick="filterBySingleTag('${tagName}', 'exclude')">
+        <span class="tag-menu-icon">🚫</span> このタグを除外
+      </div>
+      <div class="tag-menu-divider"></div>
+      <div class="tag-menu-item" onclick="promptCreateNewTag(event)">
+        <span class="tag-menu-icon">➕</span> 新しいタグを作成
+      </div>
+    `;
+  } else {
+    menu.innerHTML = `
+      <div class="tag-menu-header">🏷️ タグ管理</div>
+      <div class="tag-menu-item" onclick="promptCreateNewTag(event)">
+        <span class="tag-menu-icon">➕</span> 新しいタグを作成
+      </div>
+    `;
+  }
+
+  menu.style.display = 'block';
+  const menuWidth = 220;
+  const menuHeight = menu.offsetHeight || 160;
+  let left = e.clientX;
+  let top = e.clientY;
+
+  if (left + menuWidth > window.innerWidth - 10) {
+    left = window.innerWidth - menuWidth - 10;
+  }
+  if (top + menuHeight > window.innerHeight - 10) {
+    top = window.innerHeight - menuHeight - 10;
+  }
+
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function closeTagContextMenu() {
+  const menu = document.getElementById('tag-context-menu');
+  if (menu) menu.style.display = 'none';
+}
+
+function filterBySingleTag(tagName, type) {
+  closeTagContextMenu();
+  const clean = tagName.trim().replace(/^#/, '');
+  if (!state.filters) state.filters = {};
+  if (type === 'include') {
+    state.filters.includeTags = [clean];
+    state.filters.excludeTags = [];
+  } else {
+    state.filters.includeTags = [];
+    state.filters.excludeTags = [clean];
+  }
+  renderApp();
+}
+
+window.addEventListener('click', (e) => {
+  if (!e.target.closest('#tag-context-menu')) {
+    closeTagContextMenu();
+  }
+});
+
 function renderSmartTagBar() {
   const container = document.getElementById('smart-tag-bar-container');
   const listEl = document.getElementById('smart-tag-chips-list');
   if (!container || !listEl) return;
 
-  const allTags = getAllRegisteredTags();
-  const incList = state.filters.includeTags || [];
-  const excList = state.filters.excludeTags || [];
-
-  if (allTags.length === 0 && incList.length === 0 && excList.length === 0) {
+  // 表示対象モード: section (1 セクション), all (3 デイリー), table (4 マスター)
+  // 非表示対象モード: focus (2 フォーカス), goals (5 ビジョン), timer (6 タイマー)
+  const isTagBarEnabled = state && ['section', 'all', 'table'].includes(state.currentMode);
+  if (!isTagBarEnabled) {
     container.classList.add('hidden');
     return;
   }
 
   container.classList.remove('hidden');
+
+  // 空き領域右クリックで新規タグ作成メニュー
+  container.oncontextmenu = (e) => {
+    if (e.target.closest('.quick-tag-chip') || e.target.closest('.btn-add-tag-fixed')) return;
+    showTagContextMenu(e, null);
+  };
+
+  const allTags = getAllRegisteredTags();
+  const incList = state.filters.includeTags || [];
+  const excList = state.filters.excludeTags || [];
+
   const includeSet = new Set(incList);
   const excludeSet = new Set(excList);
 
@@ -242,19 +525,22 @@ function renderSmartTagBar() {
     const isExc = excludeSet.has(name);
     let stateCls = '';
     let icon = '';
-    let hint = 'クリックで絞込（含む）';
+    let hint = '左クリック: 絞込 / 右クリック: 削除・名前変更';
     if (isInc) {
       stateCls = 'include';
       icon = '<span class="chip-state-icon">✓</span>';
-      hint = 'クリックで除外（非表示）に切替';
+      hint = '左クリック: 除外 / 右クリック: 削除・名前変更';
     } else if (isExc) {
       stateCls = 'exclude';
       icon = '<span class="chip-state-icon">🚫</span>';
-      hint = 'クリックでフィルタ解除';
+      hint = '左クリック: 解除 / 右クリック: 削除・名前変更';
     }
 
     return `
-      <div class="quick-tag-chip ${stateCls}" onclick="toggleTagFilter('${name}')" title="#${name} (${hint})">
+      <div class="quick-tag-chip ${stateCls}"
+           onclick="toggleTagFilter('${name}')"
+           oncontextmenu="showTagContextMenu(event, '${name}')"
+           title="#${name} (${hint})">
         ${icon}
         <span class="quick-tag-name">#${name}</span>
         ${count > 0 ? `<span class="quick-tag-count">${count}</span>` : ''}
@@ -417,7 +703,7 @@ function isHabitInCurrentTimeWindow(habit, targetSectionName = null) {
     return normalizeSectionName(habit.section) === normSecName;
   }
 
-  // 3. Custom Time Range (時間指定): セクションの時間枠と少しでも重なっていたら表示
+  // 3. Custom Time Range (個別時間指定: 例 11:00〜12:00)
   if (type === 'custom') {
     if (!habit.customStart) return true; // 開始時間未設定なら常時表示
 
@@ -430,19 +716,40 @@ function isHabitInCurrentTimeWindow(habit, targetSectionName = null) {
       habitEnd = (eH || 0) + (eM || 0) / 60;
     }
 
+    const isToday = state.selectedDateOffset === 0;
+
+    // A. 今日かつリアルタイム動作時（現在時刻によるジャストタイム動的判定）
+    // 11:00前は非表示、11:00〜12:00の間のみ出現・表示、12:00以降は非表示
+    if (isToday) {
+      // 実行中または中断中のハビットは、時間が過ぎても作業継続のため非表示にしない
+      if (habit.status === 'in_progress' || habit.status === 'paused') {
+        return true;
+      }
+
+      const now = new Date();
+      const currentHour = now.getHours() + now.getMinutes() / 60;
+
+      if (habitStart <= habitEnd) {
+        // 通常区間 (例: 11:00 〜 12:00)
+        return currentHour >= habitStart && currentHour < habitEnd;
+      } else {
+        // 日またぎ区間 (例: 23:00 〜 01:00)
+        return currentHour >= habitStart || currentHour < habitEnd;
+      }
+    }
+
+    // B. 過去日・未来日（計画確認・履歴確認時）:
+    // セクションの時間枠と時間帯が重なっているか判定
     const secStart = sectionConfig.start;
     const secEnd = sectionConfig.end;
 
     if (secStart <= secEnd) {
       if (habitStart <= habitEnd) {
-        // 通常区間同士の交差判定 (少しでも重なりがあれば true)
         return habitStart < secEnd && habitEnd > secStart;
       } else {
-        // ハビットが日またぎの場合 (例: 22:00〜02:00)
         return habitStart < secEnd || habitEnd > secStart;
       }
     } else {
-      // セクションが日またぎの場合
       if (habitStart <= habitEnd) {
         return habitEnd > secStart || habitStart < secEnd;
       } else {
@@ -841,7 +1148,21 @@ function skipHabit(id) {
 
 function getFilteredHabits(customMode = null) {
   const mode = customMode || state.currentMode;
-  let list = [...state.habits];
+  let list = [...state.habits].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+  // 日次画面（セクション・全体・フォーカス等）かつ今日の場合、当日限りの実行順序があれば適用
+  if (mode !== 'table' && state.selectedDateOffset === 0) {
+    const dailyOrder = typeof loadDailyHabitOrder === 'function' ? loadDailyHabitOrder() : null;
+    if (Array.isArray(dailyOrder) && dailyOrder.length > 0) {
+      const orderMap = new Map();
+      dailyOrder.forEach((id, idx) => orderMap.set(String(id), idx));
+      list.sort((a, b) => {
+        const idxA = orderMap.has(String(a.id)) ? orderMap.get(String(a.id)) : (a.sortOrder || 9999);
+        const idxB = orderMap.has(String(b.id)) ? orderMap.get(String(b.id)) : (b.sortOrder || 9999);
+        return idxA - idxB;
+      });
+    }
+  }
 
   // 1. Recurrence schedule filter (Skip for table mode: table mode always displays ALL registered master habits)
   if (mode !== 'table') {
@@ -1047,6 +1368,14 @@ function updateHeaderAndStatus() {
 
   // Real-Time TaskChute Dynamic Estimates & ETAs calculation
   calculateTaskChuteEstimates();
+
+  // 1分ごとの定期更新時: セクション画面の個別時間ハビットの動的出現・消滅を反映
+  if (state.currentMode === 'section' && state.selectedDateOffset === 0) {
+    const isModalOpen = Boolean(document.querySelector('.modal.active, .modal.show, .modal-overlay.active, .modal[style*="display: block"]'));
+    if (!isModalOpen && typeof renderSectionView === 'function') {
+      renderSectionView();
+    }
+  }
 }
 
 function updateFilterPillsUI() {
@@ -1455,15 +1784,21 @@ function setMode(mode) {
       return;
     }
     if (mode === 'table') {
-      // 4: Cycle Habits (1) ➔ Recurring Tasks (2) ➔ Single Tasks (3) ➔ Habits (1)
+      // 4: Cycle Habits (1) ➔ Analytics Scoreboard (2) ➔ Recurring Tasks (3) ➔ Single Tasks (4) ➔ Habits (1)
       if (state.masterSubtab === 'habits') {
+        state.masterSubtab = 'analytics';
+      } else if (state.masterSubtab === 'analytics') {
         state.masterSubtab = 'tasks';
       } else if (state.masterSubtab === 'tasks' || state.masterSubtab === 'recurring_tasks') {
         state.masterSubtab = 'single_tasks';
       } else {
         state.masterSubtab = 'habits';
       }
+      clearTableSelection();
       renderTableView();
+      setTimeout(() => {
+        if (typeof initMasterScrollScale === 'function') initMasterScrollScale();
+      }, 50);
       return;
     }
     if (mode === 'goals') {
@@ -1490,6 +1825,9 @@ function setMode(mode) {
   document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${mode}`).classList.add('active');
   renderApp();
+  if (mode === 'table' && typeof initMasterScrollScale === 'function') {
+    setTimeout(initMasterScrollScale, 50);
+  }
 }
 
 function cycleStatusFilter() {
@@ -1775,10 +2113,11 @@ function deferTask(taskId, targetDateKey, targetBucket = 'today', actionLabel = 
 function showContextMenu(e, habitId) {
   e.preventDefault();
   hideAllContextMenus();
-  const habit = state.habits.find(h => h.id === habitId);
+  const strId = String(habitId);
+  const habit = (state.habits || []).find(h => String(h.id) === strId);
   if (!habit) return;
 
-  state.contextMenuHabitId = habitId;
+  state.contextMenuHabitId = habit.id;
 
   // Header Title
   const headerEl = document.getElementById('context-menu-habit-name');
@@ -1821,10 +2160,11 @@ function showContextMenu(e, habitId) {
 function showTaskContextMenu(e, taskId) {
   e.preventDefault();
   hideAllContextMenus();
-  const task = state.tasks.find(t => t.id === taskId);
+  const strId = String(taskId);
+  const task = (state.tasks || []).find(t => String(t.id) === strId);
   if (!task) return;
 
-  state.contextMenuTaskId = taskId;
+  state.contextMenuTaskId = task.id;
 
   // Header Title
   const headerEl = document.getElementById('context-menu-task-name');
@@ -1893,17 +2233,17 @@ function setupContextMenuHandlers() {
     const taskTarget = e.target.closest('[data-type="task"], .task-card, .table-row.task-row');
     if (taskTarget) {
       const tid = taskTarget.dataset.id || taskTarget.dataset.taskId;
-      if (tid && state.tasks.some(t => t.id === tid)) {
+      if (tid && (state.tasks || []).some(t => String(t.id) === String(tid))) {
         showTaskContextMenu(e, tid);
         return;
       }
     }
 
     // 2. Habit Card / Row Right Click
-    const habitTarget = e.target.closest('[data-type="habit"], .habit-card, .habit-row, [data-id]');
+    const habitTarget = e.target.closest('[data-type="habit"], .habit-card, .habit-row');
     if (habitTarget) {
-      const hid = habitTarget.dataset.id;
-      if (hid && state.habits.some(h => h.id === hid)) {
+      const hid = habitTarget.dataset.id || habitTarget.dataset.habitId;
+      if (hid && (state.habits || []).some(h => String(h.id) === String(hid))) {
         showContextMenu(e, hid);
         return;
       }
@@ -2438,6 +2778,7 @@ function setupTaskFormHandlers() {
       const customStart = document.getElementById('add-task-custom-start')?.value || null;
       const customEnd = document.getElementById('add-task-custom-end')?.value || null;
       const notes = document.getElementById('add-task-notes').value.trim();
+      const obsidianUri = document.getElementById('add-task-obsidian-uri')?.value.trim() || '';
       const tags = normalizeTags(document.getElementById('add-task-tags')?.value);
       const timingType = state.selectedAddTaskTimingType || 'section';
       const bucket = state.selectedAddTaskBucket || 'today';
@@ -2481,6 +2822,7 @@ function setupTaskFormHandlers() {
         projMinor,
         status: 'uncompleted',
         notes,
+        obsidianUri,
         tags,
         createdAt: new Date().toISOString()
       };
@@ -2542,6 +2884,7 @@ function setupTaskFormHandlers() {
       task.title = document.getElementById('edit-task-title').value.trim();
       task.estMin = parseInt(document.getElementById('edit-task-est-min').value, 10) || 25;
       task.notes = document.getElementById('edit-task-notes').value.trim();
+      task.obsidianUri = document.getElementById('edit-task-obsidian-uri')?.value.trim() || '';
       task.tags = normalizeTags(document.getElementById('edit-task-tags')?.value);
       task.status = state.selectedEditTaskStatus || task.status;
       task.bucket = state.selectedEditTaskBucket || task.bucket;
@@ -2661,22 +3004,25 @@ function setupTaskFormHandlers() {
   const subtabHabits = document.getElementById('subtab-habits');
   const subtabTasks = document.getElementById('subtab-tasks');
   const subtabSingleTasks = document.getElementById('subtab-single-tasks');
+  const subtabAnalytics = document.getElementById('subtab-analytics');
   if (subtabHabits) {
     subtabHabits.addEventListener('click', () => {
-      state.masterSubtab = 'habits';
-      renderTableView();
+      switchMasterSubtab('habits');
     });
   }
   if (subtabTasks) {
     subtabTasks.addEventListener('click', () => {
-      state.masterSubtab = 'tasks';
-      renderTableView();
+      switchMasterSubtab('tasks');
     });
   }
   if (subtabSingleTasks) {
     subtabSingleTasks.addEventListener('click', () => {
-      state.masterSubtab = 'single_tasks';
-      renderTableView();
+      switchMasterSubtab('single_tasks');
+    });
+  }
+  if (subtabAnalytics) {
+    subtabAnalytics.addEventListener('click', () => {
+      switchMasterSubtab('analytics');
     });
   }
 
@@ -2813,6 +3159,7 @@ function setupAddFormHandlers() {
     const matrixVals = getMatrixValues('add-habit');
     const tags = normalizeTags(document.getElementById('add-habit-tags')?.value);
     const notes = document.getElementById('add-habit-notes')?.value.trim() || '';
+    const obsidianUri = document.getElementById('add-habit-obsidian-uri')?.value.trim() || '';
 
     const newHabit = {
       id: newId,
@@ -2825,6 +3172,7 @@ function setupAddFormHandlers() {
       displayEndDate,
       tags,
       notes,
+      obsidianUri,
       ...matrixVals,
       domain: domainMinor,
       domainMajor,
@@ -2883,6 +3231,21 @@ function setupEditFormHandlers() {
   const formEditHabit = document.getElementById('form-edit-habit');
   if (!formEditHabit) return;
 
+  // Timing Selector in Edit Form
+  document.querySelectorAll('#edit-timing-type-selector .segment-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#edit-timing-type-selector .segment-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const type = btn.dataset.type;
+      state.selectedEditTimingType = type;
+
+      const panelSec = document.getElementById('edit-panel-timing-section');
+      const panelCustom = document.getElementById('edit-panel-timing-custom');
+      if (panelSec) panelSec.classList.toggle('hidden', type !== 'section');
+      if (panelCustom) panelCustom.classList.toggle('hidden', type !== 'custom');
+    });
+  });
+
   // Recurrence Selector in Edit Form
   const editRecPanels = {
     daily_times: document.getElementById('edit-panel-rec-daily-times'),
@@ -2929,16 +3292,16 @@ function setupEditFormHandlers() {
     if (!habit) return;
 
     const prevSnapshot = { ...habit };
-    const timingType = state.selectedEditTimingType;
+    const timingType = state.selectedEditTimingType || habit.displayType || 'section';
     let sectionVal = null;
     let customStartVal = null;
     let customEndVal = null;
 
     if (timingType === 'section') {
-      sectionVal = document.getElementById('edit-habit-section').value;
+      sectionVal = document.getElementById('edit-habit-section')?.value || habit.section || '第2セッション';
     } else if (timingType === 'custom') {
-      customStartVal = document.getElementById('edit-custom-start').value;
-      customEndVal = document.getElementById('edit-custom-end').value;
+      customStartVal = document.getElementById('edit-custom-start')?.value || habit.customStart || '13:00';
+      customEndVal = document.getElementById('edit-custom-end')?.value || habit.customEnd || '17:00';
       const [sH] = (customStartVal || '12:00').split(':').map(Number);
       for (const s of SECTIONS_CONFIG) {
         if (sH >= s.start && sH < s.end) { sectionVal = s.name; break; }
@@ -2978,6 +3341,7 @@ function setupEditFormHandlers() {
 
     habit.name = document.getElementById('edit-habit-name').value.trim();
     habit.displayType = timingType;
+    habit.timingType = timingType;
     habit.section = sectionVal;
     habit.customStart = customStartVal;
     habit.customEnd = customEndVal;
@@ -2985,6 +3349,7 @@ function setupEditFormHandlers() {
     habit.displayEndDate = displayEndDate;
     habit.tags = normalizeTags(document.getElementById('edit-habit-tags')?.value);
     habit.notes = document.getElementById('edit-habit-notes')?.value.trim() || '';
+    habit.obsidianUri = document.getElementById('edit-habit-obsidian-uri')?.value.trim() || '';
     Object.assign(habit, matrixVals);
     habit.domain = domainMinor;
     habit.domainMajor = domainMajor;

@@ -190,6 +190,14 @@ function renderFocusView() {
                 ⚙️ 編集
               </button>
             `}
+            <button class="btn-focus-action obsidian sub-action ${task.obsidianUri ? 'active' : 'disabled'}"
+                    onclick="${task.obsidianUri ? `openObsidianLink('${task.obsidianUri.replace(/'/g, "\\'")}', event)` : `openEditTaskModal('${task.id}')`}"
+                    title="${task.obsidianUri ? 'Obsidianノートを開く: ' + task.obsidianUri : 'Obsidianリンク未設定（クリックして設定）'}">
+              <svg class="obsidian-svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.5L18 8l-6 3.5L6 8l6-3.5zm-6.5 5.5l5.5 3.2v6.8L5.5 16V10zm13 6l-5.5 3.5v-6.8l5.5-3.2v6.5z"/>
+              </svg>
+              <span>Obsidian</span>
+            </button>
           </div>
         </div>
       `;
@@ -290,6 +298,14 @@ function renderFocusView() {
                 ⚙️ 編集
               </button>
             `}
+            <button class="btn-focus-action obsidian sub-action ${habit.obsidianUri ? 'active' : 'disabled'}"
+                    onclick="${habit.obsidianUri ? `openObsidianLink('${habit.obsidianUri.replace(/'/g, "\\'")}', event)` : `openEditModal('${habit.id}')`}"
+                    title="${habit.obsidianUri ? 'Obsidianノートを開く: ' + habit.obsidianUri : 'Obsidianリンク未設定（クリックして設定）'}">
+              <svg class="obsidian-svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.5L18 8l-6 3.5L6 8l6-3.5zm-6.5 5.5l5.5 3.2v6.8L5.5 16V10zm13 6l-5.5 3.5v-6.8l5.5-3.2v6.5z"/>
+              </svg>
+              <span>Obsidian</span>
+            </button>
           </div>
         </div>
       `;

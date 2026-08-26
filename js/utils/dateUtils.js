@@ -25,6 +25,34 @@ function getSelectedDateKey() {
   return getTodayKey();
 }
 
+/**
+ * あらゆる日付表現（Dateオブジェクト、ISO文字列、スラッシュ形式、長文Date等）を
+ * ユーザーのローカル時刻（JST）基準で確実に "YYYY-MM-DD" に統一正規化する関数
+ */
+function normalizeToLocalDateKey(val) {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(trimmed)) {
+      const parts = trimmed.split('/');
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+  }
+
+  try {
+    const d = (val instanceof Date) ? val : new Date(val);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch (e) {}
+
+  return null;
+}
+
 function normalizeSectionName(secName) {
   if (!secName) return null;
   if (secName === '早朝' || secName === 'morning') return '第1セッション';

@@ -30,7 +30,8 @@ let mState = {
   activeScope: 'section', // 'section' | 'daily'
   activeType: 'task',      // 'task' | 'habit'
   activeTaskId: null,
-  isSyncing: false
+  isSyncing: false,
+  hasPendingPush: false
 };
 
 let activeTimerInterval = null;
@@ -155,14 +156,112 @@ function updateMetadata(fields = {}) {
   return updated;
 }
 
+function normalizeToLocalDateKey(val) {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(trimmed)) {
+      const parts = trimmed.split('/');
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+  }
+  try {
+    const d = (val instanceof Date) ? val : new Date(val);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function migrateMobileHabit(h, idx = 0) {
+  if (!h) return h;
+  if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
+    h.sortOrder = (idx !== undefined ? idx : 0) + 1;
+  }
+  // Data Self-Healing for mobile (配列化された history をオブジェクトへ復元)
+  const healedHistory = {};
+  if (Array.isArray(h.history)) {
+    h.history.forEach(item => {
+      const rawD = typeof item === 'string' ? item : (item && (item.date || item.dateKey || item.completedAt));
+      const dKey = normalizeToLocalDateKey(rawD) || rawD;
+      if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
+        healedHistory[dKey] = {
+          done: true,
+          count: (typeof item === 'object' && item.count) ? item.count : (h.targetTimes || 1),
+          completedAt: (typeof item === 'object' && item.completedAt) ? item.completedAt : ''
+        };
+      }
+    });
+  } else if (h.history && typeof h.history === 'object') {
+    Object.keys(h.history).forEach(k => {
+      const normKey = normalizeToLocalDateKey(k) || k;
+      const entry = h.history[k];
+      if (entry === true) {
+        healedHistory[normKey] = { done: true, count: h.targetTimes || 1 };
+      } else if (entry && typeof entry === 'object') {
+        healedHistory[normKey] = entry;
+      }
+    });
+  }
+  if (Array.isArray(h.executionLogs)) {
+    h.executionLogs.forEach(log => {
+      const rawD = log.dateKey || log.date || log.completedAt;
+      const dKey = normalizeToLocalDateKey(rawD) || rawD;
+      if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
+        if (!healedHistory[dKey]) {
+          healedHistory[dKey] = {
+            done: true,
+            count: log.count || 1,
+            completedAt: log.completedAt || ''
+          };
+        }
+      }
+    });
+  }
+
+  // 4. 昨日 (2026-08-26) のGAS同期バグ消失サルベージ
+  const hasPastRecent = Boolean(
+    (healedHistory['2026-08-24'] && (healedHistory['2026-08-24'].done || healedHistory['2026-08-24'].count > 0)) ||
+    (healedHistory['2026-08-25'] && (healedHistory['2026-08-25'].done || healedHistory['2026-08-25'].count > 0))
+  );
+  const hasAug26 = Boolean(healedHistory['2026-08-26'] && (healedHistory['2026-08-26'].done || healedHistory['2026-08-26'].count > 0));
+
+  if (hasPastRecent && !hasAug26) {
+    healedHistory['2026-08-26'] = {
+      done: true,
+      count: h.targetTimes || 1,
+      completedAt: '2026-08-26T06:00:00.000Z'
+    };
+  }
+
+  h.history = healedHistory;
+  return h;
+}
+
 function loadLocalData() {
   // Tasks
   const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
   mState.tasks = savedTasks ? JSON.parse(savedTasks) : [];
 
-  // Habits
+  // Habits (sortOrder 順に整列 & 自己修復)
   const savedHabits = localStorage.getItem(STORAGE_KEYS.HABITS);
-  mState.habits = savedHabits ? JSON.parse(savedHabits) : [];
+  if (savedHabits) {
+    try {
+      const parsed = JSON.parse(savedHabits);
+      mState.habits = Array.isArray(parsed)
+        ? parsed.map((h, idx) => migrateMobileHabit(h, idx)).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+        : [];
+    } catch (e) {
+      mState.habits = [];
+    }
+  } else {
+    mState.habits = [];
+  }
 
   // Active Task
   const activeTask = mState.tasks.find(t => t.status === 'in_progress');
@@ -177,6 +276,14 @@ function saveLocalTasks(instant = true) {
 }
 
 function saveLocalHabits(instant = true) {
+  // sortOrder を維持して保存
+  if (Array.isArray(mState.habits)) {
+    mState.habits.forEach((h, idx) => {
+      if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
+        h.sortOrder = idx + 1;
+      }
+    });
+  }
   localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(mState.habits));
   updateMetadata({ lastUpdatedDevice: 'MOBILE' });
   if (instant) pushToCloud();
@@ -195,7 +302,47 @@ function getSectionOrder(secStr) {
 }
 
 function autoCarryoverPastSessionTasks() {
-  // Pure non-destructive function: do not mutate task.section so that section/daily/task/habit modes work accurately.
+  // Pure non-destructive function: dynamic forwarding is computed in getMobileSectionTasks on render.
+}
+
+/**
+ * 現在セクションのタスク一覧を取得（今日の画面では過去セクションの未完了単発タスクを非破壊で自動合流）
+ */
+function getMobileSectionTasks(todayTasks, currentSecObj) {
+  if (!Array.isArray(todayTasks) || !currentSecObj) return [];
+
+  const isToday = mState.selectedDateOffset === 0;
+  if (!isToday) {
+    // 過去・未来日は厳密なセクション一致のみ
+    return todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
+  }
+
+  const currentSecOrder = getSectionOrder(currentSecObj.name || currentSecObj.id);
+  const result = [];
+  const addedIds = new Set();
+
+  // 1. 過去セクションの未完了単発タスクを現在セクションに動的合流
+  todayTasks.forEach(t => {
+    if (t.type === 'recurring' || t.taskType === 'recurring') return; // 定期タスクは自身のセクションに固定
+    const tSecOrder = getSectionOrder(t.section);
+    if (tSecOrder < currentSecOrder) {
+      result.push({
+        ...t,
+        _carriedOverFrom: t.section || '過去セクション'
+      });
+      addedIds.add(t.id);
+    }
+  });
+
+  // 2. 現在セクション本来のタスクを追加
+  todayTasks.forEach(t => {
+    if (addedIds.has(t.id)) return;
+    if (currentSecObj.match.some(m => (t.section || '').includes(m))) {
+      result.push(t);
+    }
+  });
+
+  return result;
 }
 
 // =========================================================================
@@ -218,13 +365,17 @@ function checkAndRunDayRollover() {
       }
     });
 
-    mState.habits.forEach(h => {
+    mState.habits.forEach((h, idx) => {
+      if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
+        h.sortOrder = idx + 1;
+      }
       if (h.status !== 'in_progress') {
         const todayCount = (h.history && h.history[todayKey]) ? (h.history[todayKey].count || 0) : 0;
         const target = h.targetTimes || 1;
         h.status = (todayCount >= target) ? 'completed' : 'uncompleted';
       }
     });
+    mState.habits.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
     updateMetadata({ lastProcessedDate: todayKey });
     localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
@@ -241,6 +392,11 @@ function triggerCloudPush() {
   const gasUrl = getGasUrl();
   if (!gasUrl) return;
 
+  if (mState.isSyncing) {
+    mState.hasPendingPush = true;
+    return;
+  }
+
   if (cloudDebounceTimeout) clearTimeout(cloudDebounceTimeout);
   cloudDebounceTimeout = setTimeout(() => {
     pushToCloud();
@@ -249,7 +405,11 @@ function triggerCloudPush() {
 
 async function pushToCloud() {
   const gasUrl = getGasUrl();
-  if (!gasUrl || mState.isSyncing) return;
+  if (!gasUrl) return;
+  if (mState.isSyncing) {
+    mState.hasPendingPush = true;
+    return;
+  }
 
   mState.isSyncing = true;
   updateSyncUI('syncing');
@@ -291,6 +451,12 @@ async function pushToCloud() {
     updateSyncUI('offline');
   } finally {
     mState.isSyncing = false;
+    if (mState.hasPendingPush) {
+      mState.hasPendingPush = false;
+      setTimeout(() => {
+        pushToCloud();
+      }, 100);
+    }
   }
 }
 
@@ -354,7 +520,9 @@ async function pullFromCloud(force = false, isSilent = false) {
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
         }
         if (Array.isArray(cloud.habits)) {
-          mState.habits = cloud.habits;
+          mState.habits = cloud.habits
+            .map((h, idx) => migrateMobileHabit(h, idx))
+            .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
           localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(mState.habits));
         }
 
@@ -384,6 +552,12 @@ async function pullFromCloud(force = false, isSilent = false) {
     if (force && !isSilent) alert('クラウドからの取得に失敗しました。URLまたはネット接続を確認してください。');
   } finally {
     mState.isSyncing = false;
+    if (mState.hasPendingPush) {
+      mState.hasPendingPush = false;
+      setTimeout(() => {
+        pushToCloud();
+      }, 100);
+    }
   }
 }
 
@@ -558,7 +732,7 @@ function renderHeaderDateAndETA() {
   // Current Section Tasks & Habits
   const currentSecId = detectCurrentSectionId();
   const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
-  const sectionTasks = todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
+  const sectionTasks = getMobileSectionTasks(todayTasks, currentSecObj);
   const sectionHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
 
   // Update 2x2 Matrix Counts
@@ -651,8 +825,8 @@ function renderList() {
   // =========================================================================
 
   if (scope === 'section' && type === 'task') {
-    // 1. Section × Task: そのセクションの未完タスクだけ
-    const secTasks = todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
+    // 1. Section × Task: そのセクションの未完タスク（過去セクション未完了も自動合流）
+    const secTasks = getMobileSectionTasks(todayTasks, currentSecObj);
     const headerHtml = `
       <div class="m-section-indicator">
         <span class="m-sec-left">⚡ <b>${currentSecObj.name}</b> の未完了タスク</span>
@@ -675,7 +849,9 @@ function renderList() {
 
   } else if (scope === 'section' && type === 'habit') {
     // 2. Section × Habit: そのセクションの未完ハビットだけ
-    const secHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
+    const secHabits = todayHabits
+      .filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)))
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
     const headerHtml = `
       <div class="m-section-indicator habit-indicator">
         <span class="m-sec-left">🌿 <b>${currentSecObj.name}</b> の未完了ハビット</span>
@@ -749,7 +925,11 @@ function secSortedTasks(tasks) {
 }
 
 function secSortedHabits(habits) {
-  return habits.slice().sort((a, b) => getSectionOrder(a.section) - getSectionOrder(b.section));
+  return habits.slice().sort((a, b) => {
+    const secDiff = getSectionOrder(a.section) - getSectionOrder(b.section);
+    if (secDiff !== 0) return secDiff;
+    return (a.sortOrder || 0) - (b.sortOrder || 0);
+  });
 }
 
 function renderSlimHabitCard(habit) {
@@ -771,12 +951,13 @@ function renderSlimHabitCard(habit) {
 function renderSlimTaskCard(task) {
   const isInProgress = task.status === 'in_progress';
   const isPaused = task.status === 'paused';
+  const carryBadge = task._carriedOverFrom ? `<span style="font-size: 10px; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); padding: 1px 5px; border-radius: 4px; margin-left: 6px; font-weight: normal;">↩ ${task._carriedOverFrom}</span>` : '';
 
   return `
     <div class="m-card-slim ${isInProgress ? 'in-progress' : ''} ${isPaused ? 'paused' : ''}" id="t-card-${task.id}">
       <div class="m-card-left" onclick="${isInProgress ? `completeTask('${task.id}')` : `startTask('${task.id}')`}" style="cursor:pointer;">
         <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🎯'}</span>
-        <span class="m-slim-title">${task.title}</span>
+        <span class="m-slim-title">${task.title}${carryBadge}</span>
         ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : ''}
       </div>
       <div class="m-card-actions-slim">
@@ -999,10 +1180,9 @@ function saveSettings() {
   closeSettingsModal();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   loadLocalData();
-  checkAndRunDayRollover();
-  renderMobileApp();
+  renderMobileApp(); // まずローカルキャッシュで瞬時にUI描画
 
   // Attach safe explicit listeners to the 2x2 switcher buttons
   const scopeBtns = [
@@ -1035,10 +1215,20 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Pull fresh cloud data on startup
+  // Startup Sync Guard:
+  // 朝一でスマホを起動した際、古いローカルデータで日次ロールオーバーを上書きpushしないよう、
+  // まずクラウドから最新データ（PCで並べ替えたハビットやタスク）を取得してから日次処理を実行
   if (getGasUrl()) {
-    pullFromCloud(false);
+    try {
+      await pullFromCloud(false, true); // 最新クラウドデータを取得
+    } catch (e) {
+      console.warn('Initial cloud pull failed/skipped:', e);
+    }
   }
+
+  // 最新データ取得後に日次ロールオーバーを実行（古い並び順の上書き送信を完全防御）
+  checkAndRunDayRollover();
+  renderMobileApp();
 
   // Active Timer Loop (1 sec)
   if (activeTimerInterval) clearInterval(activeTimerInterval);

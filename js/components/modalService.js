@@ -197,121 +197,19 @@ function clearAllTagFilters() {
 // =========================================================================
 
 function promptCompleteHabit(id, event) {
-  if (event) event.stopPropagation();
-  if (event && event.shiftKey) {
-    completeHabit(id);
-    return;
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
   }
-
-  const habit = state.habits.find(h => String(h.id) === String(id));
-  if (!habit) {
-    completeHabit(id);
-    return;
-  }
-
-  const modal = document.getElementById('modal-quick-complete');
-  if (!modal) {
-    completeHabit(id);
-    return;
-  }
-
-  const dateKey = getSelectedDateKey();
-  const curCount = getHabitDayCount(habit, dateKey);
-  const targetTimes = getHabitTargetTimes(habit);
-  const nextCount = curCount + 1;
-
-  let elapsedMin = habit.targetMin || 10;
-  if (habit.startTimestamp) {
-    const elapsedSec = Math.max(1, Math.round((Date.now() - habit.startTimestamp) / 1000));
-    elapsedMin = Math.max(1, Math.round(elapsedSec / 60));
-  }
-
-  document.getElementById('quick-complete-type').value = 'habit';
-  document.getElementById('quick-complete-id').value = habit.id;
-  document.getElementById('quick-complete-title').textContent = '🌿 習慣の完了を記録';
-  document.getElementById('quick-complete-icon').textContent = '🌿';
-  document.getElementById('quick-complete-icon').style.color = '#10b981';
-  
-  const typeBadge = document.getElementById('quick-complete-type-badge');
-  if (typeBadge) {
-    typeBadge.textContent = '🌿 ハビット';
-    typeBadge.className = 'qc-target-type';
-  }
-  document.getElementById('quick-complete-item-name').textContent = habit.name;
-  document.getElementById('quick-complete-duration-badge').textContent = `⏱️ 計測: ${elapsedMin}分`;
-  
-  const countGroup = document.getElementById('quick-complete-count-group');
-  if (countGroup) countGroup.style.display = 'flex';
-  document.getElementById('quick-complete-count').value = nextCount;
-  document.getElementById('quick-complete-unit-label').textContent = targetTimes > 1 ? `回目 (目標${targetTimes}回)` : '回目';
-  document.getElementById('quick-complete-duration').value = elapsedMin;
-  
-  const noteInput = document.getElementById('quick-complete-note');
-  if (noteInput) {
-    noteInput.value = '';
-    noteInput.placeholder = '例: 30回×3セット達成！インターバル45秒、腰の調子良好';
-  }
-
-  modal.classList.add('active');
-  setTimeout(() => {
-    if (noteInput) noteInput.focus();
-  }, 50);
+  completeHabit(id);
 }
 
 function promptCompleteTask(taskId, event) {
-  if (event) event.stopPropagation();
-  if (event && event.shiftKey) {
-    completeTask(taskId);
-    return;
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
   }
-
-  const task = state.tasks.find(t => t.id === taskId);
-  if (!task) {
-    completeTask(taskId);
-    return;
-  }
-
-  const modal = document.getElementById('modal-quick-complete');
-  if (!modal) {
-    completeTask(taskId);
-    return;
-  }
-
-  let finalSec = task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0);
-  if (task.startTimestamp) {
-    const elapsedSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));
-    finalSec += elapsedSec;
-  }
-  const elapsedMin = Math.max(1, Math.round((finalSec || (task.estMin || 25) * 60) / 60));
-
-  document.getElementById('quick-complete-type').value = 'task';
-  document.getElementById('quick-complete-id').value = task.id;
-  document.getElementById('quick-complete-title').textContent = '🎯 タスクの完了を記録';
-  document.getElementById('quick-complete-icon').textContent = '🎯';
-  document.getElementById('quick-complete-icon').style.color = '#38bdf8';
-  
-  const typeBadge = document.getElementById('quick-complete-type-badge');
-  if (typeBadge) {
-    typeBadge.textContent = '🎯 タスク';
-    typeBadge.className = 'qc-target-type task-type';
-  }
-  document.getElementById('quick-complete-item-name').textContent = task.title;
-  document.getElementById('quick-complete-duration-badge').textContent = `⏱️ 実績: ${elapsedMin}分`;
-  
-  const countGroup = document.getElementById('quick-complete-count-group');
-  if (countGroup) countGroup.style.display = 'none';
-  document.getElementById('quick-complete-duration').value = elapsedMin;
-  
-  const noteInput = document.getElementById('quick-complete-note');
-  if (noteInput) {
-    noteInput.value = '';
-    noteInput.placeholder = '例: レビュー完了、クライアントにメール送付済み';
-  }
-
-  modal.classList.add('active');
-  setTimeout(() => {
-    if (noteInput) noteInput.focus();
-  }, 50);
+  completeTask(taskId);
 }
 
 // =========================================================================
@@ -330,6 +228,8 @@ function openAddTaskModal(sectionName = null, scheduledDate = null, bucket = nul
     if (titleInput) titleInput.value = '';
     const notesInput = document.getElementById('add-task-notes');
     if (notesInput) notesInput.value = '';
+    const obsInput = document.getElementById('add-task-obsidian-uri');
+    if (obsInput) obsInput.value = '';
 
     const addTagsInput = document.getElementById('add-task-tags');
     if (addTagsInput) {
@@ -410,17 +310,17 @@ function openAddTaskModal(sectionName = null, scheduledDate = null, bucket = nul
     if (typeof updateMinorSelectOptions === 'function') {
       const domMaj = document.getElementById('add-task-domain-major');
       if (domMaj) {
-        domMaj.value = d.domainMajor || '';
+        domMaj.value = d.domainMajor || 'PN1';
         updateMinorSelectOptions('add-task-domain-major', 'add-task-domain-minor', DOMAINS_DATA, d.domainMinor);
       }
       const deptMaj = document.getElementById('add-task-dept-major');
       if (deptMaj) {
-        deptMaj.value = d.deptMajor || '';
+        deptMaj.value = d.deptMajor || '制作本部';
         updateMinorSelectOptions('add-task-dept-major', 'add-task-dept-minor', DEPTS_DATA, d.deptMinor);
       }
       const projMaj = document.getElementById('add-task-proj-major');
       if (projMaj) {
-        projMaj.value = d.projMajor || '';
+        projMaj.value = d.projMajor || 'ビジネス';
         updateMinorSelectOptions('add-task-proj-major', 'add-task-proj-minor', PROJECTS_DATA, d.projMinor);
       }
     }
@@ -438,105 +338,137 @@ function openAddTaskModal(sectionName = null, scheduledDate = null, bucket = nul
 }
 
 function openEditTaskModal(taskId) {
-  const task = state.tasks.find(t => t.id === taskId);
-  if (!task) return;
-
-  const modal = document.getElementById('modal-edit-task');
-  if (!modal) return;
-
-  document.getElementById('edit-task-id').value = task.id;
-  document.getElementById('edit-task-id-badge').textContent = task.id;
-  const movingAvgMin = (typeof calculateMovingAverageDuration === 'function') ? calculateMovingAverageDuration(task, 'task') : (task.estMin || 15);
-  document.getElementById('edit-task-est-min').value = task.estMin || movingAvgMin;
-  document.getElementById('edit-task-notes').value = task.notes || '';
-  const editTagsInput = document.getElementById('edit-task-tags');
-  if (editTagsInput) {
-    editTagsInput.value = normalizeTags(task.tags).join(', ');
-    if (typeof renderTagSuggestions === 'function') {
-      renderTagSuggestions('edit-task-tag-suggestions', 'edit-task-tags');
+  try {
+    const strId = String(taskId);
+    const task = (state.tasks || []).find(t => String(t.id) === strId);
+    if (!task) {
+      console.warn('openEditTaskModal: Task not found for ID:', taskId);
+      return;
     }
+
+    const modal = document.getElementById('modal-edit-task');
+    if (!modal) return;
+
+    const idInput = document.getElementById('edit-task-id');
+    if (idInput) idInput.value = task.id;
+    const badgeEl = document.getElementById('edit-task-id-badge');
+    if (badgeEl) badgeEl.textContent = task.id;
+
+    const titleInput = document.getElementById('edit-task-title');
+    if (titleInput) titleInput.value = task.title || '';
+
+    const movingAvgMin = (typeof calculateMovingAverageDuration === 'function') ? calculateMovingAverageDuration(task, 'task') : (task.estMin || 15);
+    const estMinInput = document.getElementById('edit-task-est-min');
+    if (estMinInput) estMinInput.value = task.estMin || movingAvgMin;
+
+    const notesInput = document.getElementById('edit-task-notes');
+    if (notesInput) notesInput.value = task.notes || '';
+
+    const obsInput = document.getElementById('edit-task-obsidian-uri');
+    if (obsInput) obsInput.value = task.obsidianUri || '';
+
+    const editTagsInput = document.getElementById('edit-task-tags');
+    if (editTagsInput) {
+      editTagsInput.value = normalizeTags(task.tags).join(', ');
+      if (typeof renderTagSuggestions === 'function') {
+        renderTagSuggestions('edit-task-tag-suggestions', 'edit-task-tags');
+      }
+    }
+
+    const dateInput = document.getElementById('edit-task-scheduled-date');
+    if (dateInput) dateInput.value = task.scheduledDate || '';
+
+    // TaskChute display
+    const estDisp = document.getElementById('edit-task-est-display');
+    if (estDisp) estDisp.textContent = `${task.estMin || movingAvgMin}分`;
+    const startDisp = document.getElementById('edit-task-act-start-display');
+    if (startDisp) startDisp.textContent = task.actStart || '--:--';
+    const endDisp = document.getElementById('edit-task-act-end-display');
+    if (endDisp) endDisp.textContent = task.actEnd || '--:--';
+    const actMinDisp = document.getElementById('edit-task-act-min-display');
+    if (actMinDisp) actMinDisp.textContent = `${task.actMin || 0}分`;
+
+    // Status Selector
+    state.selectedEditTaskStatus = task.status || 'uncompleted';
+    document.querySelectorAll('#edit-task-status-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.status === state.selectedEditTaskStatus);
+    });
+
+    // Bucket Selector
+    state.selectedEditTaskBucket = task.bucket || 'today';
+    document.querySelectorAll('#edit-task-bucket-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.bucket === state.selectedEditTaskBucket);
+    });
+
+    // Label Selector
+    state.selectedEditTaskLabel = task.label || 'none';
+    document.querySelectorAll('#edit-task-label-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.label === state.selectedEditTaskLabel);
+    });
+
+    // Timing
+    const timing = task.timingType || (task.section ? 'section' : 'anytime');
+    state.selectedEditTaskTimingType = timing;
+    document.querySelectorAll('#edit-task-timing-type-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.type === timing);
+    });
+    const panelSec = document.getElementById('edit-task-panel-timing-section');
+    const panelCustom = document.getElementById('edit-task-panel-timing-custom');
+    if (panelSec) panelSec.classList.toggle('hidden', timing !== 'section');
+    if (panelCustom) panelCustom.classList.toggle('hidden', timing !== 'custom');
+
+    const secSelect = document.getElementById('edit-task-section');
+    if (secSelect && task.section) secSelect.value = task.section;
+    const custStart = document.getElementById('edit-task-custom-start');
+    if (custStart && task.customStart) custStart.value = task.customStart;
+    const custEnd = document.getElementById('edit-task-custom-end');
+    if (custEnd && task.customEnd) custEnd.value = task.customEnd;
+
+    // Recurrence
+    const isRec = task.type === 'recurring' || task.taskType === 'recurring';
+    state.selectedEditTaskType = isRec ? 'recurring' : 'single';
+    document.querySelectorAll('#edit-task-type-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.taskType === (isRec ? 'recurring' : 'single'));
+    });
+    const panelRec = document.getElementById('edit-task-panel-recurrence');
+    if (panelRec) panelRec.classList.toggle('hidden', !isRec);
+
+    const rec = task.recurrence || { type: 'everyday' };
+    state.selectedEditTaskRecType = rec.type || 'everyday';
+    document.querySelectorAll('#edit-task-rec-type-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.type === (rec.type || 'everyday'));
+    });
+
+    // 6-Axis Matrix
+    if (typeof setMatrixValues === 'function') {
+      setMatrixValues('edit-task', task.matrix || DEFAULT_MATRIX);
+    }
+
+    // Cascade selects
+    if (typeof updateMinorSelectOptions === 'function') {
+      const domMaj = document.getElementById('edit-task-domain-major');
+      if (domMaj) {
+        domMaj.value = task.domainMajor || '';
+        updateMinorSelectOptions('edit-task-domain-major', 'edit-task-domain-minor', DOMAINS_DATA, task.domainMinor);
+      }
+      const deptMaj = document.getElementById('edit-task-dept-major');
+      if (deptMaj) {
+        deptMaj.value = task.deptMajor || '';
+        updateMinorSelectOptions('edit-task-dept-major', 'edit-task-dept-minor', DEPTS_DATA, task.deptMinor);
+      }
+      const projMaj = document.getElementById('edit-task-proj-major');
+      if (projMaj) {
+        projMaj.value = task.projMajor || '';
+        updateMinorSelectOptions('edit-task-proj-major', 'edit-task-proj-minor', PROJECTS_DATA, task.projMinor);
+      }
+    }
+
+    modal.classList.add('active');
+  } catch (err) {
+    console.error('Error in openEditTaskModal:', err);
+    const modal = document.getElementById('modal-edit-task');
+    if (modal) modal.classList.add('active');
   }
-
-  const dateInput = document.getElementById('edit-task-scheduled-date');
-  if (dateInput) dateInput.value = task.scheduledDate || '';
-
-  // TaskChute display
-  document.getElementById('edit-task-est-display').textContent = `${task.estMin || movingAvgMin}分`;
-  document.getElementById('edit-task-act-start-display').textContent = task.actStart || '--:--';
-  document.getElementById('edit-task-act-end-display').textContent = task.actEnd || '--:--';
-  document.getElementById('edit-task-act-min-display').textContent = `${task.actMin || 0}分`;
-
-  // Status Selector
-  state.selectedEditTaskStatus = task.status || 'uncompleted';
-  document.querySelectorAll('#edit-task-status-selector .segment-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.status === state.selectedEditTaskStatus);
-  });
-
-  // Bucket Selector
-  state.selectedEditTaskBucket = task.bucket || 'today';
-  document.querySelectorAll('#edit-task-bucket-selector .segment-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.bucket === state.selectedEditTaskBucket);
-  });
-
-  // Label Selector
-  state.selectedEditTaskLabel = task.label || 'none';
-  document.querySelectorAll('#edit-task-label-selector .segment-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.label === state.selectedEditTaskLabel);
-  });
-
-  // Timing
-  const timing = task.timingType || (task.section ? 'section' : 'anytime');
-  state.selectedEditTaskTimingType = timing;
-  document.querySelectorAll('#edit-task-timing-type-selector .segment-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.type === timing);
-  });
-  const panelSec = document.getElementById('edit-task-panel-timing-section');
-  const panelCustom = document.getElementById('edit-task-panel-timing-custom');
-  if (panelSec) panelSec.classList.toggle('hidden', timing !== 'section');
-  if (panelCustom) panelCustom.classList.toggle('hidden', timing !== 'custom');
-
-  if (task.section) document.getElementById('edit-task-section').value = task.section;
-  if (task.customStart) document.getElementById('edit-task-custom-start').value = task.customStart;
-  if (task.customEnd) document.getElementById('edit-task-custom-end').value = task.customEnd;
-
-  // Recurrence
-  const isRec = task.type === 'recurring';
-  state.selectedEditTaskType = isRec ? 'recurring' : 'single';
-  document.querySelectorAll('#edit-task-type-selector .segment-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.taskType === (isRec ? 'recurring' : 'single'));
-  });
-  const panelRec = document.getElementById('edit-task-panel-recurrence');
-  if (panelRec) panelRec.classList.toggle('hidden', !isRec);
-
-  const rec = task.recurrence || { type: 'everyday' };
-  state.selectedEditTaskRecType = rec.type || 'everyday';
-  document.querySelectorAll('#edit-task-rec-type-selector .segment-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.type === (rec.type || 'everyday'));
-  });
-
-  // 6-Axis Matrix
-  if (typeof setMatrixValues === 'function') {
-    setMatrixValues('edit-task', task.matrix || DEFAULT_MATRIX);
-  }
-
-  // Cascade selects
-  const domMaj = document.getElementById('edit-task-domain-major');
-  if (domMaj) {
-    domMaj.value = task.domainMajor || '';
-    updateMinorSelectOptions('edit-task-domain-major', 'edit-task-domain-minor', DOMAINS_DATA, task.domainMinor);
-  }
-  const deptMaj = document.getElementById('edit-task-dept-major');
-  if (deptMaj) {
-    deptMaj.value = task.deptMajor || '';
-    updateMinorSelectOptions('edit-task-dept-major', 'edit-task-dept-minor', DEPTS_DATA, task.deptMinor);
-  }
-  const projMaj = document.getElementById('edit-task-proj-major');
-  if (projMaj) {
-    projMaj.value = task.projMajor || '';
-    updateMinorSelectOptions('edit-task-proj-major', 'edit-task-proj-minor', PROJECTS_DATA, task.projMinor);
-  }
-
-  modal.classList.add('active');
 }
 
 // =========================================================================
@@ -627,17 +559,17 @@ function openAddModal(sectionName = null, timingType = null) {
     if (typeof updateMinorSelectOptions === 'function') {
       const domMaj = document.getElementById('add-domain-major');
       if (domMaj) {
-        domMaj.value = d.domainMajor || '';
+        domMaj.value = d.domainMajor || 'PN2';
         updateMinorSelectOptions('add-domain-major', 'add-domain-minor', DOMAINS_DATA, d.domainMinor);
       }
       const deptMaj = document.getElementById('add-dept-major');
       if (deptMaj) {
-        deptMaj.value = d.deptMajor || '';
+        deptMaj.value = d.deptMajor || '制作本部';
         updateMinorSelectOptions('add-dept-major', 'add-dept-minor', DEPTS_DATA, d.deptMinor);
       }
       const projMaj = document.getElementById('add-proj-major');
       if (projMaj) {
-        projMaj.value = d.projMajor || '';
+        projMaj.value = d.projMajor || 'ビジネス';
         updateMinorSelectOptions('add-proj-major', 'add-proj-minor', PROJECTS_DATA, d.projMinor);
       }
     }
@@ -652,6 +584,8 @@ function openAddModal(sectionName = null, timingType = null) {
     }
     const addHabitNotesInput = document.getElementById('add-habit-notes');
     if (addHabitNotesInput) addHabitNotesInput.value = '';
+    const addHabitObsInput = document.getElementById('add-habit-obsidian-uri');
+    if (addHabitObsInput) addHabitObsInput.value = '';
 
     modal.classList.add('active');
     setTimeout(() => {
@@ -665,122 +599,216 @@ function openAddModal(sectionName = null, timingType = null) {
 }
 
 function openEditModal(habitId) {
-  const habit = state.habits.find(h => h.id === habitId);
-  if (!habit) return;
-
-  const modal = document.getElementById('modal-edit-habit');
-  if (!modal) return;
-
-  document.getElementById('edit-habit-id').value = habit.id;
-  document.getElementById('edit-habit-id-badge').textContent = habit.id;
-  const movingAvgMin = (typeof calculateMovingAverageDuration === 'function') ? calculateMovingAverageDuration(habit, 'habit') : (habit.targetMin || 5);
-  document.getElementById('edit-habit-min').value = habit.targetMin || movingAvgMin;
-  const editHabitTagsInput = document.getElementById('edit-habit-tags');
-  if (editHabitTagsInput) {
-    editHabitTagsInput.value = normalizeTags(habit.tags).join(', ');
-    if (typeof renderTagSuggestions === 'function') {
-      renderTagSuggestions('edit-habit-tag-suggestions', 'edit-habit-tags');
+  try {
+    const strId = String(habitId);
+    const habit = (state.habits || []).find(h => String(h.id) === strId);
+    if (!habit) {
+      console.warn('openEditModal: Habit not found for ID:', habitId);
+      return;
     }
-  }
-  const editHabitNotesInput = document.getElementById('edit-habit-notes');
-  if (editHabitNotesInput) {
-    editHabitNotesInput.value = habit.notes || '';
-  }
 
-  // Display Period
-  const startEl = document.getElementById('edit-habit-display-start');
-  const endEl = document.getElementById('edit-habit-display-end');
-  if (startEl) startEl.value = habit.displayStartDate || '';
-  if (endEl) endEl.value = habit.displayEndDate || '';
+    const modal = document.getElementById('modal-edit-habit');
+    if (!modal) return;
 
-  // Timing
-  const type = habit.displayType || 'section';
-  state.selectedEditTimingType = type;
-  document.querySelectorAll('#edit-timing-type-selector .segment-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.type === type);
-  });
-  const panelSec = document.getElementById('edit-panel-timing-section');
-  const panelCustom = document.getElementById('edit-panel-timing-custom');
-  if (panelSec) panelSec.classList.toggle('hidden', type !== 'section');
-  if (panelCustom) panelCustom.classList.toggle('hidden', type !== 'custom');
+    const idInput = document.getElementById('edit-habit-id');
+    if (idInput) idInput.value = habit.id;
+    const badgeEl = document.getElementById('edit-habit-id-badge');
+    if (badgeEl) badgeEl.textContent = habit.id;
 
-  if (habit.section && document.getElementById('edit-habit-section')) {
-    document.getElementById('edit-habit-section').value = habit.section;
-  }
-  if (habit.customStart && document.getElementById('edit-custom-start')) {
-    document.getElementById('edit-custom-start').value = habit.customStart;
-  }
-  if (habit.customEnd && document.getElementById('edit-custom-end')) {
-    document.getElementById('edit-custom-end').value = habit.customEnd;
-  }
+    const nameInput = document.getElementById('edit-habit-name');
+    if (nameInput) nameInput.value = habit.name || '';
 
-  // Recurrence
-  const rec = habit.recurrence || { type: 'everyday' };
-  const recType = rec.type || 'everyday';
-  state.selectedEditRecType = recType;
-  document.querySelectorAll('#edit-recurrence-type-selector .segment-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.type === recType);
-  });
+    // Analytics and Rates Bar
+    const rate3d = document.getElementById('edit-rate-3d');
+    const rate7d = document.getElementById('edit-rate-7d');
+    const rate30d = document.getElementById('edit-rate-30d');
+    const rate90d = document.getElementById('edit-rate-90d');
+    const tierBadge = document.getElementById('edit-profile-tier');
 
-  const editRecPanels = {
-    daily_times: document.getElementById('edit-panel-rec-daily-times'),
-    custom_days: document.getElementById('edit-panel-rec-custom-days'),
-    weekly_goal: document.getElementById('edit-panel-rec-weekly-goal'),
-    interval: document.getElementById('edit-panel-rec-interval'),
-    monthly: document.getElementById('edit-panel-rec-monthly')
-  };
-  Object.entries(editRecPanels).forEach(([k, p]) => {
-    if (p) p.classList.toggle('hidden', k !== recType);
-  });
+    const r7 = typeof getHabitRate === 'function' ? getHabitRate(habit, 7) : 0;
+    const r30 = typeof getHabitRate === 'function' ? getHabitRate(habit, 30) : 0;
+    const r90 = typeof getHabitRate === 'function' ? getHabitRate(habit, 90) : 0;
 
-  if (recType === 'daily_times') {
-    const editDailyTimesEl = document.getElementById('edit-rec-daily-times');
-    if (editDailyTimesEl) editDailyTimesEl.value = rec.timesPerDay || 2;
-  } else if (recType === 'weekly_goal') {
-    const editWeeklyTimesEl = document.getElementById('edit-rec-weekly-times');
-    if (editWeeklyTimesEl) editWeeklyTimesEl.value = rec.timesPerWeek || 3;
-  } else if (recType === 'interval') {
-    const editIntervalEl = document.getElementById('edit-rec-interval-days');
-    if (editIntervalEl) editIntervalEl.value = rec.intervalDays || 2;
-  } else if (recType === 'monthly') {
-    const editMonthInt = document.getElementById('edit-rec-month-interval');
-    if (editMonthInt) editMonthInt.value = rec.monthInterval || 1;
-    const editMonthTiming = document.getElementById('edit-rec-month-timing-type');
-    if (editMonthTiming) editMonthTiming.value = rec.timingType || 'specific_day';
-    const editMonthDay = document.getElementById('edit-rec-month-day');
-    if (editMonthDay) editMonthDay.value = rec.monthDay || 1;
-  }
+    if (rate3d) rate3d.textContent = `${r7}%`;
+    if (rate7d) rate7d.textContent = `${r7}%`;
+    if (rate30d) rate30d.textContent = `${r30}%`;
+    if (rate90d) rate90d.textContent = `${r90}%`;
 
-  // 6-Axis Load Matrix
-  if (typeof setMatrixValues === 'function') {
-    setMatrixValues('edit-habit', {
-      importance: habit.importance || 'mid',
-      urgency: habit.urgency || 'mid',
-      mentalLoad: habit.mentalLoad || 'mid',
-      physicalLoad: habit.physicalLoad || 'mid',
-      frogLevel: habit.frogLevel || (habit.frogLevel ? (habit.frogLevel >= 4 ? 'high' : habit.frogLevel <= 2 ? 'low' : 'mid') : 'mid'),
-      interestLevel: habit.interestLevel || 'mid'
+    if (tierBadge) {
+      if (r30 >= 90) {
+        tierBadge.textContent = '💎 Master';
+        tierBadge.className = 'profile-tier-badge diamond';
+      } else if (r30 >= 80) {
+        tierBadge.textContent = '🥇 Gold';
+        tierBadge.className = 'profile-tier-badge gold';
+      } else if (r30 >= 50) {
+        tierBadge.textContent = '🥈 Silver';
+        tierBadge.className = 'profile-tier-badge silver';
+      } else {
+        tierBadge.textContent = '🥉 Bronze';
+        tierBadge.className = 'profile-tier-badge bronze';
+      }
+    }
+
+    // Render 14-day history tiles
+    const historyGrid = document.getElementById('edit-history-grid');
+    if (historyGrid) {
+      const today = new Date();
+      let tilesHtml = '';
+      for (let i = 13; i >= 0; i--) {
+        const dk = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const dayNum = parseInt(dk.split('-')[2], 10);
+        
+        let isDone = false;
+        if (habit.history && typeof habit.history === 'object') {
+          const entry = habit.history[dk];
+          if (entry === true || (entry && (entry.done || entry.count > 0 || entry.status === 'completed'))) {
+            isDone = true;
+          }
+        }
+        if (!isDone && Array.isArray(habit.executionLogs)) {
+          isDone = habit.executionLogs.some(log => {
+            const rawD = log.dateKey || log.date || log.completedAt;
+            const normD = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
+            return normD === dk && (log.status === 'completed' || log.count > 0 || !log.status);
+          });
+        }
+
+        tilesHtml += `
+          <div class="history-tile ${isDone ? 'completed' : ''}" title="${dk}: ${isDone ? '達成' : '未達'}">
+            <span class="tile-date">${dayNum}</span>
+            <span class="tile-status">${isDone ? '✓' : '-'}</span>
+          </div>
+        `;
+      }
+      historyGrid.innerHTML = tilesHtml;
+    }
+
+    // Today's Status Selector
+    const todayStatus = habit.status || 'uncompleted';
+    state.selectedEditHabitStatus = todayStatus;
+    document.querySelectorAll('#edit-status-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.status === todayStatus);
     });
-  }
 
-  // Cascade Selects
-  const domMaj = document.getElementById('edit-domain-major');
-  if (domMaj) {
-    domMaj.value = habit.domainMajor || '';
-    updateMinorSelectOptions('edit-domain-major', 'edit-domain-minor', DOMAINS_DATA, habit.domainMinor || habit.domain);
-  }
-  const deptMaj = document.getElementById('edit-dept-major');
-  if (deptMaj) {
-    deptMaj.value = habit.deptMajor || '';
-    updateMinorSelectOptions('edit-dept-major', 'edit-dept-minor', DEPTS_DATA, habit.deptMinor || habit.dept);
-  }
-  const projMaj = document.getElementById('edit-proj-major');
-  if (projMaj) {
-    projMaj.value = habit.projMajor || '';
-    updateMinorSelectOptions('edit-proj-major', 'edit-proj-minor', PROJECTS_DATA, habit.projMinor || habit.proj);
-  }
+    const movingAvgMin = (typeof calculateMovingAverageDuration === 'function') ? calculateMovingAverageDuration(habit, 'habit') : (habit.targetMin || 5);
+    const minInput = document.getElementById('edit-habit-min');
+    if (minInput) minInput.value = habit.targetMin || movingAvgMin;
 
-  modal.classList.add('active');
+    const editHabitTagsInput = document.getElementById('edit-habit-tags');
+    if (editHabitTagsInput) {
+      editHabitTagsInput.value = normalizeTags(habit.tags).join(', ');
+      if (typeof renderTagSuggestions === 'function') {
+        renderTagSuggestions('edit-habit-tag-suggestions', 'edit-habit-tags');
+      }
+    }
+    const editHabitNotesInput = document.getElementById('edit-habit-notes');
+    if (editHabitNotesInput) {
+      editHabitNotesInput.value = habit.notes || '';
+    }
+    const editHabitObsInput = document.getElementById('edit-habit-obsidian-uri');
+    if (editHabitObsInput) {
+      editHabitObsInput.value = habit.obsidianUri || '';
+    }
+
+    // Display Period
+    const startEl = document.getElementById('edit-habit-display-start');
+    const endEl = document.getElementById('edit-habit-display-end');
+    if (startEl) startEl.value = habit.displayStart || habit.displayStartDate || '';
+    if (endEl) endEl.value = habit.displayEnd || habit.displayEndDate || '';
+
+    // Timing
+    const type = habit.displayType || 'section';
+    state.selectedEditTimingType = type;
+    document.querySelectorAll('#edit-timing-type-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.type === type);
+    });
+    const panelSec = document.getElementById('edit-panel-timing-section');
+    const panelCustom = document.getElementById('edit-panel-timing-custom');
+    if (panelSec) panelSec.classList.toggle('hidden', type !== 'section');
+    if (panelCustom) panelCustom.classList.toggle('hidden', type !== 'custom');
+
+    const secSelect = document.getElementById('edit-habit-section');
+    if (secSelect && habit.section) secSelect.value = habit.section;
+    const custStart = document.getElementById('edit-custom-start');
+    if (custStart && habit.customStart) custStart.value = habit.customStart;
+    const custEnd = document.getElementById('edit-custom-end');
+    if (custEnd && habit.customEnd) custEnd.value = habit.customEnd;
+
+    // Recurrence
+    const rec = habit.recurrence || { type: 'everyday' };
+    const recType = rec.type || 'everyday';
+    state.selectedEditRecType = recType;
+    document.querySelectorAll('#edit-recurrence-type-selector .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.type === recType);
+    });
+
+    const editRecPanels = {
+      daily_times: document.getElementById('edit-panel-rec-daily-times'),
+      custom_days: document.getElementById('edit-panel-rec-custom-days'),
+      weekly_goal: document.getElementById('edit-panel-rec-weekly-goal'),
+      interval: document.getElementById('edit-panel-rec-interval'),
+      monthly: document.getElementById('edit-panel-rec-monthly')
+    };
+    Object.entries(editRecPanels).forEach(([k, p]) => {
+      if (p) p.classList.toggle('hidden', k !== recType);
+    });
+
+    if (recType === 'daily_times') {
+      const editDailyTimesEl = document.getElementById('edit-rec-daily-times');
+      if (editDailyTimesEl) editDailyTimesEl.value = rec.timesPerDay || 2;
+    } else if (recType === 'weekly_goal') {
+      const editWeeklyTimesEl = document.getElementById('edit-rec-weekly-times');
+      if (editWeeklyTimesEl) editWeeklyTimesEl.value = rec.timesPerWeek || 3;
+    } else if (recType === 'interval') {
+      const editIntervalEl = document.getElementById('edit-rec-interval-days');
+      if (editIntervalEl) editIntervalEl.value = rec.intervalDays || 2;
+    } else if (recType === 'monthly') {
+      const editMonthInt = document.getElementById('edit-rec-month-interval');
+      if (editMonthInt) editMonthInt.value = rec.monthInterval || 1;
+      const editMonthTiming = document.getElementById('edit-rec-month-timing-type');
+      if (editMonthTiming) editMonthTiming.value = rec.timingType || 'specific_day';
+      const editMonthDay = document.getElementById('edit-rec-month-day');
+      if (editMonthDay) editMonthDay.value = rec.monthDay || 1;
+    }
+
+    // 6-Axis Load Matrix
+    if (typeof setMatrixValues === 'function') {
+      setMatrixValues('edit-habit', {
+        importance: habit.importance || 'mid',
+        urgency: habit.urgency || 'mid',
+        mentalLoad: habit.mentalLoad || 'mid',
+        physicalLoad: habit.physicalLoad || 'mid',
+        frogLevel: habit.frogLevel || 'mid',
+        interestLevel: habit.interestLevel || 'mid'
+      });
+    }
+
+    // Cascade Selects
+    if (typeof updateMinorSelectOptions === 'function') {
+      const domMaj = document.getElementById('edit-domain-major');
+      if (domMaj) {
+        domMaj.value = habit.domainMajor || '';
+        updateMinorSelectOptions('edit-domain-major', 'edit-domain-minor', DOMAINS_DATA, habit.domainMinor || habit.domain);
+      }
+      const deptMaj = document.getElementById('edit-dept-major');
+      if (deptMaj) {
+        deptMaj.value = habit.deptMajor || '';
+        updateMinorSelectOptions('edit-dept-major', 'edit-dept-minor', DEPTS_DATA, habit.deptMinor || habit.dept);
+      }
+      const projMaj = document.getElementById('edit-proj-major');
+      if (projMaj) {
+        projMaj.value = habit.projMajor || '';
+        updateMinorSelectOptions('edit-proj-major', 'edit-proj-minor', PROJECTS_DATA, habit.projMinor || habit.proj);
+      }
+    }
+
+    modal.classList.add('active');
+  } catch (err) {
+    console.error('Error in openEditModal:', err);
+    const modal = document.getElementById('modal-edit-habit');
+    if (modal) modal.classList.add('active');
+  }
 }
 
 // =========================================================================

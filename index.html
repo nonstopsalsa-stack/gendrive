@@ -9,7 +9,89 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Shippori+Mincho:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260822_2232">
+  <style>
+    /* =========================================================================
+       Master Tables Scrollbar Overrides: Completely hide ALL native scrollbars
+       ========================================================================= */
+    .habit-table-wrapper,
+    .single-task-table-wrapper,
+    .master-grid-wrapper,
+    .master-table-body,
+    .master-subview,
+    #master-habits-wrapper,
+    #master-tasks-wrapper,
+    #single-task-table-wrapper {
+      scrollbar-width: none !important;
+    }
+
+    .habit-table-wrapper::-webkit-scrollbar,
+    .single-task-table-wrapper::-webkit-scrollbar,
+    .master-grid-wrapper::-webkit-scrollbar,
+    .master-table-body::-webkit-scrollbar,
+    .master-subview::-webkit-scrollbar,
+    #master-habits-wrapper::-webkit-scrollbar,
+    #master-tasks-wrapper::-webkit-scrollbar,
+    #single-task-table-wrapper::-webkit-scrollbar {
+      display: none !important;
+      width: 0px !important;
+      height: 0px !important;
+      background: transparent !important;
+    }
+
+    .habit-table-wrapper::-webkit-scrollbar-thumb,
+    .single-task-table-wrapper::-webkit-scrollbar-thumb,
+    .master-grid-wrapper::-webkit-scrollbar-thumb,
+    .master-table-body::-webkit-scrollbar-thumb,
+    .master-subview::-webkit-scrollbar-thumb,
+    #master-habits-wrapper::-webkit-scrollbar-thumb,
+    #master-tasks-wrapper::-webkit-scrollbar-thumb,
+    #single-task-table-wrapper::-webkit-scrollbar-thumb {
+      display: none !important;
+      width: 0px !important;
+      height: 0px !important;
+      background: transparent !important;
+    }
+
+    .habit-table-wrapper::-webkit-scrollbar-track,
+    .single-task-table-wrapper::-webkit-scrollbar-track,
+    .master-grid-wrapper::-webkit-scrollbar-track,
+    .master-table-body::-webkit-scrollbar-track,
+    .master-subview::-webkit-scrollbar-track,
+    #master-habits-wrapper::-webkit-scrollbar-track,
+    #master-tasks-wrapper::-webkit-scrollbar-track,
+    #single-task-table-wrapper::-webkit-scrollbar-track {
+      display: none !important;
+      width: 0px !important;
+      height: 0px !important;
+      background: transparent !important;
+    }
+
+    .habit-table-wrapper::-webkit-scrollbar-button,
+    .single-task-table-wrapper::-webkit-scrollbar-button,
+    .master-grid-wrapper::-webkit-scrollbar-button,
+    .master-table-body::-webkit-scrollbar-button,
+    .master-subview::-webkit-scrollbar-button,
+    #master-habits-wrapper::-webkit-scrollbar-button,
+    #master-tasks-wrapper::-webkit-scrollbar-button,
+    #single-task-table-wrapper::-webkit-scrollbar-button {
+      display: none !important;
+      width: 0px !important;
+      height: 0px !important;
+    }
+
+    .habit-table-wrapper::-webkit-scrollbar-corner,
+    .single-task-table-wrapper::-webkit-scrollbar-corner,
+    .master-grid-wrapper::-webkit-scrollbar-corner,
+    .master-table-body::-webkit-scrollbar-corner,
+    .master-subview::-webkit-scrollbar-corner,
+    #master-habits-wrapper::-webkit-scrollbar-corner,
+    #master-tasks-wrapper::-webkit-scrollbar-corner,
+    #single-task-table-wrapper::-webkit-scrollbar-corner {
+      background: transparent !important;
+      display: none !important;
+    }
+  </style>
 </head>
 <body class="dark-theme">
   <div class="app-container">
@@ -169,7 +251,7 @@
       </div>
     </nav>
 
-    <!-- Dynamic Smart Quick Tag Bar (Filter & Exclude Toggle) -->
+    <!-- Dynamic Smart Quick Tag Bar (Filter & Exclude Toggle & Tag Management) -->
     <div class="smart-tag-bar-container" id="smart-tag-bar-container">
       <div class="smart-tag-bar-header">
         <span class="smart-tag-bar-icon">🏷️</span>
@@ -178,6 +260,9 @@
       <div class="smart-tag-chips-list" id="smart-tag-chips-list">
         <!-- Dynamic tags with 3-state cycle: Default -> Include (Blue) -> Exclude (Red Strikethrough) -> Default -->
       </div>
+      <button type="button" class="btn-add-tag-fixed" id="btn-add-tag-fixed" onclick="promptCreateNewTag(event)" title="新しいタグを作成（右クリックでも作成可能）">
+        ➕ タグ追加
+      </button>
     </div>
 
     <!-- Main Layout (Sidebar + Content Viewport) -->
@@ -449,10 +534,14 @@
           <div class="table-top-control-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap;">
             <div class="table-tab-switch" style="margin-bottom: 0;">
               <button class="table-subtab active" data-subtab="habits" id="subtab-habits" onclick="switchMasterSubtab('habits')">🌿 定期ハビット一覧 (習慣マスター)</button>
+              <button class="table-subtab" data-subtab="analytics" id="subtab-analytics" onclick="switchMasterSubtab('analytics')">📈 継続スコアボード (3d/7d/30d/90d)</button>
               <button class="table-subtab" data-subtab="tasks" id="subtab-tasks" onclick="switchMasterSubtab('tasks')">🎯 定期タスク一覧 (定期配信マスター)</button>
               <button class="table-subtab" data-subtab="single_tasks" id="subtab-single-tasks" onclick="switchMasterSubtab('single_tasks')">📋 単発タスク一覧 (全履歴・予定)</button>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="table-hint-badge" style="font-size: 11px; color: var(--primary); background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3); padding: 4px 10px; border-radius: 20px;">
+                💡 各セルで直接変更可能（自動即時保存）／ 画面下部スケールで高速横スクロール
+              </span>
               <label style="font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
                 <input type="checkbox" id="toggle-show-disabled" onchange="toggleShowDisabledItems(this.checked)" style="cursor: pointer;">
                 <span>🚫 無効データを表示</span>
@@ -480,16 +569,16 @@
           <div class="master-subview" id="master-habits-view">
             <div class="table-control-header">
               <div class="table-title-area">
-                <h2>🌿 ハビット管理台帳</h2>
+                <h2>🌿 ハビット管理台帳（全項目一括エディット）</h2>
                 <span class="badge-count" id="table-total-count">0件</span>
               </div>
               <div class="table-sort-controls">
                 <span class="sort-label">並び替え:</span>
                 <div class="sort-select-wrapper">
                   <select id="table-sort-select" class="sort-select">
-                    <option value="default">標準（ドメイン ➔ PJ ➔ 部門 ➔ 時間帯）</option>
-                    <option value="created_desc">🆕 登録が新しい順（直近追加した順）</option>
-                    <option value="created_asc">📜 登録が古い順（初期登録順）</option>
+                    <option value="default">標準（ドラッグ並び順）</option>
+                    <option value="created_desc">🆕 登録が新しい順</option>
+                    <option value="created_asc">📜 登録が古い順</option>
                     <option value="domain">ドメイン順</option>
                     <option value="proj">プロジェクト順</option>
                     <option value="dept">部門順</option>
@@ -505,29 +594,30 @@
               </div>
             </div>
 
-            <div class="habit-table-wrapper">
-              <div class="habit-table-head">
-                <div class="col-head col-num sortable" data-sort="created" title="クリックで登録順ソート切替">No. <span class="sort-indicator"></span></div>
-                <div class="col-head col-name sortable" data-sort="name">ハビット名 <span class="sort-indicator"></span></div>
-                <div class="col-head col-domain sortable" data-sort="domain">ドメイン <span class="sort-indicator"></span></div>
-                <div class="col-head col-proj sortable" data-sort="proj">プロジェクト <span class="sort-indicator"></span></div>
-                <div class="col-head col-dept sortable" data-sort="dept">部門 <span class="sort-indicator"></span></div>
-                <div class="col-head col-rec">定期</div>
-                <div class="col-head col-timing sortable" data-sort="time">タイミング <span class="sort-indicator"></span></div>
-                <div class="col-head col-min">目安</div>
-                <div class="col-head col-load">負荷</div>
-                <div class="col-head col-stats">
-                  <div class="stats-head-title">達成度（実行率）</div>
-                  <div class="stats-head-sub">
-                    <span>3日</span>
-                    <span>7日</span>
-                    <span>30日</span>
-                    <span>90日</span>
-                  </div>
+            <div class="master-table-stage">
+              <div class="habit-table-wrapper master-grid-wrapper" id="master-habits-wrapper">
+                <div class="habit-table-head master-table-head" id="habits-table-head">
+                  <!-- Dynamically Rendered Header -->
+                </div>
+                <div class="habit-table-body master-table-body" id="habit-table-body">
+                  <!-- Dynamic Render -->
                 </div>
               </div>
-              <div class="habit-table-body" id="habit-table-body">
-                <!-- Dynamic Render -->
+              <!-- Vertical Custom Scroll Scale Panel -->
+              <div class="master-vert-scale-panel" id="vert-scale-habits">
+                <button type="button" class="btn-scale-vert-nav" onclick="scrollMasterActiveTableVertical('top')" title="台帳の一番上（先頭行）へジャンプ">
+                  <span class="jump-arrow">▲</span>
+                  <span class="jump-text">最上部</span>
+                </button>
+                <div class="scale-vert-track-outer" onclick="handleVerticalScaleTrackClick(event)">
+                  <div class="scale-vert-track-inner">
+                    <div class="scale-vert-thumb-bar" title="マウスでドラッグして縦スクロール"></div>
+                  </div>
+                </div>
+                <button type="button" class="btn-scale-vert-nav" onclick="scrollMasterActiveTableVertical('bottom')" title="台帳の一番下（末尾行）へジャンプ">
+                  <span class="jump-text">最下部</span>
+                  <span class="jump-arrow">▼</span>
+                </button>
               </div>
             </div>
           </div>
@@ -536,25 +626,36 @@
           <div class="master-subview hidden" id="master-tasks-view">
             <div class="table-control-header">
               <div class="table-title-area">
-                <h2>🎯 定期タスク台帳 (リピート配信マスター)</h2>
+                <h2>🎯 定期タスク台帳 (リピート配信マスター・全項目エディット)</h2>
                 <span class="badge-count" id="table-recurring-tasks-count">0件</span>
               </div>
               <button class="btn-add-primary" onclick="openAddTaskModal('section', true)">➕ 定期タスク登録</button>
             </div>
 
-            <div class="habit-table-wrapper">
-              <div class="task-table-head">
-                <div class="col-head col-num">No.</div>
-                <div class="col-head col-name">タスク名</div>
-                <div class="col-head col-label">アイゼンハワー</div>
-                <div class="col-head col-domain">ドメイン / PJ</div>
-                <div class="col-head col-rec">配信定期</div>
-                <div class="col-head col-timing">セクション / 時間帯</div>
-                <div class="col-head col-min">見積</div>
-                <div class="col-head col-load">カエル</div>
+            <div class="master-table-stage">
+              <div class="habit-table-wrapper master-grid-wrapper" id="master-tasks-wrapper">
+                <div class="task-table-head master-table-head" id="recurring-table-head">
+                  <!-- Dynamically Rendered Header -->
+                </div>
+                <div class="task-table-body master-table-body" id="recurring-task-table-body">
+                  <!-- Dynamic Render of Recurring Tasks -->
+                </div>
               </div>
-              <div class="task-table-body" id="recurring-task-table-body">
-                <!-- Dynamic Render of Recurring Tasks -->
+              <!-- Vertical Custom Scroll Scale Panel -->
+              <div class="master-vert-scale-panel" id="vert-scale-tasks">
+                <button type="button" class="btn-scale-vert-nav" onclick="scrollMasterActiveTableVertical('top')" title="台帳の一番上（先頭行）へジャンプ">
+                  <span class="jump-arrow">▲</span>
+                  <span class="jump-text">最上部</span>
+                </button>
+                <div class="scale-vert-track-outer" onclick="handleVerticalScaleTrackClick(event)">
+                  <div class="scale-vert-track-inner">
+                    <div class="scale-vert-thumb-bar" title="マウスでドラッグして縦スクロール"></div>
+                  </div>
+                </div>
+                <button type="button" class="btn-scale-vert-nav" onclick="scrollMasterActiveTableVertical('bottom')" title="台帳の一番下（末尾行）へジャンプ">
+                  <span class="jump-text">最下部</span>
+                  <span class="jump-arrow">▼</span>
+                </button>
               </div>
             </div>
           </div>
@@ -563,27 +664,111 @@
           <div class="master-subview hidden" id="master-single-tasks-view">
             <div class="table-control-header">
               <div class="table-title-area">
-                <h2>📋 単発タスク台帳 (全タスク履歴・予定)</h2>
+                <h2>📋 単発タスク台帳 (全タスク履歴・予定・全項目エディット)</h2>
                 <span class="badge-count" id="table-single-tasks-count">0件</span>
               </div>
               <button class="btn-add-primary" onclick="openAddTaskModal()">➕ 単発タスク登録</button>
             </div>
 
-            <div class="habit-table-wrapper single-task-table-wrapper" id="single-task-table-wrapper">
-              <div class="single-task-table-head">
-                <div class="col-head col-date">完了日 / 予定日</div>
-                <div class="col-head col-num">No.</div>
-                <div class="col-head col-name">タスク名</div>
-                <div class="col-head col-label">アイゼンハワー</div>
-                <div class="col-head col-domain">ドメイン / PJ</div>
-                <div class="col-head col-timing">セクション / 時間</div>
-                <div class="col-head col-min">見積 / 実績</div>
-                <div class="col-head col-status">状態</div>
+            <div class="master-table-stage">
+              <div class="habit-table-wrapper single-task-table-wrapper master-grid-wrapper" id="single-task-table-wrapper">
+                <div class="single-task-table-head master-table-head" id="single-tasks-table-head">
+                  <!-- Dynamically Rendered Header -->
+                </div>
+                <div class="single-task-table-body master-table-body" id="single-task-table-body">
+                  <!-- Dynamic Render of Single Tasks -->
+                </div>
               </div>
-              <div class="single-task-table-body" id="single-task-table-body">
-                <!-- Dynamic Render of Single Tasks -->
+              <!-- Vertical Custom Scroll Scale Panel -->
+              <div class="master-vert-scale-panel" id="vert-scale-single-tasks">
+                <button type="button" class="btn-scale-vert-nav" onclick="scrollMasterActiveTableVertical('top')" title="台帳の一番上（先頭行）へジャンプ">
+                  <span class="jump-arrow">▲</span>
+                  <span class="jump-text">最上部</span>
+                </button>
+                <div class="scale-vert-track-outer" onclick="handleVerticalScaleTrackClick(event)">
+                  <div class="scale-vert-track-inner">
+                    <div class="scale-vert-thumb-bar" title="マウスでドラッグして縦スクロール"></div>
+                  </div>
+                </div>
+                <button type="button" class="btn-scale-vert-nav" onclick="scrollMasterActiveTableVertical('bottom')" title="台帳の一番下（末尾行）へジャンプ">
+                  <span class="jump-text">最下部</span>
+                  <span class="jump-arrow">▼</span>
+                </button>
               </div>
             </div>
+          </div>
+
+          <!-- 4-D. Habits & Recurring Tasks Analytics Scoreboard -->
+          <div class="master-subview hidden" id="master-analytics-view">
+            <div class="table-control-header">
+              <div class="table-title-area">
+                <h2>📈 習慣・定期 継続スコアボード（3日 / 週 / 30日 / 90日 達成度 & ストリーク一覧）</h2>
+                <span class="badge-count" id="table-analytics-count">0件</span>
+              </div>
+              <div class="table-sort-controls">
+                <span class="sort-label">表示対象:</span>
+                <div class="sort-select-wrapper">
+                  <select id="analytics-filter-type" class="sort-select" onchange="renderTableAnalyticsView()">
+                    <option value="all">すべて（ハビット ＋ 定期タスク）</option>
+                    <option value="habits">🌿 ハビットのみ</option>
+                    <option value="tasks">🎯 定期タスクのみ</option>
+                  </select>
+                </div>
+                <span class="sort-label" style="margin-left: 8px;">並び替え:</span>
+                <div class="sort-select-wrapper">
+                  <select id="analytics-sort-select" class="sort-select" onchange="renderTableAnalyticsView()">
+                    <option value="streak_desc">🔥 連続日数（ストリーク）順</option>
+                    <option value="rate7_desc">⚡ 7日達成率（高い順）</option>
+                    <option value="rate30_desc">🌕 30日達成率（高い順）</option>
+                    <option value="rate90_desc">🏆 90日達成率（高い順）</option>
+                    <option value="rate7_asc">⚠️ 7日達成率（低い順・要テコ入れ）</option>
+                    <option value="name_asc">名前順（50音）</option>
+                  </select>
+                </div>
+                <button type="button" class="btn-toggle-visual-mode" onclick="toggleAnalyticsVisualMode()" title="表示切替: 棒グラフ ⇄ ニコちゃんマーク (キーボード: V または S)">
+                  <span id="visual-mode-toggle-icon">📊</span> <span id="visual-mode-toggle-text">棒グラフ</span> <span class="kbd-sub">V</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- KPI Summary Banner -->
+            <div class="analytics-kpi-row" id="analytics-kpi-row"></div>
+
+            <!-- Scoreboard Grid Stage with Vertical Scale Panel -->
+            <div class="master-table-stage">
+              <div class="habit-table-wrapper master-grid-wrapper analytics-scoreboard-wrapper" id="master-analytics-wrapper">
+                <div class="analytics-scoreboard-container" id="analytics-scoreboard-container">
+                  <!-- Dynamically Rendered Scoreboard Grid -->
+                </div>
+              </div>
+              <!-- Vertical Custom Scroll Scale Panel -->
+              <div class="master-vert-scale-panel" id="vert-scale-analytics">
+                <button type="button" class="btn-scale-vert-nav" onclick="scrollMasterActiveTableVertical('top')" title="台帳の一番上（先頭行）へジャンプ">
+                  <span class="jump-arrow">▲</span>
+                  <span class="jump-text">最上部</span>
+                </button>
+                <div class="scale-vert-track-outer" onclick="handleVerticalScaleTrackClick(event)">
+                  <div class="scale-vert-track-inner">
+                    <div class="scale-vert-thumb-bar" title="マウスでドラッグして縦スクロール"></div>
+                  </div>
+                </div>
+                <button type="button" class="btn-scale-vert-nav" onclick="scrollMasterActiveTableVertical('bottom')" title="台帳の一番下（末尾行）へジャンプ">
+                  <span class="jump-text">最下部</span>
+                  <span class="jump-arrow">▼</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sticky Bottom Horizontal Scroll Scale Bar (Pure Horizontal Navigation) -->
+          <div class="master-scroll-scale-panel" id="master-scroll-scale-panel">
+            <button type="button" class="btn-scale-nav" onclick="scrollMasterActiveTable('left')" title="左端の列へスクロール">◀ 先頭</button>
+            <div class="scale-track-outer" id="scale-track-outer" onclick="handleScaleTrackClick(event)">
+              <div class="scale-track-inner" id="scale-track-inner">
+                <div class="scale-thumb-bar" id="scale-thumb-bar" title="マウスでドラッグして横スクロール"></div>
+              </div>
+            </div>
+            <button type="button" class="btn-scale-nav" onclick="scrollMasterActiveTable('right')" title="右端の列へスクロール">末尾 ▶</button>
           </div>
         </section>
 
@@ -1387,6 +1572,15 @@
                 <label>📝 メモ・備考</label>
                 <textarea id="add-habit-notes" rows="3" placeholder="習慣のコツ、チェックポイント、メモなど" style="min-height: 64px;"></textarea>
               </div>
+
+              <!-- Obsidian Note Link -->
+              <div class="form-group">
+                <label>🟣 Obsidian考察ノートリンク</label>
+                <div class="input-with-action-btn">
+                  <input type="text" id="add-habit-obsidian-uri" placeholder="obsidian://open?... または ノート名 (例: 001_My_Idea/習慣考察)" autocomplete="off" />
+                  <button type="button" class="btn-input-test-link" onclick="openObsidianLink(document.getElementById('add-habit-obsidian-uri').value)" title="Obsidianで開く">🔗 開く</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1737,6 +1931,15 @@
                 <label>📝 メモ・備考</label>
                 <textarea id="edit-habit-notes" rows="3" placeholder="習慣のコツ、チェックポイント、メモなど" style="min-height: 64px;"></textarea>
               </div>
+
+              <!-- Obsidian Note Link -->
+              <div class="form-group">
+                <label>🟣 Obsidian考察ノートリンク</label>
+                <div class="input-with-action-btn">
+                  <input type="text" id="edit-habit-obsidian-uri" placeholder="obsidian://open?... または ノート名 (例: 001_My_Idea/習慣考察)" autocomplete="off" />
+                  <button type="button" class="btn-input-test-link" onclick="openObsidianLink(document.getElementById('edit-habit-obsidian-uri').value)" title="Obsidianで開く">🔗 開く</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1875,11 +2078,11 @@
                 <div class="cascade-grid cascade-row">
                   <select id="add-task-domain-major">
                     <option value="">ドメイン (大分類)</option>
-                    <option value="PN1">PN1 個人基盤</option>
-                    <option value="PN2" selected>PN2 事業・顧客</option>
-                    <option value="PN3">PN3 組織・チーム</option>
-                    <option value="PN4">PN4 財務・資産</option>
-                    <option value="PN5">PN5 投資・研究開発</option>
+                    <option value="PN1" selected>PN1系 稼ぐ</option>
+                    <option value="PN2">PN2系 動く</option>
+                    <option value="PN3">PN3系 ストレスを減らす</option>
+                    <option value="PN4">PN4系 夢中を増やす</option>
+                    <option value="PN5">PN5系 貢献する</option>
                   </select>
                   <select id="add-task-domain-minor">
                     <option value="">ドメイン (詳細)</option>
@@ -1887,9 +2090,13 @@
                 </div>
                 <div class="cascade-grid cascade-row">
                   <select id="add-task-dept-major">
-                    <option value="">部門 (大分類)</option>
-                    <option value="HONBU" selected>本部 (コア機能)</option>
-                    <option value="CHOKKATSU">直轄・専門機能</option>
+                    <option value="">部門 (本部/直轄)</option>
+                    <option value="CEO直轄">CEO直轄 / 経営企画</option>
+                    <option value="制作本部" selected>制作本部</option>
+                    <option value="営業マーケ本部">営業マーケ本部</option>
+                    <option value="管理本部">管理本部</option>
+                    <option value="ガバナンス本部">ガバナンス本部</option>
+                    <option value="開発・QA">開発 / 品質保証</option>
                   </select>
                   <select id="add-task-dept-minor">
                     <option value="">部門 (詳細)</option>
@@ -1898,8 +2105,8 @@
                 <div class="cascade-grid cascade-row">
                   <select id="add-task-proj-major">
                     <option value="">プロジェクト (大分類)</option>
-                    <option value="BIZ" selected>ビジネス系</option>
-                    <option value="LIFE">プライベート系</option>
+                    <option value="ビジネス" selected>💼 ビジネス系</option>
+                    <option value="プライベート">🏡 プライベート系</option>
                   </select>
                   <select id="add-task-proj-minor">
                     <option value="">プロジェクト (詳細)</option>
@@ -2028,6 +2235,15 @@
               <div class="form-group">
                 <label>📝 メモ・備考</label>
                 <textarea id="add-task-notes" rows="3" placeholder="参考リンク、要件、チェックリストなど" style="min-height: 64px;"></textarea>
+              </div>
+
+              <!-- Obsidian Note Link -->
+              <div class="form-group">
+                <label>🟣 Obsidian考察ノートリンク</label>
+                <div class="input-with-action-btn">
+                  <input type="text" id="add-task-obsidian-uri" placeholder="obsidian://open?... または ノート名 (例: 001_My_Idea/タスク考察)" autocomplete="off" />
+                  <button type="button" class="btn-input-test-link" onclick="openObsidianLink(document.getElementById('add-task-obsidian-uri').value)" title="Obsidianで開く">🔗 開く</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2165,11 +2381,11 @@
                 <div class="cascade-grid cascade-row">
                   <select id="edit-task-domain-major">
                     <option value="">ドメイン (大分類)</option>
-                    <option value="PN1">PN1 個人基盤</option>
-                    <option value="PN2">PN2 事業・顧客</option>
-                    <option value="PN3">PN3 組織・チーム</option>
-                    <option value="PN4">PN4 財務・資産</option>
-                    <option value="PN5">PN5 投資・研究開発</option>
+                    <option value="PN1">PN1系 稼ぐ</option>
+                    <option value="PN2">PN2系 動く</option>
+                    <option value="PN3">PN3系 ストレスを減らす</option>
+                    <option value="PN4">PN4系 夢中を増やす</option>
+                    <option value="PN5">PN5系 貢献する</option>
                   </select>
                   <select id="edit-task-domain-minor">
                     <option value="">ドメイン (詳細)</option>
@@ -2177,9 +2393,13 @@
                 </div>
                 <div class="cascade-grid cascade-row">
                   <select id="edit-task-dept-major">
-                    <option value="">部門 (大分類)</option>
-                    <option value="HONBU">本部 (コア機能)</option>
-                    <option value="CHOKKATSU">直轄・専門機能</option>
+                    <option value="">部門 (本部/直轄)</option>
+                    <option value="CEO直轄">CEO直轄 / 経営企画</option>
+                    <option value="制作本部">制作本部</option>
+                    <option value="営業マーケ本部">営業マーケ本部</option>
+                    <option value="管理本部">管理本部</option>
+                    <option value="ガバナンス本部">ガバナンス本部</option>
+                    <option value="開発・QA">開発 / 品質保証</option>
                   </select>
                   <select id="edit-task-dept-minor">
                     <option value="">部門 (詳細)</option>
@@ -2188,8 +2408,8 @@
                 <div class="cascade-grid cascade-row">
                   <select id="edit-task-proj-major">
                     <option value="">プロジェクト (大分類)</option>
-                    <option value="BIZ">ビジネス系</option>
-                    <option value="LIFE">プライベート系</option>
+                    <option value="ビジネス">💼 ビジネス系</option>
+                    <option value="プライベート">🏡 プライベート系</option>
                   </select>
                   <select id="edit-task-proj-minor">
                     <option value="">プロジェクト (詳細)</option>
@@ -2318,6 +2538,15 @@
               <div class="form-group">
                 <label>📝 メモ・備考</label>
                 <textarea id="edit-task-notes" rows="3" placeholder="参考リンク、要件など" style="min-height: 64px;"></textarea>
+              </div>
+
+              <!-- Obsidian Note Link -->
+              <div class="form-group">
+                <label>🟣 Obsidian考察ノートリンク</label>
+                <div class="input-with-action-btn">
+                  <input type="text" id="edit-task-obsidian-uri" placeholder="obsidian://open?... または ノート名 (例: 001_My_Idea/タスク考察)" autocomplete="off" />
+                  <button type="button" class="btn-input-test-link" onclick="openObsidianLink(document.getElementById('edit-task-obsidian-uri').value)" title="Obsidianで開く">🔗 開く</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2690,11 +2919,11 @@
                 <div class="cascade-grid cascade-row">
                   <select id="select-preset-domain-major">
                     <option value="">ドメイン (大分類)</option>
-                    <option value="PN1">PN1 個人基盤</option>
-                    <option value="PN2">PN2 事業・顧客</option>
-                    <option value="PN3">PN3 組織・チーム</option>
-                    <option value="PN4">PN4 財務・資産</option>
-                    <option value="PN5" selected>PN5 投資・研究開発/生活</option>
+                    <option value="PN1">PN1系 稼ぐ</option>
+                    <option value="PN2">PN2系 動く</option>
+                    <option value="PN3">PN3系 ストレスを減らす</option>
+                    <option value="PN4">PN4系 夢中を増やす</option>
+                    <option value="PN5" selected>PN5系 貢献する</option>
                   </select>
                   <select id="select-preset-domain-minor">
                     <option value="">ドメイン (詳細)</option>
@@ -2702,9 +2931,13 @@
                 </div>
                 <div class="cascade-grid cascade-row">
                   <select id="select-preset-dept-major">
-                    <option value="">部門 (大分類)</option>
-                    <option value="HONBU" selected>本部 (コア機能)</option>
-                    <option value="CHOKKATSU">直轄・専門機能</option>
+                    <option value="">部門 (本部/直轄)</option>
+                    <option value="CEO直轄">CEO直轄 / 経営企画</option>
+                    <option value="制作本部" selected>制作本部</option>
+                    <option value="営業マーケ本部">営業マーケ本部</option>
+                    <option value="管理本部">管理本部</option>
+                    <option value="ガバナンス本部">ガバナンス本部</option>
+                    <option value="開発・QA">開発 / 品質保証</option>
                   </select>
                   <select id="select-preset-dept-minor">
                     <option value="">部門 (詳細)</option>
@@ -2713,8 +2946,8 @@
                 <div class="cascade-grid cascade-row">
                   <select id="select-preset-proj-major">
                     <option value="">プロジェクト (大分類)</option>
-                    <option value="BIZ">ビジネス系</option>
-                    <option value="LIFE" selected>プライベート系</option>
+                    <option value="ビジネス">💼 ビジネス系</option>
+                    <option value="プライベート" selected>🏡 プライベート系</option>
                   </select>
                   <select id="select-preset-proj-minor">
                     <option value="">プロジェクト (詳細)</option>
