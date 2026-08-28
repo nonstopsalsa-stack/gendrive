@@ -102,6 +102,9 @@
           <span class="logo-icon">⚡</span>
           <span class="logo-text">Gendrive</span>
           <span class="logo-badge">ACTION ENGINE</span>
+
+        <!-- Version Badge (Clickable to open Release Notes) -->
+        <div class="version-badge" id="app-version-badge" onclick="openReleaseNotesModal()" title="📜 バージョン v1.0.0 (クリックで更新履歴を表示)">v1.0.0</div>
         </div>
 
         <!-- Date Navigation Bar -->
@@ -1191,6 +1194,97 @@
   </div>
 
   <!-- Modal: Shortcut Help -->
+    <!-- Modal: Release Notes / Changelog -->
+    <div class="modal-overlay" id="modal-release-notes">
+      <div class="modal-card modal-wide modal-release-notes-card">
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <span class="modal-header-icon" style="color: #38bdf8;">📜</span>
+            <div class="release-header-titles">
+              <h3>Gendrive 更新履歴 ＆ リリースノート</h3>
+              <span class="release-version-pill" id="release-modal-version">v1.0.0 正式版</span>
+            </div>
+          </div>
+          <button class="modal-close" id="btn-close-release-notes" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body release-notes-body">
+          <div class="release-hero-banner">
+            <div class="release-hero-left">
+              <span class="release-badge-tag">MAJOR RELEASE</span>
+              <h2 class="release-hero-title">⚡ Gendrive v1.0.0 正式統合版</h2>
+              <p class="release-hero-desc">Personal Action Engine ＆ クラウド同期・6大画面統合システム</p>
+            </div>
+            <div class="release-hero-date">2026-08-29</div>
+          </div>
+
+          <div class="release-section-group">
+            <h4 class="release-section-title">🚀 v1.0.0 の主要機能・ハイライト</h4>
+            <div class="release-feature-grid">
+              <div class="release-feature-card">
+                <div class="feature-card-header">
+                  <span class="feature-icon">⚡</span>
+                  <b>6大特化ビュー統合</b>
+                </div>
+                <p>セクション(<code>1</code>)・フォーカス(<code>2</code>)・デイリー(<code>3</code>)・マスター(<code>4</code>)・ビジョン(<code>5</code>)・タイマー(<code>6</code>)を数字キー1発で切り替え。</p>
+              </div>
+
+              <div class="release-feature-card">
+                <div class="feature-card-header">
+                  <span class="feature-icon">🏁</span>
+                  <b>TaskChute式リアルタイム計算</b>
+                </div>
+                <p>今日の全タスク実行による「今日完了見込み時刻(ETA)」と「現セクション時間経過スケール」をヘッダーに常時表示。</p>
+              </div>
+
+              <div class="release-feature-card">
+                <div class="feature-card-header">
+                  <span class="feature-icon">📥</span>
+                  <b>スマート・キャリーオーバー</b>
+                </div>
+                <p>前日までの未完了タスクを自動検知。現在のセクションへワンクリックで一括取り込み・再計画が可能。</p>
+              </div>
+
+              <div class="release-feature-card">
+                <div class="feature-card-header">
+                  <span class="feature-icon">☁️</span>
+                  <b>GASクラウド同期 ＆ タイムマシーン</b>
+                </div>
+                <p>PCとスマホ(PWA)間の双方向リアルタイム同期。Drive上の5シート一括スプレッドシートからワンクリックで過去世代へ復元。</p>
+              </div>
+
+              <div class="release-feature-card">
+                <div class="feature-card-header">
+                  <span class="feature-icon">⌨️</span>
+                  <b>キーボードファースト設計</b>
+                </div>
+                <p>タスク追加(<code>T</code>)・ハビット追加(<code>N</code>)・プリセット(<code>P</code>)・再同期(<code>R</code>)など、マウス不要の超速操作。</p>
+              </div>
+
+              <div class="release-feature-card">
+                <div class="feature-card-header">
+                  <span class="feature-icon">📜</span>
+                  <b>Clipper互換 リリースノート体系</b>
+                </div>
+                <p>ヘッダーにバージョン番号を常時表示。<code>CHANGELOG.md</code> や <code>docs/release_notes/</code> と完全連携。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="release-section-group">
+            <h4 class="release-section-title">💡 バージョン表記と設計のポイント</h4>
+            <ul class="release-bullet-list">
+              <li><b>Single Source of Truth</b>: <code>config.js</code> でバージョン番号（<code>v1.0.0</code>）を一元管理し、ヘッダー・モーダルに自動反映。</li>
+              <li><b>情報階層（Info Hierarchy）</b>: 「ロゴ(Product) ➜ バージョン(Version) ➜ 日付(Context)」の順で左から右へ自然に配置。</li>
+              <li><b>Chrome / PWA 両対応</b>: 個別アプリ起動時もブラウザタブ時もレイアウト崩れなく常に同じ位置で確認可能。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-footer release-modal-footer">
+          <span class="release-footer-meta">Docs: docs/release_notes/2026-08-29_v1.0.0_initial_action_engine.md</span>
+          <button type="button" class="btn-primary" onclick="closeModal()" style="padding: 6px 18px;">閉じる (Esc)</button>
+        </div>
+      </div>
+    </div>
   <div class="modal-overlay" id="modal-shortcuts">
     <div class="modal-card">
       <div class="modal-header">

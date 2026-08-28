@@ -1911,6 +1911,8 @@ safeBindClick('filter-proj-pill', () => openCascadeFilterModal('proj', 'プロ�
 safeBindClick('filter-tag-pill', openTagFilterModal);
 safeBindClick('btn-reset-filters', resetAllFilters);
 
+safeBindClick('app-version-badge', openReleaseNotesModal);
+safeBindClick('btn-close-release-notes', closeModal);
 safeBindClick('btn-shortcuts', openShortcutsModal);
 safeBindClick('btn-close-shortcuts', closeModal);
 safeBindClick('btn-close-filter', closeModal);

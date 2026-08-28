@@ -1,8 +1,13 @@
-/**
+﻿/**
  * Gendrive - Master Configuration & Hierarchical Definitions
  * 哲生 (AI Company OS & Personal OS Engine)
  */
 
+// =========================================================================
+// 0. Application Version (Single Source of Truth)
+// =========================================================================
+const APP_VERSION = 'v1.0.0';
+const APP_VERSION_NAME = 'Personal Action Engine 正式版';
 // =========================================================================
 // 1. Hierarchical Master Definitions
 // =========================================================================

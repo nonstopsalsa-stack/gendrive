@@ -1312,6 +1312,10 @@ function handleQuickAddTask(e) {
 }
 
 function openSettingsModal() {
+  const verBadge = document.getElementById('m-app-version-badge');
+  if (verBadge && typeof APP_VERSION !== 'undefined') {
+    verBadge.textContent = APP_VERSION;
+  }
   haptic(10);
   const modal = document.getElementById('m-settings-modal');
   const input = document.getElementById('m-gas-url-input');

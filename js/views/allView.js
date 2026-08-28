@@ -35,6 +35,8 @@ function renderAllView() {
   if (!container) return;
 
   const isToday = state.selectedDateOffset === 0;
+  const isPast = state.selectedDateOffset > 0;
+  const isFuture = state.selectedDateOffset < 0;
   const todayTasks = state.tasks.filter(isTaskForSelectedDate);
   const allHabits = isToday ? state.habits : [];
 
@@ -195,10 +197,6 @@ function renderAllView() {
     if (state.filters.status !== 'all' && secTasks.length === 0 && secHabits.length === 0) {
       continue;
     }
-
-    const isToday = state.selectedDateOffset === 0;
-    const isPast = state.selectedDateOffset > 0;
-    const isFuture = state.selectedDateOffset < 0;
 
     let secEtaBadgeHtml = '';
 

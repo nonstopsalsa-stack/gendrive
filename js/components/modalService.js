@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Modal Management & Form Handler Service
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -1050,3 +1050,18 @@ function clearCloudSyncSettings() {
   }
 }
 
+
+
+// =========================================================================
+// Release Notes Modal
+// =========================================================================
+function openReleaseNotesModal() {
+  const modal = document.getElementById('modal-release-notes');
+  if (modal) {
+    const verEl = document.getElementById('release-modal-version');
+    if (verEl && typeof APP_VERSION !== 'undefined') {
+      verEl.textContent = APP_VERSION + ' 正式版';
+    }
+    modal.classList.add('active');
+  }
+}
