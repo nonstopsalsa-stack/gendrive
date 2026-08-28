@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive Mobile Lite - Core Controller & Local-First Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -30,6 +30,7 @@ let mState = {
   activeScope: 'section', // 'section' | 'daily'
   activeType: 'task',      // 'task' | 'habit'
   activeTaskId: null,
+  activeHabitId: null,
   isSyncing: false,
   hasPendingPush: false
 };
@@ -263,9 +264,11 @@ function loadLocalData() {
     mState.habits = [];
   }
 
-  // Active Task
+  // Active Task & Active Habit
   const activeTask = mState.tasks.find(t => t.status === 'in_progress');
   mState.activeTaskId = activeTask ? activeTask.id : null;
+  const activeHabit = mState.habits.find(h => h.status === 'in_progress');
+  mState.activeHabitId = activeHabit ? activeHabit.id : null;
 }
 
 function saveLocalTasks(instant = true) {
@@ -391,6 +394,10 @@ function checkAndRunDayRollover() {
 function triggerCloudPush() {
   const gasUrl = getGasUrl();
   if (!gasUrl) return;
+  if (!Array.isArray(mState.habits) || mState.habits.length === 0) {
+    console.warn('Skipping cloud push: habits array is empty');
+    return;
+  }
 
   if (mState.isSyncing) {
     mState.hasPendingPush = true;
@@ -532,9 +539,11 @@ async function pullFromCloud(force = false, isSilent = false) {
           lastProcessedDate: cloudMeta.lastProcessedDate || localMeta.lastProcessedDate
         });
 
-        // Recheck active task
+        // Recheck active task & habit
         const activeTask = mState.tasks.find(t => t.status === 'in_progress');
         mState.activeTaskId = activeTask ? activeTask.id : null;
+        const activeHabit = mState.habits.find(h => h.status === 'in_progress');
+        mState.activeHabitId = activeHabit ? activeHabit.id : null;
 
         renderMobileApp();
         updateSyncUI('success');
@@ -612,6 +621,26 @@ function startTask(taskId) {
     }
   });
 
+  // 実行中ハビットがあれば自動中断（完全シングルタスク排他制御）
+  if (Array.isArray(mState.habits)) {
+    let habitPaused = false;
+    mState.habits.forEach(h => {
+      if (h.status === 'in_progress') {
+        h.status = 'paused';
+        if (h.startTimestamp) {
+          const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - h.startTimestamp) / 1000));
+          h.accumulatedSeconds = (h.accumulatedSeconds || (h.actMin ? h.actMin * 60 : 0)) + sessionElapsedSec;
+          h.actMin = Math.round(h.accumulatedSeconds / 60);
+        }
+        h.startTimestamp = null;
+        habitPaused = true;
+      }
+    });
+    if (habitPaused && typeof saveLocalHabits === 'function') {
+      saveLocalHabits();
+    }
+  }
+  mState.activeHabitId = null;
   saveLocalTasks();
   renderMobileApp();
 }
@@ -665,34 +694,155 @@ function uncompleteTask(taskId) {
   renderMobileApp();
 }
 
-function toggleHabit(habitId) {
+function startHabit(habitId) {
   haptic(20);
+  const targetHabit = mState.habits.find(h => String(h.id) === String(habitId));
+  if (!targetHabit) return;
+
+  const now = new Date();
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  // 1. 他のハビットを自動中断（一時停止）
+  mState.habits.forEach(h => {
+    if (String(h.id) === String(habitId)) {
+      h.status = 'in_progress';
+      h.actStart = h.actStart || nowTimeStr;
+      h.startTimestamp = Date.now();
+      mState.activeHabitId = h.id;
+    } else if (h.status === 'in_progress') {
+      h.status = 'paused';
+      if (h.startTimestamp) {
+        const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - h.startTimestamp) / 1000));
+        h.accumulatedSeconds = (h.accumulatedSeconds || (h.actMin ? h.actMin * 60 : 0)) + sessionElapsedSec;
+        h.actMin = Math.round(h.accumulatedSeconds / 60);
+      }
+      h.startTimestamp = null;
+    }
+  });
+
+  // 2. 実行中タスクがあれば自動中断（完全シングルタスク排他制御）
+  if (Array.isArray(mState.tasks)) {
+    let taskPaused = false;
+    mState.tasks.forEach(t => {
+      if (t.status === 'in_progress') {
+        t.status = 'paused';
+        if (t.startTimestamp) {
+          const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - t.startTimestamp) / 1000));
+          t.accumulatedSeconds = (t.accumulatedSeconds || (t.actMin ? t.actMin * 60 : 0)) + sessionElapsedSec;
+          t.actMin = Math.round(t.accumulatedSeconds / 60);
+        }
+        t.startTimestamp = null;
+        taskPaused = true;
+      }
+    });
+    if (taskPaused && typeof saveLocalTasks === 'function') {
+      saveLocalTasks();
+    }
+  }
+  mState.activeTaskId = null;
+
+  saveLocalHabits();
+  renderMobileApp();
+}
+
+function pauseHabit(habitId) {
+  haptic(15);
   const habit = mState.habits.find(h => String(h.id) === String(habitId));
-  if (!habit) return;
+  if (!habit || habit.status !== 'in_progress') return;
 
-  const dateKey = getTodayDateString(mState.selectedDateOffset);
-  if (!habit.history) habit.history = {};
+  habit.status = 'paused';
+  if (habit.startTimestamp) {
+    const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - habit.startTimestamp) / 1000));
+    habit.accumulatedSeconds = (habit.accumulatedSeconds || (habit.actMin ? habit.actMin * 60 : 0)) + sessionElapsedSec;
+    habit.actMin = Math.round(habit.accumulatedSeconds / 60);
+  }
+  habit.startTimestamp = null;
 
-  const backupHistory = JSON.parse(JSON.stringify(habit.history));
-  const currentEntry = habit.history[dateKey] || { count: 0 };
-  const targetTimes = habit.targetTimes || 1;
-
-  if (currentEntry.count >= targetTimes) {
-    // Reset to 0
-    delete habit.history[dateKey];
-    habit.status = 'uncompleted';
-  } else {
-    // Mark completed
-    habit.history[dateKey] = {
-      done: true,
-      count: targetTimes,
-      completedAt: new Date().toISOString()
-    };
-    habit.status = 'completed';
+  if (String(mState.activeHabitId) === String(habitId)) {
+    mState.activeHabitId = null;
   }
 
   saveLocalHabits();
   renderMobileApp();
+}
+
+function completeHabit(habitId) {
+  haptic([20, 50, 20]);
+  const habit = mState.habits.find(h => String(h.id) === String(habitId));
+  if (!habit) return;
+
+  const backupHabit = JSON.parse(JSON.stringify(habit));
+
+  const now = new Date();
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  habit.actEnd = nowTimeStr;
+
+  if (habit.startTimestamp) {
+    const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - habit.startTimestamp) / 1000));
+    habit.accumulatedSeconds = (habit.accumulatedSeconds || (habit.actMin ? habit.actMin * 60 : 0)) + sessionElapsedSec;
+  }
+
+  const finalTotalSec = habit.accumulatedSeconds || (habit.actMin ? habit.actMin * 60 : (habit.targetMin || 5) * 60);
+  habit.actMin = Math.max(1, Math.round(finalTotalSec / 60));
+  habit.status = 'completed';
+  habit.startTimestamp = null;
+
+  const dateKey = getTodayDateString(mState.selectedDateOffset);
+  if (!habit.history) habit.history = {};
+
+  const targetTimes = habit.targetTimes || 1;
+  habit.history[dateKey] = {
+    done: true,
+    count: targetTimes,
+    durationMin: habit.actMin,
+    actStart: habit.actStart || null,
+    actEnd: habit.actEnd || null,
+    completedAt: now.toISOString()
+  };
+
+  if (String(mState.activeHabitId) === String(habitId)) {
+    mState.activeHabitId = null;
+  }
+
+  saveLocalHabits();
+  renderMobileApp();
+
+  showMobileUndoToast(`🌿 「${habit.name}」を完了しました`, () => {
+    Object.assign(habit, backupHabit);
+    if (backupHabit.status === 'in_progress') mState.activeHabitId = habit.id;
+    saveLocalHabits();
+    renderMobileApp();
+  });
+}
+
+function uncompleteHabit(habitId) {
+  haptic(15);
+  const habit = mState.habits.find(h => String(h.id) === String(habitId));
+  if (!habit) return;
+
+  const dateKey = getTodayDateString(mState.selectedDateOffset);
+  if (habit.history && habit.history[dateKey]) {
+    delete habit.history[dateKey];
+  }
+  habit.status = 'uncompleted';
+  habit.actEnd = null;
+  habit.startTimestamp = null;
+
+  saveLocalHabits();
+  renderMobileApp();
+}
+
+function toggleHabit(habitId) {
+  const habit = mState.habits.find(h => String(h.id) === String(habitId));
+  if (!habit) return;
+
+  const dateKey = getTodayDateString(mState.selectedDateOffset);
+  const isDone = habit.history && habit.history[dateKey] && habit.history[dateKey].done;
+  if (isDone) {
+    uncompleteHabit(habitId);
+  } else {
+    completeHabit(habitId);
+  }
 }
 
 // =========================================================================
@@ -772,23 +922,37 @@ function renderStickyActiveBar() {
   if (!bar) return;
 
   const activeTask = mState.tasks.find(t => t.id === mState.activeTaskId && t.status === 'in_progress');
-  if (!activeTask) {
+  const activeHabit = mState.habits.find(h => String(h.id) === String(mState.activeHabitId) && h.status === 'in_progress');
+
+  if (!activeTask && !activeHabit) {
     bar.classList.add('hidden');
     return;
   }
 
   bar.classList.remove('hidden');
-  document.getElementById('active-bar-title').textContent = activeTask.title;
+  const titleEl = document.getElementById('active-bar-title');
+  const pauseBtn = bar.querySelector('.btn-touch-pause');
+  const completeBtn = bar.querySelector('.btn-touch-success');
 
-  updateActiveTimerDisplay(activeTask);
+  if (activeTask) {
+    if (titleEl) titleEl.textContent = `🎯 ${activeTask.title}`;
+    if (pauseBtn) pauseBtn.setAttribute('onclick', `pauseTask('${activeTask.id}')`);
+    if (completeBtn) completeBtn.setAttribute('onclick', `completeTask('${activeTask.id}')`);
+    updateActiveTimerDisplay(activeTask);
+  } else if (activeHabit) {
+    if (titleEl) titleEl.textContent = `🌿 ${activeHabit.name}`;
+    if (pauseBtn) pauseBtn.setAttribute('onclick', `pauseHabit('${activeHabit.id}')`);
+    if (completeBtn) completeBtn.setAttribute('onclick', `completeHabit('${activeHabit.id}')`);
+    updateActiveTimerDisplay(activeHabit);
+  }
 }
 
-function updateActiveTimerDisplay(task) {
+function updateActiveTimerDisplay(item) {
   const timerEl = document.getElementById('active-bar-timer');
-  const badgeEl = document.getElementById(`timer-badge-${task.id}`);
-  if (!task || !task.startTimestamp) return;
+  const badgeEl = document.getElementById(`timer-badge-${item.id}`);
+  if (!item || !item.startTimestamp) return;
 
-  const elapsedSec = (task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0)) + Math.floor((Date.now() - task.startTimestamp) / 1000);
+  const elapsedSec = (item.accumulatedSeconds || (item.actMin ? item.actMin * 60 : 0)) + Math.floor((Date.now() - item.startTimestamp) / 1000);
   const timeFormatted = formatTime(elapsedSec);
   if (timerEl) timerEl.textContent = timeFormatted;
   if (badgeEl) badgeEl.textContent = timeFormatted;
@@ -933,16 +1097,30 @@ function secSortedHabits(habits) {
 }
 
 function renderSlimHabitCard(habit) {
+  const isInProgress = habit.status === 'in_progress';
+  const isPaused = habit.status === 'paused';
+
   return `
-    <div class="m-card-slim" id="h-card-${habit.id}">
-      <div class="m-card-left" onclick="toggleHabit('${habit.id}')" style="cursor:pointer;">
-        <span class="m-slim-icon">🌿</span>
+    <div class="m-card-slim ${isInProgress ? 'in-progress' : ''} ${isPaused ? 'paused' : ''}" id="h-card-${habit.id}">
+      <div class="m-card-left" onclick="${isInProgress ? `completeHabit('${habit.id}')` : `startHabit('${habit.id}')`}" style="cursor:pointer;">
+        <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🌿'}</span>
         <span class="m-slim-title">${habit.name}</span>
+        ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>` : ''}
       </div>
       <div class="m-card-actions-slim">
-        <button class="btn-slim btn-slim-success" onclick="toggleHabit('${habit.id}')">
-          ✔ 完了
-        </button>
+        ${isInProgress ? `
+          <button class="btn-slim btn-slim-success" onclick="completeHabit('${habit.id}')">
+            ✔ 完了
+          </button>
+        ` : isPaused ? `
+          <button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${habit.id}')">
+            ▶ 再開
+          </button>
+        ` : `
+          <button class="btn-slim btn-slim-primary" onclick="startHabit('${habit.id}')">
+            ▶ 開始
+          </button>
+        `}
       </div>
     </div>
   `;
@@ -1230,12 +1408,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   checkAndRunDayRollover();
   renderMobileApp();
 
-  // Active Timer Loop (1 sec)
+  // Active Timer Loop (1 sec - Tasks & Habits)
   if (activeTimerInterval) clearInterval(activeTimerInterval);
   activeTimerInterval = setInterval(() => {
     const activeTask = mState.tasks.find(t => t.id === mState.activeTaskId && t.status === 'in_progress');
+    const activeHabit = mState.habits.find(h => String(h.id) === String(mState.activeHabitId) && h.status === 'in_progress');
     if (activeTask) {
       updateActiveTimerDisplay(activeTask);
+    } else if (activeHabit) {
+      updateActiveTimerDisplay(activeHabit);
     }
   }, 1000);
 

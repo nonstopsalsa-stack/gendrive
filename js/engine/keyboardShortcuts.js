@@ -1,7 +1,21 @@
-/**
+﻿/**
  * Gendrive - Keyboard Shortcuts Engine (with Strict Modal Isolation & Ctrl+Enter Submit)
  * 哲生 (AI Company OS & Personal OS Engine)
  */
+
+// 現在実行中（in_progress）のタスクまたはハビットを1件取得するヘルパー（完全単一実行前提）
+function getActiveInProgressItem() {
+  if (typeof state === 'undefined' || !state) return null;
+  if (Array.isArray(state.tasks)) {
+    const runningTask = state.tasks.find(t => t.status === 'in_progress');
+    if (runningTask) return { type: 'task', item: runningTask };
+  }
+  if (Array.isArray(state.habits)) {
+    const runningHabit = state.habits.find(h => h.status === 'in_progress');
+    if (runningHabit) return { type: 'habit', item: runningHabit };
+  }
+  return null;
+}
 
 function setupKeyboardShortcuts() {
   window.addEventListener('keydown', (e) => {
@@ -343,7 +357,31 @@ function setupKeyboardShortcuts() {
         if (typeof cycleStatusFilter === 'function') cycleStatusFilter();
         break;
 
+      // Shift + Space: 実行中アイテムの中断（一時停止）
+      // Space（単体）: 実行中アイテムの終了（完了）
       case ' ':
+        e.preventDefault();
+        const activeItem = getActiveInProgressItem();
+        if (activeItem) {
+          if (e.shiftKey) {
+            // Shift + Space: 中断（一時停止）
+            if (activeItem.type === 'task' && typeof pauseTask === 'function') {
+              pauseTask(activeItem.item.id);
+            } else if (activeItem.type === 'habit' && typeof pauseHabit === 'function') {
+              pauseHabit(activeItem.item.id);
+            }
+          } else {
+            // Space: 終了（完了）
+            if (activeItem.type === 'task' && typeof completeTask === 'function') {
+              completeTask(activeItem.item.id);
+            } else if (activeItem.type === 'habit' && typeof completeHabit === 'function') {
+              completeHabit(activeItem.item.id);
+            }
+          }
+        }
+        // 実行中のものがなければ何もしない（誤爆防止）
+        break;
+
       case 'Enter':
         e.preventDefault();
         if (filtered.length > 0 && typeof toggleHabit === 'function') {

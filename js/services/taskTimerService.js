@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - TaskChute Live Timer & Execution State Service
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -51,6 +51,25 @@ function startTask(taskId) {
     }
   });
 
+  // 実行中ハビットがあれば自動中断（完全シングルタスク排他制御）
+  if (Array.isArray(state.habits)) {
+    let habitPaused = false;
+    state.habits.forEach(h => {
+      if (h.status === 'in_progress') {
+        h.status = 'paused';
+        if (h.startTimestamp) {
+          const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - h.startTimestamp) / 1000));
+          h.accumulatedSeconds = (h.accumulatedSeconds || (h.actMin ? h.actMin * 60 : 0)) + sessionElapsedSec;
+          h.actMin = Math.round(h.accumulatedSeconds / 60);
+        }
+        h.startTimestamp = null;
+        habitPaused = true;
+      }
+    });
+    if (habitPaused && typeof saveHabits === 'function') {
+      saveHabits();
+    }
+  }
   saveTasks();
   renderApp();
 }

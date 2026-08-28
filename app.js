@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Habit Flow - Core Logic & Keyboard Engine
  * Fully customized for 哲生 (AI Company OS & Personal OS Engine)
  * Enhanced with 3-Way Timing Selector (Anytime / Section / Custom Range)
@@ -849,10 +849,32 @@ function startHabit(id) {
     }
   });
 
+  const now = new Date();
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   habit.status = 'in_progress';
+  habit.actStart = habit.actStart || nowTimeStr;
   habit.startTimestamp = Date.now();
   state.activeHabitId = habit.id;
 
+  // 実行中タスクがあれば自動中断（完全シングルタスク排他制御）
+  if (Array.isArray(state.tasks)) {
+    let taskPaused = false;
+    state.tasks.forEach(t => {
+      if (t.status === 'in_progress') {
+        t.status = 'paused';
+        if (t.startTimestamp) {
+          const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - t.startTimestamp) / 1000));
+          t.accumulatedSeconds = (t.accumulatedSeconds || (t.actMin ? t.actMin * 60 : 0)) + sessionElapsedSec;
+          t.actMin = Math.round(t.accumulatedSeconds / 60);
+        }
+        t.startTimestamp = null;
+        taskPaused = true;
+      }
+    });
+    if (taskPaused && typeof saveTasks === 'function') {
+      saveTasks();
+    }
+  }
   saveHabits();
   renderApp();
 }
@@ -917,10 +939,15 @@ function completeHabit(id, userNote = '', userCount = null, userDurationMin = nu
   const prevHistoryEntry = habit.history[dateKey];
   const prevStatus = habit.status;
 
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  habit.actEnd = nowTimeStr;
+
   const historyEntry = {
     done: isGoalReached,
     count: newCount,
     durationMin: elapsedMin,
+    actStart: habit.actStart || null,
+    actEnd: habit.actEnd || null,
     completedAt: now.toISOString()
   };
   if (userNote && userNote.trim()) {
@@ -1150,20 +1177,7 @@ function getFilteredHabits(customMode = null) {
   const mode = customMode || state.currentMode;
   let list = [...state.habits].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
-  // 日次画面（セクション・全体・フォーカス等）かつ今日の場合、当日限りの実行順序があれば適用
-  if (mode !== 'table' && state.selectedDateOffset === 0) {
-    const dailyOrder = typeof loadDailyHabitOrder === 'function' ? loadDailyHabitOrder() : null;
-    if (Array.isArray(dailyOrder) && dailyOrder.length > 0) {
-      const orderMap = new Map();
-      dailyOrder.forEach((id, idx) => orderMap.set(String(id), idx));
-      list.sort((a, b) => {
-        const idxA = orderMap.has(String(a.id)) ? orderMap.get(String(a.id)) : (a.sortOrder || 9999);
-        const idxB = orderMap.has(String(b.id)) ? orderMap.get(String(b.id)) : (b.sortOrder || 9999);
-        return idxA - idxB;
-      });
-    }
-  }
-
+  // Permanent sortOrder is always preserved
   // 1. Recurrence schedule filter (Skip for table mode: table mode always displays ALL registered master habits)
   if (mode !== 'table') {
     const targetDate = new Date();

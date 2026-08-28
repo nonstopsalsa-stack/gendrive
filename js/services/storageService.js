@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Storage & Cloud Synchronization Service
  * 哲生 (AI Company OS & Personal OS Engine)
  * Local-First Architecture with Google Apps Script (GAS) Sync Engine
@@ -606,15 +606,13 @@ function loadHabits() {
 }
 
 function saveHabits(skipCloudSync = false) {
-  // 全ハビットの現在の配列インデックスに基づき sortOrder (1〜N) を恒久刻印
   if (Array.isArray(state.habits)) {
+    state.habits.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
     state.habits.forEach((h, idx) => {
       h.sortOrder = idx + 1;
     });
   }
   localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
-  // マスター画面で正本を変更した場合は、当日のセクション一時順序もマスター順にリセット
-  clearDailyHabitOrder();
   updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
   updateSyncStatus('local');
@@ -623,40 +621,24 @@ function saveHabits(skipCloudSync = false) {
   }
 }
 
-// =========================================================================
-// 5-B. Daily Habit Order Engine (当日限りのセクション・デイリー表示順キャッシュ)
-// =========================================================================
-
-function loadDailyHabitOrder() {
-  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().split('T')[0];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.DAILY_HABIT_ORDER);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.dateKey === todayKey && Array.isArray(parsed.order)) {
-        return parsed.order;
-      }
+// Master Permanent Reordering Engine
+function reorderHabitsMaster(orderedIdList) {
+  if (!Array.isArray(orderedIdList) || !Array.isArray(state.habits)) return;
+  const map = new Map();
+  orderedIdList.forEach((id, idx) => map.set(String(id), idx + 1));
+  state.habits.forEach(h => {
+    if (map.has(String(h.id))) {
+      h.sortOrder = map.get(String(h.id));
     }
-  } catch (e) {}
-  return null;
+  });
+  state.habits.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  saveHabits();
 }
 
-function saveDailyHabitOrder(orderList) {
-  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().split('T')[0];
-  try {
-    const payload = {
-      dateKey: todayKey,
-      order: Array.isArray(orderList) ? orderList.map(String) : []
-    };
-    localStorage.setItem(STORAGE_KEYS.DAILY_HABIT_ORDER, JSON.stringify(payload));
-  } catch (e) {}
-}
-
-function clearDailyHabitOrder() {
-  try {
-    localStorage.removeItem(STORAGE_KEYS.DAILY_HABIT_ORDER);
-  } catch (e) {}
-}
+// Stub functions for backward compatibility (Deprecated daily temporary order)
+function loadDailyHabitOrder() { return null; }
+function saveDailyHabitOrder(orderList) {}
+function clearDailyHabitOrder() {}
 
 function loadCustomTags() {
   const saved = localStorage.getItem(STORAGE_KEYS.CUSTOM_TAGS);

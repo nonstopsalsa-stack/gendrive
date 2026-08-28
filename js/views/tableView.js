@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Master Data Editor & Multi-Key Sorting Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  * High-Performance Grid Editor with Bulk Operations & Drag & Drop Reordering
@@ -1469,7 +1469,7 @@ function handleTableDrop(event, targetId, type) {
   if (!sourceId || sourceId === tId || tableDragType !== type) return;
 
   if (type === 'habit') {
-    const list = [...state.habits];
+    const list = [...state.habits].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
     const fromIdx = list.findIndex(h => String(h.id) === sourceId);
     const toIdx = list.findIndex(h => String(h.id) === tId);
     if (fromIdx !== -1 && toIdx !== -1) {

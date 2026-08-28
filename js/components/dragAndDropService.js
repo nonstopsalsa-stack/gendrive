@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Drag & Drop Interaction Service (with In-Section Reordering & Cross-View Sync)
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -204,46 +204,65 @@ function reorderItems(sourceId, sourceType, targetId, targetType, isAbove) {
     saveTasks();
     renderApp();
   } else if (sourceType === 'habit' && targetType === 'habit') {
-    // 日次実行画面（セクション・デイリー画面等）でのハビット並び替え：
-    // マスターの sortOrder や正本データは一切破壊せず、「当日限りの実行順序 (dailyHabitOrder)」として保持
-    const sourceHabit = state.habits.find(h => String(h.id) === String(sourceId));
-    const targetHabit = state.habits.find(h => String(h.id) === String(targetId));
-    if (!sourceHabit || !targetHabit) return;
+    // セクション画面・日次画面でのドラッグ＆ドロップ：
+    // 恒久的な正本（sortOrder）を直接更新し、翌日もスマホでも永久に維持されるように保存
+    const sId = String(sourceId);
+    const tId = String(targetId);
+    if (sId === tId) return;
 
-    // 現在の当日順序またはマスター全ハビットID配列を取得
-    const activeDailyOrder = (typeof loadDailyHabitOrder === 'function' && loadDailyHabitOrder()) || state.habits.map(h => String(h.id));
-    const currentIds = [...activeDailyOrder];
-    const prevOrderSnapshot = [...currentIds];
+    const list = [...state.habits].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const sIdx = list.findIndex(h => String(h.id) === sId);
+    const tIdx = list.findIndex(h => String(h.id) === tId);
+    if (sIdx === -1 || tIdx === -1) return;
 
-    const sIndex = currentIds.indexOf(String(sourceId));
-    const tIndex = currentIds.indexOf(String(targetId));
-    if (sIndex !== -1 && tIndex !== -1) {
-      const [movedId] = currentIds.splice(sIndex, 1);
-      const newTIndex = currentIds.indexOf(String(targetId));
-      const insertIndex = isAbove ? newTIndex : newTIndex + 1;
-      currentIds.splice(insertIndex, 0, movedId);
+    const sourceHabit = list[sIdx];
+    const targetHabit = list[tIdx];
 
-      if (typeof saveDailyHabitOrder === 'function') {
-        saveDailyHabitOrder(currentIds);
-      }
+    const prevSnapshot = state.habits.map(h => ({ id: h.id, sortOrder: h.sortOrder, section: h.section, displayType: h.displayType }));
 
-      pushUndoAction({
-        description: `ハビット「${sourceHabit.name}」の当日実行順を変更`,
-        undo: () => {
-          if (typeof saveDailyHabitOrder === 'function') {
-            saveDailyHabitOrder(prevOrderSnapshot);
-          }
-          renderApp();
-        }
-      });
-
-      renderApp();
+    // セクションが異なるハビットへドロップした場合はセクションも連動更新
+    if (targetHabit.section && sourceHabit.section !== targetHabit.section) {
+      sourceHabit.section = targetHabit.section;
     }
+    if (targetHabit.displayType && sourceHabit.displayType !== targetHabit.displayType) {
+      sourceHabit.displayType = targetHabit.displayType;
+    }
+
+    // 配列から取り出して目的位置へ正確に挿入
+    const [moved] = list.splice(sIdx, 1);
+    const currentTargetIdx = list.findIndex(h => String(h.id) === tId);
+    const insertIdx = isAbove ? currentTargetIdx : currentTargetIdx + 1;
+    list.splice(insertIdx, 0, moved);
+
+    // 全ハビットの sortOrder を 1〜N で再採番して恒久固定
+    list.forEach((h, idx) => {
+      h.sortOrder = idx + 1;
+    });
+    state.habits = list;
+    saveHabits();
+
+    pushUndoAction({
+      description: `ハビット「${sourceHabit.name}」の並び順を変更`,
+      undo: () => {
+        const undoMap = new Map();
+        prevSnapshot.forEach(item => undoMap.set(String(item.id), item));
+        state.habits.forEach(h => {
+          const prev = undoMap.get(String(h.id));
+          if (prev) {
+            h.sortOrder = prev.sortOrder;
+            h.section = prev.section;
+            h.displayType = prev.displayType;
+          }
+        });
+        state.habits.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+        saveHabits();
+        renderApp();
+      }
+    });
+
+    renderApp();
   }
 }
-
-// =========================================================================
-// Container & Sidebar Drop Targets Setup
 // =========================================================================
 
 function setupDragAndDrop() {
