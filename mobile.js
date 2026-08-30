@@ -1274,28 +1274,25 @@ function renderSlimHabitCard(habit) {
   const targetTimes = getItemTargetTimes(habit);
   const isMulti = targetTimes > 1;
 
+  const cardCls = isInProgress ? 'in-progress' : (isPaused ? 'paused' : '');
+  const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}回</span>` : '';
+  const timerBadgeHtml = isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>` : '';
+  const actionBtnHtml = isInProgress
+    ? `<button class="btn-slim btn-slim-success" onclick="completeHabit('${habit.id}')">✔ ${isMulti ? (curCount + 1) + '回目完了' : '完了'}</button>`
+    : (isPaused
+      ? `<button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${habit.id}')">▶ 再開</button>`
+      : `<button class="btn-slim btn-slim-primary" onclick="startHabit('${habit.id}')">▶ 開始</button>`);
+
   return `
-    <div class="m-card-slim ${isInProgress ? 'in-progress' : '} ${isPaused ? 'paused' : '}" id="h-card-${habit.id}">
+    <div class="m-card-slim ${cardCls}" id="h-card-${habit.id}">
       <div class="m-card-left" onclick="${isInProgress ? `completeHabit('${habit.id}')` : `startHabit('${habit.id}')`}" style="cursor:pointer;">
-        <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🌿'}</span>
+        <span class="m-slim-icon">${isInProgress ? '⚡' : (isPaused ? '⏸' : '🌿')}</span>
         <span class="m-slim-title">${habit.name}</span>
-        ${isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : '}">${curCount}/${targetTimes}回</span>` : ''}
-        ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>` : ''}
+        ${countBadgeHtml}
+        ${timerBadgeHtml}
       </div>
       <div class="m-card-actions-slim">
-        ${isInProgress ? `
-          <button class="btn-slim btn-slim-success" onclick="completeHabit('${habit.id}')">
-            ✔ ${isMulti ? `${curCount + 1}回目完了` : '完了'}
-          </button>
-        ` : isPaused ? `
-          <button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${habit.id}')">
-            ▶ 再開
-          </button>
-        ` : `
-          <button class="btn-slim btn-slim-primary" onclick="startHabit('${habit.id}')">
-            ▶ 開始
-          </button>
-        `}
+        ${actionBtnHtml}
       </div>
     </div>
   `;
@@ -1310,28 +1307,25 @@ function renderSlimTaskCard(task) {
   const isMulti = targetTimes > 1;
   const carryBadge = task._carriedOverFrom ? `<span style="font-size: 10px; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); padding: 1px 5px; border-radius: 4px; margin-left: 6px; font-weight: normal;">↩ ${task._carriedOverFrom}</span>` : '';
 
+  const cardCls = isInProgress ? 'in-progress' : (isPaused ? 'paused' : '');
+  const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}回</span>` : '';
+  const timerBadgeHtml = isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : '';
+  const actionBtnHtml = isInProgress
+    ? `<button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">✔ ${isMulti ? (curCount + 1) + '回目完了' : '完了'}</button>`
+    : (isPaused
+      ? `<button class="btn-slim btn-slim-pause-resume" onclick="startTask('${task.id}')">▶ 再開</button>`
+      : `<button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">▶ 開始</button>`);
+
   return `
-    <div class="m-card-slim ${isInProgress ? 'in-progress' : '} ${isPaused ? 'paused' : '}" id="t-card-${task.id}">
+    <div class="m-card-slim ${cardCls}" id="t-card-${task.id}">
       <div class="m-card-left" onclick="${isInProgress ? `completeTask('${task.id}')` : `startTask('${task.id}')`}" style="cursor:pointer;">
-        <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🎯'}</span>
+        <span class="m-slim-icon">${isInProgress ? '⚡' : (isPaused ? '⏸' : '🎯')}</span>
         <span class="m-slim-title">${task.title}${carryBadge}</span>
-        ${isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : '}">${curCount}/${targetTimes}回</span>` : ''}
-        ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : ''}
+        ${countBadgeHtml}
+        ${timerBadgeHtml}
       </div>
       <div class="m-card-actions-slim">
-        ${isInProgress ? `
-          <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
-            ✔ ${isMulti ? `${curCount + 1}回目完了` : '完了'}
-          </button>
-        ` : isPaused ? `
-          <button class="btn-slim btn-slim-pause-resume" onclick="startTask('${task.id}')">
-            ▶ 再開
-          </button>
-        ` : `
-          <button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">
-            ▶ 開始
-          </button>
-        `}
+        ${actionBtnHtml}
       </div>
     </div>
   `;
