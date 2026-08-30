@@ -294,7 +294,7 @@ function getTaskTimeProgress(task) {
     return 0;
   }
 
-  let totalSec = task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0);
+  let totalSec = task.accumulatedSeconds || 0;
   if (task.status === 'in_progress' && task.startTimestamp) {
     const sessionSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));
     totalSec += sessionSec;
@@ -317,7 +317,7 @@ function getHabitTimeProgress(habit) {
     return 0;
   }
 
-  let totalSec = habit.accumulatedSeconds || (habit.actMin ? habit.actMin * 60 : 0);
+  let totalSec = habit.accumulatedSeconds || 0;
   if (habit.status === 'in_progress' && habit.startTimestamp) {
     totalSec += Math.max(0, Math.floor((Date.now() - habit.startTimestamp) / 1000));
   }

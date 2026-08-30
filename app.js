@@ -848,6 +848,7 @@ function startHabit(id) {
 
   const now = new Date();
   const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (habit.status !== 'paused') { habit.accumulatedSeconds = 0; habit.actMin = 0; }
   habit.status = 'in_progress';
   habit.actStart = habit.actStart || nowTimeStr;
   habit.startTimestamp = Date.now();
