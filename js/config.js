@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.2.1';
-const APP_VERSION_NAME = 'Mobile Multi-Count Habit Sync & Anytime Section Forwarding';
+const APP_VERSION = 'v1.2.2';
+const APP_VERSION_NAME = 'Full Multi-Count Recurrence Engine for Mobile';
 
 const SECTIONS_CONFIG = [
   { id: 'sec_1', name: '第1セッション', start: 3, end: 6, label: '🌅 第1セッション (03:00 - 06:00)', desc: '起床・静寂の自己投資・思考整理', startStr: '03:00', endStr: '06:00' },
