@@ -111,6 +111,26 @@ function updateCarryoverBanner() {
 }
 
 // 4. Carryover All Past Tasks into Current Section (One-Click)
+// 4-B. Carryover All Past Tasks into Inbox (One-Click)
+function carryoverAllPastTasksToInbox() {
+  const pastTasks = getPastIncompleteTasks();
+  if (pastTasks.length === 0) return;
+
+  pastTasks.forEach(t => {
+    t.bucket = 'inbox';
+    t.scheduledDate = null;
+    t.section = null;
+    t.timingType = 'anytime';
+  });
+
+  saveTasks();
+  updateCarryoverBanner();
+  renderApp();
+
+  const msg = `📦 過去の未完了タスク ${pastTasks.length}件 を【Inbox】へ移動しました！`;
+  showCarryoverToast(msg);
+}
+
 function carryoverAllPastTasksToCurrentSection() {
   const pastTasks = getPastIncompleteTasks();
   if (pastTasks.length === 0) return;

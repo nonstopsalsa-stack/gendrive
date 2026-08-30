@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive Mobile Lite - Solid Neon Dark Theme & Touch Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -454,6 +454,28 @@ body.theme-habit {
   flex-direction: column;
   gap: 6px;
   padding-bottom: calc(78px + var(--safe-bottom, 12px));
+}
+
+/* Multi-count Badge for Habits */
+.m-slim-count-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent-emerald, #34d399);
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  padding: 1px 7px;
+  border-radius: 6px;
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.m-slim-count-badge.active {
+  background: rgba(52, 211, 153, 0.22);
+  border-color: rgba(52, 211, 153, 0.6);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.3);
 }
 
 /* Slim Card */

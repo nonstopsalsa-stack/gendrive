@@ -1,16 +1,17 @@
-﻿/**
+/**
  * Gendrive - Master Configuration & Hierarchical Definitions
  * 哲生 (AI Company OS & Personal OS Engine)
  */
 
 // =========================================================================
-// 0. Application Version (Single Source of Truth)
-// =========================================================================
-const APP_VERSION = 'v1.0.0';
-const APP_VERSION_NAME = 'Personal Action Engine 正式版';
-// =========================================================================
 // 1. Hierarchical Master Definitions
 // =========================================================================
+
+// =========================================================================
+// 0. Application Version (Single Source of Truth)
+// =========================================================================
+const APP_VERSION = 'v1.2.0';
+const APP_VERSION_NAME = 'Mobile Multi-Count Habit Engine & Progress Tracking';
 
 const SECTIONS_CONFIG = [
   { id: 'sec_1', name: '第1セッション', start: 3, end: 6, label: '🌅 第1セッション (03:00 - 06:00)', desc: '起床・静寂の自己投資・思考整理', startStr: '03:00', endStr: '06:00' },

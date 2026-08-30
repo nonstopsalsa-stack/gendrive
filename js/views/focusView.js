@@ -60,8 +60,9 @@ function isHabitActiveForFocus(habit) {
 // =========================================================================
 
 function renderFocusView() {
+  const isToday = state.selectedDateOffset === 0;
   const showTasks = state.viewType === 'all' || state.viewType === 'task';
-  const showHabits = state.viewType === 'all' || state.viewType === 'habit';
+  const showHabits = isToday && (state.viewType === 'all' || state.viewType === 'habit');
 
   const paneTask = document.getElementById('focus-pane-task');
   const paneHabit = document.getElementById('focus-pane-habit');

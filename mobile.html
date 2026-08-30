@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="mobile.css?v=20260821_23">
+  <link rel="stylesheet" href="mobile.css?v=20260830_v120">
 </head>
 <body>
 
@@ -33,6 +33,7 @@
         <span class="brand-icon">⚡</span>
         <span class="brand-title">Gendrive</span>
         <span class="brand-tag">LITE</span>
+        <span class="version-tag" style="font-size: 10px; font-weight: 700; color: #38bdf8; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.35); padding: 1px 6px; border-radius: 10px; font-family: var(--font-mono);">v1.2.0</span>
       </div>
       <div class="header-meta-actions">
         <div class="sync-badge" id="m-sync-badge" onclick="pullFromCloud(true)" title="タップで強制再同期">
@@ -160,41 +161,27 @@
   </div>
 
   <!-- Settings Bottom Sheet Modal -->
-    <div class="m-modal-overlay" id="m-settings-modal" onclick="closeSettingsModal()">
-      <div class="m-modal-sheet" onclick="event.stopPropagation()">
-        <div class="sheet-handle"></div>
-        <h3 class="sheet-title">☁️ クラウド同期設定 (GAS)</h3>
-        
-        <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
-          Google Apps Script のウェブアプリ URL を貼り付けることで、PC版と完全自動同期します。
-        </p>
+  <div class="m-modal-overlay" id="m-settings-modal" onclick="closeSettingsModal()">
+    <div class="m-modal-sheet" onclick="event.stopPropagation()">
+      <div class="sheet-handle"></div>
+      <h3 class="sheet-title">☁️ クラウド同期設定 (GAS)</h3>
+      
+      <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
+        Google Apps Script のウェブアプリ URL を貼り付けることで、PC版と完全自動同期します。
+      </p>
 
-        <div style="margin-bottom: 16px;">
-          <label style="font-size: 12px; font-weight: 700; color: var(--text-dim); display: block; margin-bottom: 6px;">GAS Web App URL</label>
-          <input type="url" id="m-gas-url-input" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; font-family: var(--font-mono); font-size: 12px; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff;">
-        </div>
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 12px; font-weight: 700; color: var(--text-dim); display: block; margin-bottom: 6px;">GAS Web App URL</label>
+        <input type="url" id="m-gas-url-input" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; font-family: var(--font-mono); font-size: 12px; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff;">
+      </div>
 
-        <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button class="btn-touch btn-touch-primary" onclick="saveSettings()" style="flex: 2; font-size: 12.5px; padding: 0 10px;">☁️ 保存して同期</button>
-          <button class="btn-touch btn-touch-subtle" onclick="pullFromCloud(true)" style="flex: 1; font-size: 12.5px; padding: 0 10px;">📥 取得</button>
-          <button class="btn-touch btn-touch-subtle" onclick="closeSettingsModal()" style="flex: 1; font-size: 12.5px; padding: 0 10px;">閉じる</button>
-        </div>
-
-        <!-- App Version & Info Section -->
-        <div class="m-version-info-section" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 16px;">⚡</span>
-            <div>
-              <div style="font-size: 12.5px; font-weight: 700; color: #fff;">Gendrive Mobile</div>
-              <div style="font-size: 10.5px; color: var(--text-muted, #94a3b8);">Personal Action Engine</div>
-            </div>
-          </div>
-          <div class="m-version-badge" id="m-app-version-badge" style="font-family: var(--font-mono, 'JetBrains Mono', monospace); font-size: 11px; font-weight: 700; color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); padding: 4px 10px; border-radius: 9999px; letter-spacing: 0.03em;">
-            v1.0.0
-          </div>
-        </div>
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <button class="btn-touch btn-touch-primary" onclick="saveSettings()" style="flex: 2;">💾 保存して同期</button>
+        <button class="btn-touch btn-touch-subtle" onclick="pullFromCloud(true)" style="flex: 1;">📥 取得</button>
+        <button class="btn-touch btn-touch-subtle" onclick="closeSettingsModal()" style="flex: 1;">閉じる</button>
       </div>
     </div>
+  </div>
 
   <!-- Mobile Floating UNDO Toast Bar -->
   <div class="m-undo-toast hidden" id="m-undo-toast">
@@ -202,7 +189,6 @@
     <button class="m-undo-btn" id="m-undo-action-btn" onclick="executeMobileUndo()">↩️ 元に戻す</button>
   </div>
 
-  <script src="js/config.js"></script>
-  <script src="mobile.js?v=20260820_12"></script>
+  <script src="mobile.js?v=20260830_v120"></script>
 </body>
 </html>

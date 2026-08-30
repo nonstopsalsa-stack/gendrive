@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Habit Flow - Core Logic & Keyboard Engine
  * Fully customized for 哲生 (AI Company OS & Personal OS Engine)
  * Enhanced with 3-Way Timing Selector (Anytime / Section / Custom Range)
@@ -660,8 +660,14 @@ function isTaskForSelectedDate(task, dateObj = null) {
   const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const todayKey = getTodayKey();
 
+  const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType) || (Boolean(task.recurrence) && task.recurrence.type && task.recurrence.type !== 'none');
+
   // 1. 定期タスク (Recurring Tasks)
-  if (task.type === 'recurring') {
+  if (isRec) {
+    // 過去日（昨日以前）を表示している場合は、定期タスクは非表示（未完了単発タスクの残存確認を一発で把握可能にするため）
+    if (dateKey < todayKey) {
+      return false;
+    }
     return isHabitScheduledForDate(task, d);
   }
 
@@ -676,14 +682,6 @@ function isTaskForSelectedDate(task, dateObj = null) {
 
   return false;
 }
-
-
-
-
-
-
-
-
 
 function isHabitInCurrentTimeWindow(habit, targetSectionName = null) {
   if (!habit) return false;
@@ -1176,6 +1174,11 @@ function skipHabit(id) {
 function getFilteredHabits(customMode = null) {
   const mode = customMode || state.currentMode;
   let list = [...state.habits].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+  // 過去日の表示時はマスターテーブル以外ではハビットを非表示（未完了単発タスクの残存確認を容易にするため）
+  if (mode !== 'table' && state.selectedDateOffset > 0) {
+    return [];
+  }
 
   // Permanent sortOrder is always preserved
   // 1. Recurrence schedule filter (Skip for table mode: table mode always displays ALL registered master habits)
@@ -1911,8 +1914,6 @@ safeBindClick('filter-proj-pill', () => openCascadeFilterModal('proj', 'プロ�
 safeBindClick('filter-tag-pill', openTagFilterModal);
 safeBindClick('btn-reset-filters', resetAllFilters);
 
-safeBindClick('app-version-badge', openReleaseNotesModal);
-safeBindClick('btn-close-release-notes', closeModal);
 safeBindClick('btn-shortcuts', openShortcutsModal);
 safeBindClick('btn-close-shortcuts', closeModal);
 safeBindClick('btn-close-filter', closeModal);
@@ -2542,6 +2543,13 @@ function setupDateNavHandlers() {
   }
 
   // Carryover Banner & Modal Event Listeners
+    const btnCarryoverInbox = document.getElementById('btn-carryover-inbox');
+  if (btnCarryoverInbox) {
+    btnCarryoverInbox.addEventListener('click', () => {
+      carryoverAllPastTasksToInbox();
+    });
+  }
+
   const btnCarryoverAll = document.getElementById('btn-carryover-all');
   if (btnCarryoverAll) {
     btnCarryoverAll.addEventListener('click', () => {

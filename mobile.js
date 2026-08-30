@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive Mobile Lite - Core Controller & Local-First Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -783,22 +783,41 @@ function completeHabit(habitId) {
   }
 
   const finalTotalSec = habit.accumulatedSeconds || (habit.actMin ? habit.actMin * 60 : (habit.targetMin || 5) * 60);
-  habit.actMin = Math.max(1, Math.round(finalTotalSec / 60));
-  habit.status = 'completed';
-  habit.startTimestamp = null;
+  const elapsedMin = Math.max(1, Math.round(finalTotalSec / 60));
+  habit.actMin = elapsedMin;
 
   const dateKey = getTodayDateString(mState.selectedDateOffset);
   if (!habit.history) habit.history = {};
 
+  const curEntry = habit.history[dateKey];
+  const curCount = (curEntry && typeof curEntry.count === 'number') ? curEntry.count : (curEntry && curEntry.done ? (habit.targetTimes || 1) : 0);
   const targetTimes = habit.targetTimes || 1;
+  const newCount = curCount + 1;
+  const isGoalReached = (newCount >= targetTimes);
+
   habit.history[dateKey] = {
-    done: true,
-    count: targetTimes,
-    durationMin: habit.actMin,
+    done: isGoalReached,
+    count: newCount,
+    durationMin: elapsedMin,
     actStart: habit.actStart || null,
     actEnd: habit.actEnd || null,
     completedAt: now.toISOString()
   };
+
+  // Add to executionLogs array (Timeline)
+  if (!Array.isArray(habit.executionLogs)) habit.executionLogs = [];
+  habit.executionLogs.unshift({
+    id: 'hlog_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    dateKey: dateKey,
+    completedAt: now.toISOString(),
+    count: newCount,
+    durationMin: elapsedMin,
+    note: ''
+  });
+
+  habit.status = isGoalReached ? 'completed' : 'uncompleted';
+  habit.startTimestamp = null;
+  habit.accumulatedSeconds = 0;
 
   if (String(mState.activeHabitId) === String(habitId)) {
     mState.activeHabitId = null;
@@ -807,7 +826,11 @@ function completeHabit(habitId) {
   saveLocalHabits();
   renderMobileApp();
 
-  showMobileUndoToast(`🌿 「${habit.name}」を完了しました`, () => {
+  const toastMsg = targetTimes > 1
+    ? (isGoalReached ? `🌿 「${habit.name}」本日の目標達成 (${newCount}/${targetTimes}回)！🎉` : `🌿 「${habit.name}」(${newCount}/${targetTimes}回目) を記録しました`)
+    : `🌿 「${habit.name}」を完了しました`;
+
+  showMobileUndoToast(toastMsg, () => {
     Object.assign(habit, backupHabit);
     if (backupHabit.status === 'in_progress') mState.activeHabitId = habit.id;
     saveLocalHabits();
@@ -869,15 +892,22 @@ function renderHeaderDateAndETA() {
     dateEl.textContent = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]}) ${isToday ? '今日' : ''}`;
   }
 
-  // Today's Uncompleted Tasks
-  const todayTasks = mState.tasks.filter(t => !t.isDisabled && (t.scheduledDate === targetDateKey || (!t.scheduledDate && mState.selectedDateOffset === 0)) && t.bucket !== 'someday' && t.bucket !== 'vault' && t.status !== 'completed' && t.status !== 'skipped');
+    const isToday = mState.selectedDateOffset === 0;
+  const isPast = mState.selectedDateOffset < 0;
 
-  // Today's Uncompleted Habits
-  const todayHabits = mState.habits.filter(h => {
+  // Today's Uncompleted Tasks (on past dates, exclude recurring tasks to immediately verify remaining single tasks)
+  const todayTasks = mState.tasks.filter(t => {
+    if (t.isDisabled || t.bucket === 'someday' || t.bucket === 'vault' || t.status === 'completed' || t.status === 'skipped') return false;
+    if (isPast && (t.type === 'recurring' || t.taskType === 'recurring' || t.recType)) return false;
+    return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
+  });
+
+  // Today's Uncompleted Habits (Only shown when viewing today)
+  const todayHabits = isToday ? mState.habits.filter(h => {
     if (h.isDisabled) return false;
     const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
     return !(entry && entry.done);
-  });
+  }) : [];
 
   // Current Section Tasks & Habits
   const currentSecId = detectCurrentSectionId();
@@ -934,15 +964,27 @@ function renderStickyActiveBar() {
   const pauseBtn = bar.querySelector('.btn-touch-pause');
   const completeBtn = bar.querySelector('.btn-touch-success');
 
-  if (activeTask) {
+    if (activeTask) {
     if (titleEl) titleEl.textContent = `🎯 ${activeTask.title}`;
     if (pauseBtn) pauseBtn.setAttribute('onclick', `pauseTask('${activeTask.id}')`);
-    if (completeBtn) completeBtn.setAttribute('onclick', `completeTask('${activeTask.id}')`);
+    if (completeBtn) {
+      completeBtn.textContent = '✔ 完了';
+      completeBtn.setAttribute('onclick', `completeTask('${activeTask.id}')`);
+    }
     updateActiveTimerDisplay(activeTask);
   } else if (activeHabit) {
-    if (titleEl) titleEl.textContent = `🌿 ${activeHabit.name}`;
+    const targetDateKey = getTodayDateString(mState.selectedDateOffset);
+    const entry = (activeHabit.history && activeHabit.history[targetDateKey]) ? activeHabit.history[targetDateKey] : null;
+    const curCount = (entry && typeof entry.count === 'number') ? entry.count : 0;
+    const targetTimes = activeHabit.targetTimes || 1;
+    const isMulti = targetTimes > 1;
+
+    if (titleEl) titleEl.textContent = isMulti ? `🌿 ${activeHabit.name} (${curCount + 1}/${targetTimes}回目)` : `🌿 ${activeHabit.name}`;
     if (pauseBtn) pauseBtn.setAttribute('onclick', `pauseHabit('${activeHabit.id}')`);
-    if (completeBtn) completeBtn.setAttribute('onclick', `completeHabit('${activeHabit.id}')`);
+    if (completeBtn) {
+      completeBtn.textContent = isMulti ? `✔ ${curCount + 1}/${targetTimes}回目完了` : '✔ 完了';
+      completeBtn.setAttribute('onclick', `completeHabit('${activeHabit.id}')`);
+    }
     updateActiveTimerDisplay(activeHabit);
   }
 }
@@ -966,20 +1008,24 @@ function renderList() {
   const currentSecId = detectCurrentSectionId();
   const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
 
-  // 1. Get Today's Uncompleted Tasks
+    const isToday = mState.selectedDateOffset === 0;
+  const isPast = mState.selectedDateOffset < 0;
+
+  // 1. Get Today's Uncompleted Tasks (on past dates, exclude recurring tasks)
   const todayTasks = mState.tasks.filter(t => {
     if (t.isDisabled) return false;
     if (t.bucket === 'someday' || t.bucket === 'vault') return false;
     if (t.status === 'completed' || t.status === 'skipped') return false;
-    return (t.scheduledDate === targetDateKey) || (!t.scheduledDate && mState.selectedDateOffset === 0);
+    if (isPast && (t.type === 'recurring' || t.taskType === 'recurring' || t.recType)) return false;
+    return (t.scheduledDate === targetDateKey) || (!t.scheduledDate && isToday);
   });
 
-  // 2. Get Today's Uncompleted Habits
-  const todayHabits = mState.habits.filter(h => {
+  // 2. Get Today's Uncompleted Habits (Only shown when viewing today)
+  const todayHabits = isToday ? mState.habits.filter(h => {
     if (h.isDisabled) return false;
     const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
     return !(entry && entry.done);
-  });
+  }) : [];
 
   const scope = mState.activeScope || 'section';
   const type = mState.activeType || 'task';
@@ -1099,18 +1145,24 @@ function secSortedHabits(habits) {
 function renderSlimHabitCard(habit) {
   const isInProgress = habit.status === 'in_progress';
   const isPaused = habit.status === 'paused';
+  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
+  const entry = (habit.history && habit.history[targetDateKey]) ? habit.history[targetDateKey] : null;
+  const curCount = (entry && typeof entry.count === 'number') ? entry.count : (entry && entry.done ? (habit.targetTimes || 1) : 0);
+  const targetTimes = habit.targetTimes || 1;
+  const isMulti = targetTimes > 1;
 
   return `
     <div class="m-card-slim ${isInProgress ? 'in-progress' : ''} ${isPaused ? 'paused' : ''}" id="h-card-${habit.id}">
       <div class="m-card-left" onclick="${isInProgress ? `completeHabit('${habit.id}')` : `startHabit('${habit.id}')`}" style="cursor:pointer;">
         <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🌿'}</span>
         <span class="m-slim-title">${habit.name}</span>
+        ${isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}回</span>` : ''}
         ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>` : ''}
       </div>
       <div class="m-card-actions-slim">
         ${isInProgress ? `
           <button class="btn-slim btn-slim-success" onclick="completeHabit('${habit.id}')">
-            ✔ 完了
+            ✔ ${isMulti ? `${curCount + 1}回目完了` : '完了'}
           </button>
         ` : isPaused ? `
           <button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${habit.id}')">
@@ -1312,10 +1364,6 @@ function handleQuickAddTask(e) {
 }
 
 function openSettingsModal() {
-  const verBadge = document.getElementById('m-app-version-badge');
-  if (verBadge && typeof APP_VERSION !== 'undefined') {
-    verBadge.textContent = APP_VERSION;
-  }
   haptic(10);
   const modal = document.getElementById('m-settings-modal');
   const input = document.getElementById('m-gas-url-input');
