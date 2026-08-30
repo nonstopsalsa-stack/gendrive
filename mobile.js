@@ -1,3 +1,41 @@
+// =========================================================================
+// 0. Multi-Count Recurrence Engine (Tasks & Habits)
+// =========================================================================
+
+function getItemTargetTimes(item) {
+  if (!item) return 1;
+  if (typeof item.targetTimes === 'number' && item.targetTimes > 0) return item.targetTimes;
+  if (item.recurrence) {
+    if (item.recurrence.type === 'daily_times') {
+      return Math.max(1, parseInt(item.recurrence.timesPerDay, 10) || 2);
+    }
+    if (typeof item.recurrence.targetTimes === 'number' && item.recurrence.targetTimes > 0) {
+      return item.recurrence.targetTimes;
+    }
+    if (typeof item.recurrence.timesPerDay === 'number' && item.recurrence.timesPerDay > 0) {
+      return item.recurrence.timesPerDay;
+    }
+  }
+  if (item.recObj && item.recObj.type === 'daily_times') {
+    return Math.max(1, parseInt(item.recObj.timesPerDay, 10) || 2);
+  }
+  if (item.daily_times) return parseInt(item.daily_times, 10) || 1;
+  return 1;
+}
+
+function getItemDayCount(item, dateKey = null) {
+  if (!item || !item.history) return 0;
+  const dKey = dateKey || getTodayDateString(mState.selectedDateOffset);
+  const val = item.history[dKey];
+  if (typeof val === 'number') return val;
+  if (val === true) return getItemTargetTimes(item);
+  if (typeof val === 'object' && val !== null) {
+    if (typeof val.count === 'number') return val.count;
+    if (val.done) return getItemTargetTimes(item);
+  }
+  return 0;
+}
+
 /**
  * Gendrive Mobile Lite - Core Controller & Local-First Engine
  * 哲生 (AI Company OS & Personal OS Engine)
@@ -193,7 +231,7 @@ function migrateMobileHabit(h, idx = 0) {
       if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
         healedHistory[dKey] = {
           done: true,
-          count: (typeof item === 'object' && item.count) ? item.count : (h.targetTimes || 1),
+          count: (typeof item === 'object' && item.count) ? item.count : (getItemTargetTimes(h) || 1),
           completedAt: (typeof item === 'object' && item.completedAt) ? item.completedAt : ''
         };
       }
@@ -203,7 +241,7 @@ function migrateMobileHabit(h, idx = 0) {
       const normKey = normalizeToLocalDateKey(k) || k;
       const entry = h.history[k];
       if (entry === true) {
-        healedHistory[normKey] = { done: true, count: h.targetTimes || 1 };
+        healedHistory[normKey] = { done: true, count: getItemTargetTimes(h) || 1 };
       } else if (entry && typeof entry === 'object') {
         healedHistory[normKey] = entry;
       }
@@ -215,7 +253,7 @@ function migrateMobileHabit(h, idx = 0) {
       const dKey = normalizeToLocalDateKey(rawD) || rawD;
       if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
         const logCount = typeof log.count === 'number' ? log.count : 1;
-        const targetTimes = h.targetTimes || 1;
+        const targetTimes = getItemTargetTimes(h);
         if (!healedHistory[dKey]) {
           healedHistory[dKey] = {
             done: logCount >= targetTimes,
@@ -237,7 +275,7 @@ function migrateMobileHabit(h, idx = 0) {
   if (hasPastRecent && !hasAug26) {
     healedHistory['2026-08-26'] = {
       done: true,
-      count: h.targetTimes || 1,
+      count: getItemTargetTimes(h) || 1,
       completedAt: '2026-08-26T06:00:00.000Z'
     };
   }
@@ -312,9 +350,6 @@ function autoCarryoverPastSessionTasks() {
 
 /**
  * 現在セクションのタスク一覧を取得（今日の画面では過去セクションの未完了単発タスクを非破壊で自動合流）
- */
-/**
- * 現在セクションのハビット一覧を取得（いつでもハビット＆過去セクション未完了も自動合流）
  */
 function getMobileSectionHabits(todayHabits, currentSecObj) {
   if (!Array.isArray(todayHabits) || !currentSecObj) return [];
@@ -849,9 +884,8 @@ function completeHabit(habitId) {
   const dateKey = getTodayDateString(mState.selectedDateOffset);
   if (!habit.history) habit.history = {};
 
-  const curEntry = habit.history[dateKey];
-  const curCount = (curEntry && typeof curEntry.count === 'number') ? curEntry.count : (curEntry && curEntry.done ? (habit.targetTimes || 1) : 0);
-  const targetTimes = habit.targetTimes || 1;
+  const targetTimes = getItemTargetTimes(habit);
+  const curCount = getItemDayCount(habit, dateKey);
   const newCount = curCount + 1;
   const isGoalReached = (newCount >= targetTimes);
 
@@ -898,6 +932,29 @@ function completeHabit(habitId) {
   });
 }
 
+function uncompleteHabit(habitId) {
+  haptic(15);
+  const habit = mState.habits.find(h => String(h.id) === String(habitId));
+  if (!habit) return;
+
+  const dateKey = getTodayDateString(mState.selectedDateOffset);
+  if (habit.history && habit.history[dateKey]) {
+    const curCount = getItemDayCount(habit, dateKey);
+    if (curCount > 1) {
+      habit.history[dateKey].count = curCount - 1;
+      habit.history[dateKey].done = false;
+    } else {
+      delete habit.history[dateKey];
+    }
+  }
+  habit.status = 'uncompleted';
+  habit.actEnd = null;
+  habit.startTimestamp = null;
+
+  saveLocalHabits();
+  renderMobileApp();
+}
+
 function toggleHabit(habitId) {
   const habit = mState.habits.find(h => String(h.id) === String(habitId));
   if (!habit) return;
@@ -938,28 +995,16 @@ function renderHeaderDateAndETA() {
     const isToday = mState.selectedDateOffset === 0;
   const isPast = mState.selectedDateOffset < 0;
 
-    // Today's Uncompleted Tasks (strictly checks multi-count progress)
+  // Today's Uncompleted Tasks (on past dates, exclude recurring tasks to immediately verify remaining single tasks)
   const todayTasks = mState.tasks.filter(t => {
-    if (t.isDisabled || t.bucket === 'someday' || t.bucket === 'vault' || t.status === 'skipped') return false;
-    const targetTimes = getItemTargetTimes(t);
-    const curCount = getItemDayCount(t, targetDateKey);
-    if (targetTimes > 1) {
-      if (curCount >= targetTimes) return false;
-    } else {
-      if (t.status === 'completed') return false;
-    }
+    if (t.isDisabled || t.bucket === 'someday' || t.bucket === 'vault' || t.status === 'completed' || t.status === 'skipped') return false;
     if (isPast && (t.type === 'recurring' || t.taskType === 'recurring' || t.recType)) return false;
     return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
   });
 
-      // Today's Uncompleted Habits (strictly checks multi-count progress)
+  // Today's Uncompleted Habits (Only shown when viewing today)
   const todayHabits = isToday ? mState.habits.filter(h => {
     if (h.isDisabled) return false;
-    const targetTimes = getItemTargetTimes(h);
-    const curCount = getItemDayCount(h, targetDateKey);
-    if (targetTimes > 1) {
-      return curCount < targetTimes;
-    }
     const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
     return !(entry && entry.done);
   }) : [];
@@ -968,7 +1013,7 @@ function renderHeaderDateAndETA() {
   const currentSecId = detectCurrentSectionId();
   const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
   const sectionTasks = getMobileSectionTasks(todayTasks, currentSecObj);
-  const sectionHabits = getMobileSectionHabits(todayHabits, currentSecObj);
+  const sectionHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
 
   // Update 2x2 Matrix Counts
   const sectionCountEl = document.getElementById('m-section-count');
@@ -1077,12 +1122,17 @@ function renderList() {
       if (t.status === 'completed') return false;
     }
     if (isPast && (t.type === 'recurring' || t.taskType === 'recurring' || t.recType)) return false;
-    return (t.scheduledDate === targetDateKey) || (!t.scheduledDate && isToday);
+    return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
   });
 
-  // 2. Get Today's Uncompleted Habits (Only shown when viewing today)
+  // 2. Get Today's Uncompleted Habits (strictly checks multi-count progress)
   const todayHabits = isToday ? mState.habits.filter(h => {
     if (h.isDisabled) return false;
+    const targetTimes = getItemTargetTimes(h);
+    const curCount = getItemDayCount(h, targetDateKey);
+    if (targetTimes > 1) {
+      return curCount < targetTimes;
+    }
     const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
     return !(entry && entry.done);
   }) : [];
@@ -1204,8 +1254,9 @@ function renderSlimHabitCard(habit) {
   const isInProgress = habit.status === 'in_progress';
   const isPaused = habit.status === 'paused';
   const targetDateKey = getTodayDateString(mState.selectedDateOffset);
-  const targetTimes = getItemTargetTimes(habit);
-  const curCount = getItemDayCount(habit, targetDateKey);
+  const entry = (habit.history && habit.history[targetDateKey]) ? habit.history[targetDateKey] : null;
+  const curCount = (entry && typeof entry.count === 'number') ? entry.count : (entry && entry.done ? (habit.targetTimes || 1) : 0);
+  const targetTimes = habit.targetTimes || 1;
   const isMulti = targetTimes > 1;
 
   return `
