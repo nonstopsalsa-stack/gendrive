@@ -161,8 +161,10 @@ function formatTime(totalSec) {
 // 2. Storage & Metadata Management
 // =========================================================================
 
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
+
 function getGasUrl() {
-  return localStorage.getItem(STORAGE_KEYS.GAS_URL) || '';
+  return localStorage.getItem(STORAGE_KEYS.GAS_URL) || DEFAULT_GAS_URL;
 }
 
 function setGasUrl(url) {
@@ -592,7 +594,7 @@ async function pullFromCloud(force = false, isSilent = false) {
       const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
 
       // ONLY overwrite if cloud is strictly newer OR force requested
-      if (force || cloudTime > localTime) {
+      if (force || cloudTime > localTime || (mState.tasks.length === 0 && mState.habits.length === 0)) {
         if (Array.isArray(cloud.tasks)) {
           mState.tasks = cloud.tasks;
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
@@ -1558,7 +1560,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // まずクラウドから最新データ（PCで並べ替えたハビットやタスク）を取得してから日次処理を実行
   if (getGasUrl()) {
     try {
-      await pullFromCloud(false, true); // 最新クラウドデータを取得
+      await pullFromCloud(true, false); // 最新クラウドデータを確実に取得
     } catch (e) {
       console.warn('Initial cloud pull failed/skipped:', e);
     }
