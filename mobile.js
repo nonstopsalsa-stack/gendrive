@@ -209,19 +209,23 @@ function migrateMobileHabit(h, idx = 0) {
       }
     });
   }
-  if (Array.isArray(h.executionLogs)) {
+    if (Array.isArray(h.executionLogs)) {
     h.executionLogs.forEach(log => {
       const rawD = log.dateKey || log.date || log.completedAt;
       const dKey = normalizeToLocalDateKey(rawD) || rawD;
       if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
+        const logCount = typeof log.count === 'number' ? log.count : 1;
+        const targetTimes = h.targetTimes || 1;
         if (!healedHistory[dKey]) {
           healedHistory[dKey] = {
-            done: true,
-            count: log.count || 1,
+            done: logCount >= targetTimes,
+            count: logCount,
             completedAt: log.completedAt || ''
           };
         }
       }
+    });
+  }
     });
   }
 
@@ -311,6 +315,40 @@ function autoCarryoverPastSessionTasks() {
 /**
  * 現在セクションのタスク一覧を取得（今日の画面では過去セクションの未完了単発タスクを非破壊で自動合流）
  */
+/**
+ * 現在セクションのハビット一覧を取得（いつでもハビット＆過去セクション未完了も自動合流）
+ */
+function getMobileSectionHabits(todayHabits, currentSecObj) {
+  if (!Array.isArray(todayHabits) || !currentSecObj) return [];
+  const isToday = mState.selectedDateOffset === 0;
+  if (!isToday) {
+    return todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
+  }
+
+  const currentSecOrder = getSectionOrder(currentSecObj.name || currentSecObj.id);
+
+  return todayHabits.filter(h => {
+    // 1. Anytime habits (セクション未設定 / いつでも) は常に現在セクションに表示
+    if (!h.section || h.section === 'anytime' || h.section === 'いつでも' || h.timingType === 'anytime') {
+      return true;
+    }
+    // 2. 現在セクションに一致
+    if (currentSecObj.match.some(m => (h.section || '').includes(m))) {
+      return true;
+    }
+    // 3. 過去セクションの未完了ハビットを現在セクションに動的合流
+    const habitSecOrder = getSectionOrder(h.section);
+    if (habitSecOrder > 0 && habitSecOrder < currentSecOrder) {
+      return true;
+    }
+    return false;
+  }).sort((a, b) => {
+    const secDiff = getSectionOrder(a.section) - getSectionOrder(b.section);
+    if (secDiff !== 0) return secDiff;
+    return (a.sortOrder || 0) - (b.sortOrder || 0);
+  });
+}
+
 function getMobileSectionTasks(todayTasks, currentSecObj) {
   if (!Array.isArray(todayTasks) || !currentSecObj) return [];
 
@@ -838,23 +876,6 @@ function completeHabit(habitId) {
   });
 }
 
-function uncompleteHabit(habitId) {
-  haptic(15);
-  const habit = mState.habits.find(h => String(h.id) === String(habitId));
-  if (!habit) return;
-
-  const dateKey = getTodayDateString(mState.selectedDateOffset);
-  if (habit.history && habit.history[dateKey]) {
-    delete habit.history[dateKey];
-  }
-  habit.status = 'uncompleted';
-  habit.actEnd = null;
-  habit.startTimestamp = null;
-
-  saveLocalHabits();
-  renderMobileApp();
-}
-
 function toggleHabit(habitId) {
   const habit = mState.habits.find(h => String(h.id) === String(habitId));
   if (!habit) return;
@@ -902,18 +923,22 @@ function renderHeaderDateAndETA() {
     return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
   });
 
-  // Today's Uncompleted Habits (Only shown when viewing today)
+    // Today's Uncompleted Habits (Only shown when viewing today - strictly checks targetTimes progress)
   const todayHabits = isToday ? mState.habits.filter(h => {
     if (h.isDisabled) return false;
     const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
-    return !(entry && entry.done);
+    const curCount = (entry && typeof entry.count === 'number') ? entry.count : (entry && entry.done ? (h.targetTimes || 1) : 0);
+    const targetTimes = h.targetTimes || 1;
+    const isGoalReached = (curCount >= targetTimes && targetTimes > 0);
+    if (isGoalReached) return false; // goal reached -> hide
+    return true; // uncompleted / in-progress -> show
   }) : [];
 
   // Current Section Tasks & Habits
   const currentSecId = detectCurrentSectionId();
   const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
   const sectionTasks = getMobileSectionTasks(todayTasks, currentSecObj);
-  const sectionHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
+  const sectionHabits = getMobileSectionHabits(todayHabits, currentSecObj);
 
   // Update 2x2 Matrix Counts
   const sectionCountEl = document.getElementById('m-section-count');
@@ -1058,10 +1083,8 @@ function renderList() {
     container.innerHTML = headerHtml + secTasks.map(t => renderSlimTaskCard(t)).join('');
 
   } else if (scope === 'section' && type === 'habit') {
-    // 2. Section × Habit: そのセクションの未完ハビットだけ
-    const secHabits = todayHabits
-      .filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)))
-      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+        // 2. Section × Habit: そのセクションの未完ハビット（いつでもハビット＆過去セクション未完了も自動合流）
+    const secHabits = getMobileSectionHabits(todayHabits, currentSecObj);
     const headerHtml = `
       <div class="m-section-indicator habit-indicator">
         <span class="m-sec-left">🌿 <b>${currentSecObj.name}</b> の未完了ハビット</span>
