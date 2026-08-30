@@ -1,4 +1,4 @@
-# 📜 Gendrive 更新履歴 (Changelog)
+﻿# 📜 Gendrive 更新履歴 (Changelog)
 
 Gendrive (Personal Action Engine) の全バージョン変更履歴です。
 

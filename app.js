@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Habit Flow - Core Logic & Keyboard Engine
  * Fully customized for 哲生 (AI Company OS & Personal OS Engine)
  * Enhanced with 3-Way Timing Selector (Anytime / Section / Custom Range)
@@ -652,6 +652,9 @@ function getTaskStatusForSelectedDate(task) {
 
 function isTaskForSelectedDate(task, dateObj = null) {
   if (!task || task.isDisabled) return false;
+  // Inbox, This Week, Next Week, Genius, Someday, Vault などの専用バケットのタスクはデイリー画面から除外
+  if (task.bucket && task.bucket !== 'today') return false;
+
   const d = dateObj ? new Date(dateObj) : (() => {
     const dt = new Date();
     dt.setDate(dt.getDate() - state.selectedDateOffset);
@@ -671,16 +674,12 @@ function isTaskForSelectedDate(task, dateObj = null) {
     return isHabitScheduledForDate(task, d);
   }
 
-  // 2. 単発タスク (Single Tasks)
-  if (task.bucket === 'today' || !task.bucket) {
-    if (task.scheduledDate) {
-      return task.scheduledDate === dateKey;
-    }
-    // 日付未指定の場合は「今日（todayKey）」に表示
-    return dateKey === todayKey;
+  // 2. 単発タスク (Single Tasks: bucket === 'today' または 未指定)
+  if (task.scheduledDate) {
+    return task.scheduledDate === dateKey;
   }
-
-  return false;
+  // 日付未指定の場合は「今日（todayKey）」に表示
+  return dateKey === todayKey;
 }
 
 function isHabitInCurrentTimeWindow(habit, targetSectionName = null) {

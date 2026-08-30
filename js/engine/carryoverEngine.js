@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Carryover & Dynamic Task Forwarding Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -14,7 +14,7 @@ function getPastIncompleteTasks() {
   const todayKey = getTodayKey();
   return state.tasks.filter(t => {
     if (t.type === 'recurring') return false;
-    if (['someday', 'vault'].includes(t.bucket)) return false;
+    if (t.bucket && t.bucket !== 'today') return false;
     const st = t.status || 'uncompleted';
     if (st === 'completed' || st === 'skipped') return false;
     if (!t.scheduledDate) return false;

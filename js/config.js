@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Master Configuration & Hierarchical Definitions
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -10,7 +10,7 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.2.4';
+const APP_VERSION = 'v1.2.5';
 const APP_VERSION_NAME = 'Embedded Cloud Sync & Zero-Config Mobile Connection';
 
 const SECTIONS_CONFIG = [

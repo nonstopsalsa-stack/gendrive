@@ -1,4 +1,4 @@
-// =========================================================================
+﻿// =========================================================================
 // 0. Multi-Count Recurrence Engine (Tasks & Habits)
 // =========================================================================
 
@@ -286,10 +286,21 @@ function migrateMobileHabit(h, idx = 0) {
   return h;
 }
 
+function sanitizeMobileTasks(tasks) {
+  if (!Array.isArray(tasks)) return [];
+  tasks.forEach(t => {
+    // 非todayバケット（inbox等）に誤って予定日が設定されている場合は解除
+    if (t.bucket && t.bucket !== 'today') {
+      t.scheduledDate = null;
+    }
+  });
+  return tasks;
+}
+
 function loadLocalData() {
   // Tasks
   const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
-  mState.tasks = savedTasks ? JSON.parse(savedTasks) : [];
+  mState.tasks = savedTasks ? sanitizeMobileTasks(JSON.parse(savedTasks)) : [];
 
   // Habits (sortOrder 順に整列 & 自己修復)
   const savedHabits = localStorage.getItem(STORAGE_KEYS.HABITS);
@@ -364,7 +375,7 @@ function getMobileSectionHabits(todayHabits, currentSecObj) {
 
   return todayHabits.filter(h => {
     // 1. Anytime habits (セクション未設定 / いつでも) は常に現在セクションに表示
-    if (!h.section || h.section === 'anytime' || h.section === 'いつでも' || h.timingType === 'anytime') {
+    if (!h.section || h.section === 'anytime' || h.section === 'いつでも' || h.timingType === 'anytime' || h.displayType === 'anytime') {
       return true;
     }
     // 2. 現在セクションに一致
@@ -432,7 +443,7 @@ function checkAndRunDayRollover() {
   if (meta.lastProcessedDate !== todayKey) {
     let carriedCount = 0;
     mState.tasks.forEach(t => {
-      if (t.type !== 'recurring' && !['someday', 'vault'].includes(t.bucket)) {
+      if (t.type !== 'recurring' && (!t.bucket || t.bucket === 'today')) {
         if (t.status !== 'completed' && t.status !== 'skipped' && t.scheduledDate && t.scheduledDate < todayKey) {
           t.scheduledDate = todayKey;
           t.section = t.section || '第1セッション';
@@ -596,7 +607,7 @@ async function pullFromCloud(force = false, isSilent = false) {
       // ONLY overwrite if cloud is strictly newer OR force requested
       if (force || cloudTime > localTime || (mState.tasks.length === 0 && mState.habits.length === 0)) {
         if (Array.isArray(cloud.tasks)) {
-          mState.tasks = cloud.tasks;
+          mState.tasks = sanitizeMobileTasks(cloud.tasks);
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
         }
         if (Array.isArray(cloud.habits)) {
@@ -999,7 +1010,7 @@ function renderHeaderDateAndETA() {
 
   // Today's Uncompleted Tasks (on past dates, exclude recurring tasks to immediately verify remaining single tasks)
   const todayTasks = mState.tasks.filter(t => {
-    if (t.isDisabled || t.bucket === 'someday' || t.bucket === 'vault' || t.status === 'completed' || t.status === 'skipped') return false;
+    if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'completed' || t.status === 'skipped') return false;
     if (isPast && (t.type === 'recurring' || t.taskType === 'recurring' || t.recType)) return false;
     return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
   });
@@ -1065,20 +1076,23 @@ function renderStickyActiveBar() {
   const titleEl = document.getElementById('active-bar-title');
   const pauseBtn = bar.querySelector('.btn-touch-pause');
   const completeBtn = bar.querySelector('.btn-touch-success');
+  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
 
-    if (activeTask) {
-    if (titleEl) titleEl.textContent = `🎯 ${activeTask.title}`;
+  if (activeTask) {
+    const curCount = getItemDayCount(activeTask, targetDateKey);
+    const targetTimes = getItemTargetTimes(activeTask);
+    const isMulti = targetTimes > 1;
+
+    if (titleEl) titleEl.textContent = isMulti ? `🎯 ${activeTask.title} (${curCount + 1}/${targetTimes}回目)` : `🎯 ${activeTask.title}`;
     if (pauseBtn) pauseBtn.setAttribute('onclick', `pauseTask('${activeTask.id}')`);
     if (completeBtn) {
-      completeBtn.textContent = '✔ 完了';
+      completeBtn.textContent = isMulti ? `✔ ${curCount + 1}/${targetTimes}回目完了` : '✔ 完了';
       completeBtn.setAttribute('onclick', `completeTask('${activeTask.id}')`);
     }
     updateActiveTimerDisplay(activeTask);
   } else if (activeHabit) {
-    const targetDateKey = getTodayDateString(mState.selectedDateOffset);
-    const entry = (activeHabit.history && activeHabit.history[targetDateKey]) ? activeHabit.history[targetDateKey] : null;
-    const curCount = (entry && typeof entry.count === 'number') ? entry.count : 0;
-    const targetTimes = activeHabit.targetTimes || 1;
+    const curCount = getItemDayCount(activeHabit, targetDateKey);
+    const targetTimes = getItemTargetTimes(activeHabit);
     const isMulti = targetTimes > 1;
 
     if (titleEl) titleEl.textContent = isMulti ? `🌿 ${activeHabit.name} (${curCount + 1}/${targetTimes}回目)` : `🌿 ${activeHabit.name}`;
@@ -1115,7 +1129,7 @@ function renderList() {
 
     // 1. Get Today's Uncompleted Tasks (strictly checks multi-count progress)
   const todayTasks = mState.tasks.filter(t => {
-    if (t.isDisabled || t.bucket === 'someday' || t.bucket === 'vault' || t.status === 'skipped') return false;
+    if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'skipped') return false;
     const targetTimes = getItemTargetTimes(t);
     const curCount = getItemDayCount(t, targetDateKey);
     if (targetTimes > 1) {
@@ -1256,17 +1270,16 @@ function renderSlimHabitCard(habit) {
   const isInProgress = habit.status === 'in_progress';
   const isPaused = habit.status === 'paused';
   const targetDateKey = getTodayDateString(mState.selectedDateOffset);
-  const entry = (habit.history && habit.history[targetDateKey]) ? habit.history[targetDateKey] : null;
-  const curCount = (entry && typeof entry.count === 'number') ? entry.count : (entry && entry.done ? (habit.targetTimes || 1) : 0);
-  const targetTimes = habit.targetTimes || 1;
+  const curCount = getItemDayCount(habit, targetDateKey);
+  const targetTimes = getItemTargetTimes(habit);
   const isMulti = targetTimes > 1;
 
   return `
-    <div class="m-card-slim ${isInProgress ? 'in-progress' : ''} ${isPaused ? 'paused' : ''}" id="h-card-${habit.id}">
+    <div class="m-card-slim ${isInProgress ? 'in-progress' : '} ${isPaused ? 'paused' : '}" id="h-card-${habit.id}">
       <div class="m-card-left" onclick="${isInProgress ? `completeHabit('${habit.id}')` : `startHabit('${habit.id}')`}" style="cursor:pointer;">
         <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🌿'}</span>
         <span class="m-slim-title">${habit.name}</span>
-        ${isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}回</span>` : ''}
+        ${isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : '}">${curCount}/${targetTimes}回</span>` : ''}
         ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>` : ''}
       </div>
       <div class="m-card-actions-slim">
@@ -1291,19 +1304,24 @@ function renderSlimHabitCard(habit) {
 function renderSlimTaskCard(task) {
   const isInProgress = task.status === 'in_progress';
   const isPaused = task.status === 'paused';
+  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
+  const curCount = getItemDayCount(task, targetDateKey);
+  const targetTimes = getItemTargetTimes(task);
+  const isMulti = targetTimes > 1;
   const carryBadge = task._carriedOverFrom ? `<span style="font-size: 10px; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); padding: 1px 5px; border-radius: 4px; margin-left: 6px; font-weight: normal;">↩ ${task._carriedOverFrom}</span>` : '';
 
   return `
-    <div class="m-card-slim ${isInProgress ? 'in-progress' : ''} ${isPaused ? 'paused' : ''}" id="t-card-${task.id}">
+    <div class="m-card-slim ${isInProgress ? 'in-progress' : '} ${isPaused ? 'paused' : '}" id="t-card-${task.id}">
       <div class="m-card-left" onclick="${isInProgress ? `completeTask('${task.id}')` : `startTask('${task.id}')`}" style="cursor:pointer;">
         <span class="m-slim-icon">${isInProgress ? '⚡' : isPaused ? '⏸' : '🎯'}</span>
         <span class="m-slim-title">${task.title}${carryBadge}</span>
+        ${isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : '}">${curCount}/${targetTimes}回</span>` : ''}
         ${isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : ''}
       </div>
       <div class="m-card-actions-slim">
         ${isInProgress ? `
           <button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">
-            ✔ 完了
+            ✔ ${isMulti ? `${curCount + 1}回目完了` : '完了'}
           </button>
         ` : isPaused ? `
           <button class="btn-slim btn-slim-pause-resume" onclick="startTask('${task.id}')">
