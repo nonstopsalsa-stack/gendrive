@@ -409,7 +409,7 @@ function isHabitScheduledForDate(habit, dateObj) {
 
     case 'weekly_goal': {
       const timesTarget = Number(rec.timesPerWeek) || 3;
-      const targetKey = ${d.getFullYear()}--;
+      const targetKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       
       if (habit.history && habit.history[targetKey]) {
         return true;
@@ -420,7 +420,7 @@ function isHabitScheduledForDate(habit, dateObj) {
       for (let i = 0; i < 7; i++) {
         const cur = new Date(monday);
         cur.setDate(cur.getDate() + i);
-        const k = ${cur.getFullYear()}--;
+        const k = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
         if (habit.history && habit.history[k]) {
           weekCompleted++;
         }
@@ -534,9 +534,7 @@ function getMobileSectionHabits(todayHabits, currentSecObj) {
     if (secDiff !== 0) return secDiff;
     return (a.sortOrder || 0) - (b.sortOrder || 0);
   });
-});
 }
-
 function getMobileSectionTasks(todayTasks, currentSecObj) {
   if (!Array.isArray(todayTasks) || !currentSecObj) return [];
 
@@ -1395,6 +1393,7 @@ function secSortedHabits(habits) {
   });
 }
 
+
 function renderSlimHabitCard(habit) {
   const isInProgress = habit.status === 'in_progress';
   const isPaused = habit.status === 'paused';
@@ -1661,7 +1660,7 @@ function saveSettings() {
   closeSettingsModal();
 }
 
-window.addEventListener('DOMContentLoaded', async () => {
+async function initMobileApp() {
   loadLocalData();
   renderMobileApp(); // まずローカルキャッシュで瞬時にUI描画
 
@@ -1696,18 +1695,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Startup Sync Guard:
-  // 朝一でスマホを起動した際、古いローカルデータで日次ロールオーバーを上書きpushしないよう、
-  // まずクラウドから最新データ（PCで並べ替えたハビットやタスク）を取得してから日次処理を実行
+  // Startup Sync Guard
   if (getGasUrl()) {
     try {
-      await pullFromCloud(true, false); // 最新クラウドデータを確実に取得
+      await pullFromCloud(true, false);
     } catch (e) {
       console.warn('Initial cloud pull failed/skipped:', e);
     }
   }
 
-  // 最新データ取得後に日次ロールオーバーを実行（古い並び順の上書き送信を完全防御）
   checkAndRunDayRollover();
   renderMobileApp();
 
@@ -1726,11 +1722,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   // 15-Second Silent Heartbeat Sync Loop
   setInterval(() => {
     if (getGasUrl() && !mState.isSyncing) {
-      pullFromCloud(false, true); // Silent background check
+      pullFromCloud(false, true);
     }
   }, 15000);
 
-  // Auto-sync when app comes to foreground (tab focus or PWA resume)
+  // Auto-sync when app comes to foreground
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && getGasUrl()) {
       pullFromCloud(false, true);
@@ -1749,4 +1745,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       console.log('SW registration skipped:', err);
     });
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMobileApp);
+} else {
+  initMobileApp();
+}
