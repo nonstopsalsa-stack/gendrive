@@ -364,37 +364,177 @@ function autoCarryoverPastSessionTasks() {
 /**
  * 現在セクションのタスク一覧を取得（今日の画面では過去セクションの未完了単発タスクを非破壊で自動合流）
  */
-function getMobileSectionHabits(todayHabits, currentSecObj) {
-  if (!Array.isArray(todayHabits) || !currentSecObj) return [];
-  const isToday = mState.selectedDateOffset === 0;
-  if (!isToday) {
-    return todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
+// =========================================================================
+// Recurrence & Schedule Engine for Mobile (100% PC-Aligned)
+// =========================================================================
+
+function getMondayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function isBusinessDay(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  return day !== 0 && day !== 6;
+}
+
+function isHabitScheduledForDate(habit, dateObj) {
+  if (!habit || habit.isDisabled) return false;
+  const rec = habit.recurrence || { type: habit.repeatType === '平日' ? 'business_days' : 'everyday' };
+  const d = dateObj ? new Date(dateObj) : new Date();
+  const dayOfWeek = d.getDay(); // 0(日) - 6(土)
+  const dayOfMonth = d.getDate(); // 1 - 31
+
+  switch (rec.type) {
+    case 'everyday':
+      return true;
+
+    case 'daily_times':
+      return true;
+
+    case 'business_days':
+    case 'weekdays':
+      return isBusinessDay(d);
+
+    case 'weekends':
+      return dayOfWeek === 0 || dayOfWeek === 6;
+
+    case 'custom_days':
+      return Array.isArray(rec.days) && rec.days.includes(dayOfWeek);
+
+    case 'weekly_goal': {
+      const timesTarget = Number(rec.timesPerWeek) || 3;
+      const targetKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      
+      if (habit.history && habit.history[targetKey]) {
+        return true;
+      }
+
+      const monday = getMondayOfWeek(d);
+      let weekCompleted = 0;
+      for (let i = 0; i < 7; i++) {
+        const cur = new Date(monday);
+        cur.setDate(cur.getDate() + i);
+        const k = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
+        if (habit.history && habit.history[k]) {
+          weekCompleted++;
+        }
+      }
+      return weekCompleted < timesTarget;
+    }
+
+    case 'interval': {
+      const interval = Number(rec.intervalDays) || 2;
+      if (interval <= 1) return true;
+      const start = new Date(habit.createdAt || '2026-05-01');
+      start.setHours(0, 0, 0, 0);
+      const target = new Date(d);
+      target.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((target - start) / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && (diffDays % interval === 0);
+    }
+
+    case 'monthly': {
+      const start = new Date(habit.createdAt || '2026-05-01');
+      const startMonthIndex = start.getFullYear() * 12 + start.getMonth();
+      const curMonthIndex = d.getFullYear() * 12 + d.getMonth();
+      const monthInterval = Number(rec.monthInterval) || 1;
+
+      if ((curMonthIndex - startMonthIndex) % monthInterval !== 0) {
+        return false;
+      }
+
+      const timingType = rec.timingType || 'specific_day';
+      if (timingType === 'specific_day') {
+        const targetDay = Number(rec.monthDay) || 1;
+        return dayOfMonth === targetDay;
+      }
+      return dayOfMonth === 1;
+    }
+
+    default:
+      return true;
+  }
+}
+
+function isHabitInCurrentTimeWindow(habit, currentSecObj) {
+  if (!habit) return false;
+  const type = habit.displayType || habit.timingType || 'section';
+
+  // 1. Anytime (いつでも): 常時表示
+  if (type === 'anytime' || !habit.section || habit.section === 'anytime' || habit.section === 'いつでも') {
+    return true;
   }
 
-  const currentSecOrder = getSectionOrder(currentSecObj.name || currentSecObj.id);
+  // 2. Section (セクション指定): 現在セクションと一致
+  if (type === 'section') {
+    if (!currentSecObj) return true;
+    return currentSecObj.match.some(m => (habit.section || '').includes(m));
+  }
 
-  return todayHabits.filter(h => {
-    // 1. Anytime habits (セクション未設定 / いつでも) は常に現在セクションに表示
-    if (!h.section || h.section === 'anytime' || h.section === 'いつでも' || h.timingType === 'anytime' || h.displayType === 'anytime') {
-      return true;
+  // 3. Custom Time (個別時間指定)
+  if (type === 'custom') {
+    if (!habit.customStart) return true;
+    const [sH, sM] = String(habit.customStart).split(':').map(Number);
+    const habitStart = (sH || 0) + (sM || 0) / 60;
+    let habitEnd = habitStart + ((habit.targetMin || 30) / 60);
+    if (habit.customEnd) {
+      const [eH, eM] = String(habit.customEnd).split(':').map(Number);
+      habitEnd = (eH || 0) + (eM || 0) / 60;
     }
-    // 2. 現在セクションに一致
-    if (currentSecObj.match.some(m => (h.section || '').includes(m))) {
-      return true;
+
+    const now = new Date();
+    const currentHour = now.getHours() + now.getMinutes() / 60;
+    if (habitStart <= habitEnd) {
+      return currentHour >= habitStart && currentHour < habitEnd;
+    } else {
+      return currentHour >= habitStart || currentHour < habitEnd;
     }
-    // 3. 過去セクションの未完了ハビットを現在セクションに動的合流
-    const habitSecOrder = getSectionOrder(h.section);
-    if (habitSecOrder > 0 && habitSecOrder < currentSecOrder) {
-      return true;
-    }
-    return false;
-  }).sort((a, b) => {
+  }
+
+  return true;
+}
+
+function isHabitCompletedForToday(habit, targetDateKey) {
+  if (!habit) return false;
+  const targetTimes = getItemTargetTimes(habit);
+  const curCount = getItemDayCount(habit, targetDateKey);
+  if (targetTimes > 1) {
+    return curCount >= targetTimes;
+  }
+  const entry = (habit.history && habit.history[targetDateKey]) ? habit.history[targetDateKey] : null;
+  if (entry && (entry === true || entry.done)) return true;
+  return habit.status === 'completed';
+}
+
+function getMobileTodayHabits(targetDateObj, targetDateKey) {
+  const isToday = mState.selectedDateOffset === 0;
+  if (!isToday) return [];
+  const targetDate = targetDateObj || new Date();
+
+  return mState.habits.filter(h => {
+    if (h.isDisabled) return false;
+    // 1. スケジュール判定 (曜日・平日・休日等)
+    if (!isHabitScheduledForDate(h, targetDate)) return false;
+    // 2. 完了判定 (未完了のみ抽出)
+    if (isHabitCompletedForToday(h, targetDateKey)) return false;
+    return true;
+  });
+}
+
+function getMobileSectionHabits(todayHabits, currentSecObj) {
+  if (!Array.isArray(todayHabits) || !currentSecObj) return [];
+  return todayHabits.filter(h => isHabitInCurrentTimeWindow(h, currentSecObj)).sort((a, b) => {
     const secDiff = getSectionOrder(a.section) - getSectionOrder(b.section);
     if (secDiff !== 0) return secDiff;
     return (a.sortOrder || 0) - (b.sortOrder || 0);
   });
 }
-
 function getMobileSectionTasks(todayTasks, currentSecObj) {
   if (!Array.isArray(todayTasks) || !currentSecObj) return [];
 
@@ -1016,11 +1156,7 @@ function renderHeaderDateAndETA() {
   });
 
   // Today's Uncompleted Habits (Only shown when viewing today)
-  const todayHabits = isToday ? mState.habits.filter(h => {
-    if (h.isDisabled) return false;
-    const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
-    return !(entry && entry.done);
-  }) : [];
+  const targetDateObj = new Date(); targetDateObj.setDate(targetDateObj.getDate() - mState.selectedDateOffset); const todayHabits = getMobileTodayHabits(targetDateObj, targetDateKey);
 
   // Current Section Tasks & Habits
   const currentSecId = detectCurrentSectionId();
@@ -1142,16 +1278,7 @@ function renderList() {
   });
 
   // 2. Get Today's Uncompleted Habits (strictly checks multi-count progress)
-  const todayHabits = isToday ? mState.habits.filter(h => {
-    if (h.isDisabled) return false;
-    const targetTimes = getItemTargetTimes(h);
-    const curCount = getItemDayCount(h, targetDateKey);
-    if (targetTimes > 1) {
-      return curCount < targetTimes;
-    }
-    const entry = (h.history && h.history[targetDateKey]) ? h.history[targetDateKey] : null;
-    return !(entry && entry.done);
-  }) : [];
+  const targetDateObj = new Date(); targetDateObj.setDate(targetDateObj.getDate() - mState.selectedDateOffset); const todayHabits = getMobileTodayHabits(targetDateObj, targetDateKey);
 
   const scope = mState.activeScope || 'section';
   const type = mState.activeType || 'task';
@@ -1265,6 +1392,7 @@ function secSortedHabits(habits) {
     return (a.sortOrder || 0) - (b.sortOrder || 0);
   });
 }
+
 
 function renderSlimHabitCard(habit) {
   const isInProgress = habit.status === 'in_progress';
@@ -1532,7 +1660,7 @@ function saveSettings() {
   closeSettingsModal();
 }
 
-window.addEventListener('DOMContentLoaded', async () => {
+async function initMobileApp() {
   loadLocalData();
   renderMobileApp(); // まずローカルキャッシュで瞬時にUI描画
 
@@ -1567,18 +1695,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Startup Sync Guard:
-  // 朝一でスマホを起動した際、古いローカルデータで日次ロールオーバーを上書きpushしないよう、
-  // まずクラウドから最新データ（PCで並べ替えたハビットやタスク）を取得してから日次処理を実行
+  // Startup Sync Guard
   if (getGasUrl()) {
     try {
-      await pullFromCloud(true, false); // 最新クラウドデータを確実に取得
+      await pullFromCloud(true, false);
     } catch (e) {
       console.warn('Initial cloud pull failed/skipped:', e);
     }
   }
 
-  // 最新データ取得後に日次ロールオーバーを実行（古い並び順の上書き送信を完全防御）
   checkAndRunDayRollover();
   renderMobileApp();
 
@@ -1597,11 +1722,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   // 15-Second Silent Heartbeat Sync Loop
   setInterval(() => {
     if (getGasUrl() && !mState.isSyncing) {
-      pullFromCloud(false, true); // Silent background check
+      pullFromCloud(false, true);
     }
   }, 15000);
 
-  // Auto-sync when app comes to foreground (tab focus or PWA resume)
+  // Auto-sync when app comes to foreground
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && getGasUrl()) {
       pullFromCloud(false, true);
@@ -1620,4 +1745,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       console.log('SW registration skipped:', err);
     });
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMobileApp);
+} else {
+  initMobileApp();
+}
