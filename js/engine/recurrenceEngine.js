@@ -120,10 +120,17 @@ function isHabitScheduledForDate(habit, dateObj) {
 // =========================================================================
 
 function getHabitTargetTimes(habit) {
-  if (!habit || !habit.recurrence) return 1;
-  if (habit.recurrence.type === 'daily_times') {
-    return Math.max(1, parseInt(habit.recurrence.timesPerDay, 10) || 2);
+  if (!habit) return 1;
+  if (typeof habit.targetTimes === 'number' && habit.targetTimes > 0) return habit.targetTimes;
+  if (habit.recurrence) {
+    if (habit.recurrence.type === 'daily_times') {
+      return Math.max(1, parseInt(habit.recurrence.timesPerDay, 10) || 2);
+    }
+    if (typeof habit.recurrence.targetTimes === 'number' && habit.recurrence.targetTimes > 0) {
+      return habit.recurrence.targetTimes;
+    }
   }
+  if (typeof habit.dailyTimes === 'number' && habit.dailyTimes > 0) return habit.dailyTimes;
   return 1;
 }
 

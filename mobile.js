@@ -1,4 +1,4 @@
-﻿// =========================================================================
+// =========================================================================
 // 0. Multi-Count Recurrence Engine (Tasks & Habits)
 // =========================================================================
 
@@ -1092,13 +1092,7 @@ function uncompleteHabit(habitId) {
 
   const dateKey = getTodayDateString(mState.selectedDateOffset);
   if (habit.history && habit.history[dateKey]) {
-    const curCount = getItemDayCount(habit, dateKey);
-    if (curCount > 1) {
-      habit.history[dateKey].count = curCount - 1;
-      habit.history[dateKey].done = false;
-    } else {
-      delete habit.history[dateKey];
-    }
+    delete habit.history[dateKey];
   }
   habit.status = 'uncompleted';
   habit.actEnd = null;
