@@ -1739,10 +1739,30 @@ async function initMobileApp() {
     }
   });
 
-  // Register Service Worker
+  // Register Service Worker with Auto Update & Force Refresh
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(err => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      reg.update().catch(() => {});
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              window.location.reload();
+            }
+          });
+        }
+      });
+    }).catch(err => {
       console.log('SW registration skipped:', err);
+    });
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
     });
   }
 }
@@ -1751,4 +1771,22 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initMobileApp);
 } else {
   initMobileApp();
+}
+async function forceHardRefresh() {
+  haptic(30);
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        await reg.unregister();
+      }
+    }
+  } catch (e) {
+    console.error('Error clearing cache:', e);
+  }
+  window.location.href = window.location.pathname + '?r=' + Date.now();
 }
