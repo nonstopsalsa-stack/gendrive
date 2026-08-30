@@ -209,7 +209,7 @@ function migrateMobileHabit(h, idx = 0) {
       }
     });
   }
-    if (Array.isArray(h.executionLogs)) {
+  if (Array.isArray(h.executionLogs)) {
     h.executionLogs.forEach(log => {
       const rawD = log.dateKey || log.date || log.completedAt;
       const dKey = normalizeToLocalDateKey(rawD) || rawD;
@@ -224,8 +224,6 @@ function migrateMobileHabit(h, idx = 0) {
           };
         }
       }
-    });
-  }
     });
   }
 
