@@ -1162,7 +1162,7 @@ function renderHeaderDateAndETA() {
   const currentSecId = detectCurrentSectionId();
   const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
   const sectionTasks = getMobileSectionTasks(todayTasks, currentSecObj);
-  const sectionHabits = todayHabits.filter(h => currentSecObj.match.some(m => (h.section || '').includes(m)));
+  const sectionHabits = getMobileSectionHabits(todayHabits, currentSecObj);
 
   // Update 2x2 Matrix Counts
   const sectionCountEl = document.getElementById('m-section-count');
