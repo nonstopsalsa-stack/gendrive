@@ -105,7 +105,8 @@ function setupCascadeSelects() {
 
 
 // App State
-let state = {
+window.state = null;
+let state = window.state = {
   habits: loadHabits(),
   tasks: loadTasks(),
   goals: loadGoals(),
@@ -848,6 +849,7 @@ function startHabit(id) {
 
   const now = new Date();
   const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (habit.status !== 'paused') { habit.accumulatedSeconds = 0; habit.actMin = 0; }
   habit.status = 'in_progress';
   habit.actStart = habit.actStart || nowTimeStr;
   habit.startTimestamp = Date.now();
@@ -1093,7 +1095,7 @@ function deleteExecutionLog(type, itemId, logId) {
   renderApp();
 }
 
-function toggleHabit(id) {
+function uncompleteHabit(id) {
   const targetId = String(id);
   const habit = state.habits.find(h => String(h.id) === targetId);
   if (!habit) return;
@@ -1101,52 +1103,73 @@ function toggleHabit(id) {
   const dateKey = getSelectedDateKey();
   if (!habit.history) habit.history = {};
 
-  const curCount = getHabitDayCount(habit, dateKey);
-  const targetTimes = getHabitTargetTimes(habit);
+  const prevHistoryEntry = habit.history[dateKey];
+  const prevStatus = habit.status;
+  const prevLogs = Array.isArray(habit.executionLogs) ? [...habit.executionLogs] : [];
 
-  if (habit.status === 'in_progress') {
-    completeHabit(id);
-    return;
-  }
+  // その日の実行記録を完全に削除（回数0回・完全未完了にリセット）
+  delete habit.history[dateKey];
 
-  if (curCount > 0) {
-    const newCount = Math.max(0, curCount - 1);
-    const prevHistoryEntry = habit.history[dateKey];
-    const prevStatus = habit.status;
-
-    if (newCount === 0) {
-      delete habit.history[dateKey];
-      habit.status = 'uncompleted';
-    } else {
-      habit.history[dateKey] = {
-        done: newCount >= targetTimes,
-        count: newCount,
-        durationMin: habit.targetMin || 15,
-        completedAt: new Date().toISOString()
-      };
-      habit.status = (newCount >= targetTimes) ? 'completed' : 'uncompleted';
-    }
+  if (state.selectedDateOffset === 0) {
+    habit.status = 'uncompleted';
+    habit.actEnd = null;
     habit.startTimestamp = null;
-
-    pushUndoAction({
-      description: `ハビット「${habit.name}」の完了を取り消し (${newCount}/${targetTimes}回)`,
-      undo: () => {
-        habit.history[dateKey] = prevHistoryEntry;
-        habit.status = prevStatus;
-        recalculateHabitRates(habit);
-      }
-    });
-
-  } else {
-    startHabit(id);
-    return;
+    habit.accumulatedSeconds = 0;
+    if (String(state.activeHabitId) === targetId) {
+      state.activeHabitId = null;
+    }
   }
+
+  // タイムラインログからも当日のログを除去
+  if (Array.isArray(habit.executionLogs)) {
+    habit.executionLogs = habit.executionLogs.filter(l => l.dateKey !== dateKey);
+  }
+
+  pushUndoAction({
+    description: `ハビット「${habit.name}」を未完了に戻しました（0回）`,
+    undo: () => {
+      if (prevHistoryEntry !== undefined) {
+        habit.history[dateKey] = prevHistoryEntry;
+      }
+      habit.status = prevStatus;
+      habit.executionLogs = prevLogs;
+      recalculateHabitRates(habit);
+      saveHabits();
+      renderApp();
+    }
+  });
 
   recalculateHabitRates(habit);
   saveHabits();
   renderApp();
 }
 
+function toggleHabit(id) {
+  const targetId = String(id);
+  const habit = state.habits.find(h => String(h.id) === targetId);
+  if (!habit) return;
+
+  const curStatus = getHabitStatusForSelectedDate(habit);
+  const curCount = getHabitDayCount(habit);
+
+  if (habit.status === 'in_progress') {
+    completeHabit(id);
+    return;
+  }
+
+  // 完了状態または回数カウントが存在する場合は未完了（0回）に戻す
+  if (curStatus === 'completed' || curCount > 0) {
+    uncompleteHabit(id);
+    return;
+  }
+
+  // 過去日なら完了にする、今日なら開始する
+  if (state.selectedDateOffset > 0) {
+    completeHabit(id);
+  } else {
+    startHabit(id);
+  }
+}
 function skipHabit(id) {
   const targetId = String(id);
   const habit = state.habits.find(h => String(h.id) === targetId);
@@ -1221,6 +1244,9 @@ function getFilteredHabits(customMode = null) {
 
   // 7. Tag 3-way filter (Include / Exclude)
   list = list.filter(matchesTagFilters);
+
+  // Always return habits in strict Master sortOrder
+  list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
   return list;
 }
@@ -2142,14 +2168,16 @@ function showContextMenu(e, habitId) {
   // Dynamic Toggle Complete Button
   const toggleIcon = document.getElementById('ctx-toggle-icon');
   const toggleText = document.getElementById('ctx-toggle-text');
-  const isCompleted = habit.status === 'completed';
+  const curStatus = getHabitStatusForSelectedDate(habit);
+  const isCompleted = curStatus === 'completed';
 
+  const dateLabel = state.selectedDateOffset === 0 ? '今日' : 'この日';
   if (isCompleted) {
     if (toggleIcon) toggleIcon.textContent = '⏳';
-    if (toggleText) toggleText.textContent = '今日を未完了に戻す';
+    if (toggleText) toggleText.textContent = `${dateLabel}を未完了に戻す`;
   } else {
     if (toggleIcon) toggleIcon.textContent = '✓';
-    if (toggleText) toggleText.textContent = '今日を完了にする';
+    if (toggleText) toggleText.textContent = `${dateLabel}を完了にする`;
   }
 
   // Positioning with viewport boundary clamp
@@ -2172,7 +2200,6 @@ function showContextMenu(e, habitId) {
   menu.style.left = `${Math.max(10, x)}px`;
   menu.style.top = `${Math.max(10, y)}px`;
 }
-
 function showTaskContextMenu(e, taskId) {
   e.preventDefault();
   hideAllContextMenus();
@@ -2286,7 +2313,16 @@ function setupContextMenuHandlers() {
       const hid = state.contextMenuHabitId;
       hideAllContextMenus();
       if (!hid) return;
-      toggleHabit(hid);
+
+      const habit = (state.habits || []).find(h => String(h.id) === String(hid));
+      if (!habit) return;
+
+      const curStatus = getHabitStatusForSelectedDate(habit);
+      if (curStatus === 'completed') {
+        uncompleteHabit(hid);
+      } else {
+        completeHabit(hid);
+      }
     });
   }
 

@@ -721,13 +721,15 @@
                 </div>
                 <span class="sort-label" style="margin-left: 8px;">並び替え:</span>
                 <div class="sort-select-wrapper">
-                  <select id="analytics-sort-select" class="sort-select" onchange="renderTableAnalyticsView()">
-                    <option value="streak_desc">🔥 連続日数（ストリーク）順</option>
-                    <option value="rate7_desc">⚡ 7日達成率（高い順）</option>
-                    <option value="rate30_desc">🌕 30日達成率（高い順）</option>
-                    <option value="rate90_desc">🏆 90日達成率（高い順）</option>
-                    <option value="rate7_asc">⚠️ 7日達成率（低い順・要テコ入れ）</option>
-                    <option value="name_asc">名前順（50音）</option>
+                  <select id="analytics-sort-select" class="sort-select" onchange="handleAnalyticsSortSelectChange(this.value)">
+                    <option value="master" selected>&#x1F4DC; &#x30DE;&#x30B9;&#x30BF;&#x30FC;&#x8A2D;&#x5B9A;&#x9806; (&#x30C7;&#x30D5;&#x30A9;&#x30EB;&#x30C8;)</option>
+                    <option value="streak">&#x1F525; &#x9023;&#x7D9A;&#x65E5;&#x6570; (&#x9AD8;)</option>
+                    <option value="r3">&#x26A1; 3&#x65E5;&#x9054;&#x6210;&#x5EA6; (&#x9AD8;)</option>
+                    <option value="r7">&#x1F4C5; 7&#x65E5;&#x9054;&#x6210;&#x5EA6; (&#x9AD8;)</option>
+                    <option value="r30">&#x1FA99; 30&#x65E5;&#x9054;&#x6210;&#x5EA6; (&#x9AD8;)</option>
+                    <option value="r90">&#x1F3C6; 90&#x65E5;&#x9054;&#x6210;&#x5EA6; (&#x9AD8;)</option>
+                    <option value="status">&#x1F31F; &#x72B6;&#x614B;&#x8A55;&#x4FA1; (&#x7D76;&#x597D;&#x8ABF;&#xFF5E;)</option>
+                    <option value="name">&#x540D;&#x524D;&#x9806; (50&#x97F3;)</option>
                   </select>
                 </div>
                 <button type="button" class="btn-toggle-visual-mode" onclick="toggleAnalyticsVisualMode()" title="表示切替: 棒グラフ ⇄ ニコちゃんマーク (キーボード: V または S)">

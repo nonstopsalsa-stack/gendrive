@@ -1,4 +1,4 @@
-// =========================================================================
+﻿// =========================================================================
 // 1. Render All View (Today Screen with Robust Flat Mode & Section Groups)
 // =========================================================================
 
@@ -138,7 +138,7 @@ function renderAllView() {
     });
 
     // 2. Collect ALL Habits (Active only on Today)
-    const flatHabits = isToday ? getFilteredHabits('all') : [];
+    const flatHabits = isToday ? getFilteredHabits('all').sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) : [];
 
     let flatContentHtml = `
       ${toolbarHtml}
@@ -192,7 +192,7 @@ function renderAllView() {
       return true;
     });
 
-    const secHabits = isToday ? getFilteredHabits('all').filter(h => isHabitInDailySection(h, s.name)) : [];
+    const secHabits = isToday ? getFilteredHabits('all').filter(h => isHabitInDailySection(h, s.name)).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) : [];
 
     if (state.filters.status !== 'all' && secTasks.length === 0 && secHabits.length === 0) {
       continue;

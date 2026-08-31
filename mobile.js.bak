@@ -1,4 +1,4 @@
-// =========================================================================
+﻿// =========================================================================
 // 0. Multi-Count Recurrence Engine (Tasks & Habits)
 // =========================================================================
 
@@ -1192,115 +1192,53 @@ function renderStickyActiveBar() {
   const bar = document.getElementById('sticky-active-bar');
   if (!bar) return;
 
-  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
+  const activeTask = mState.tasks.find(t => t.id === mState.activeTaskId && t.status === 'in_progress');
+  const activeHabit = mState.habits.find(h => String(h.id) === String(mState.activeHabitId) && h.status === 'in_progress');
 
-  // Check active habit or task (either in_progress or paused)
-  const activeHabit = mState.activeHabitId
-    ? mState.habits.find(h => String(h.id) === String(mState.activeHabitId) && (h.status === 'in_progress' || h.status === 'paused'))
-    : null;
-
-  const activeTask = mState.activeTaskId
-    ? mState.tasks.find(t => String(t.id) === String(mState.activeTaskId) && (t.status === 'in_progress' || t.status === 'paused'))
-    : null;
-
-  if (!activeHabit && !activeTask) {
+  if (!activeTask && !activeHabit) {
     bar.classList.add('hidden');
-    bar.innerHTML = '';
     return;
   }
 
   bar.classList.remove('hidden');
+  const titleEl = document.getElementById('active-bar-title');
+  const pauseBtn = bar.querySelector('.btn-touch-pause');
+  const completeBtn = bar.querySelector('.btn-touch-success');
+  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
 
-  if (activeHabit) {
-    const isInProgress = activeHabit.status === 'in_progress';
-    const isPaused = activeHabit.status === 'paused';
-    const curCount = getItemDayCount(activeHabit, targetDateKey);
-    const targetTimes = getItemTargetTimes(activeHabit);
-    const isMulti = targetTimes > 1;
-
-    const elapsedSec = (activeHabit.accumulatedSeconds || (activeHabit.actMin ? activeHabit.actMin * 60 : 0)) +
-      (isInProgress && activeHabit.startTimestamp ? Math.max(0, Math.floor((Date.now() - activeHabit.startTimestamp) / 1000)) : 0);
-    const timeFormatted = formatTime(elapsedSec);
-
-    const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
-    const timerBadgeHtml = `<span class="m-slim-timer-badge ${isPaused ? 'paused' : ''}" id="active-bar-timer">${timeFormatted}</span>`;
-
-    const statusLineHtml = isInProgress
-      ? `<span class="top-status-line running"><span class="active-bar-pulse"></span>RUNNING</span>`
-      : `<span class="top-status-line paused">\u23F8 PAUSED</span>`;
-
-    const actionBtnHtml = isInProgress
-      ? `<button class="btn-slim btn-slim-warning" onclick="pauseHabit('${activeHabit.id}')">\u23F8 \u4E2D\u65AD</button>
-         <button class="btn-slim btn-slim-success" onclick="completeHabit('${activeHabit.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
-      : `<button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${activeHabit.id}')">\u25B6 \u518D\u958B</button>
-         <button class="btn-slim btn-slim-success" onclick="completeHabit('${activeHabit.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`;
-
-    bar.innerHTML = `
-      <div class="top-sticky-card ${isInProgress ? 'in-progress' : 'paused'}" id="top-h-card-${activeHabit.id}">
-        <div class="top-card-left" onclick="${isInProgress ? `completeHabit('${activeHabit.id}')` : `startHabit('${activeHabit.id}')`}" style="cursor:pointer;">
-          <span class="m-slim-icon" style="font-size: 16px;">${isInProgress ? '\u26A1' : '\u23F8\uFE0F'}</span>
-          <div class="top-card-meta">
-            ${statusLineHtml}
-            <span class="top-card-title">${activeHabit.name}</span>
-          </div>
-          ${countBadgeHtml}
-          ${timerBadgeHtml}
-        </div>
-        <div class="top-card-actions">
-          ${actionBtnHtml}
-        </div>
-      </div>
-    `;
-  } else if (activeTask) {
-    const isInProgress = activeTask.status === 'in_progress';
-    const isPaused = activeTask.status === 'paused';
+  if (activeTask) {
     const curCount = getItemDayCount(activeTask, targetDateKey);
     const targetTimes = getItemTargetTimes(activeTask);
     const isMulti = targetTimes > 1;
 
-    const elapsedSec = (activeTask.accumulatedSeconds || (activeTask.actMin ? activeTask.actMin * 60 : 0)) +
-      (isInProgress && activeTask.startTimestamp ? Math.max(0, Math.floor((Date.now() - activeTask.startTimestamp) / 1000)) : 0);
-    const timeFormatted = formatTime(elapsedSec);
+    if (titleEl) titleEl.textContent = isMulti ? `🎯 ${activeTask.title} (${curCount + 1}/${targetTimes}回目)` : `🎯 ${activeTask.title}`;
+    if (pauseBtn) pauseBtn.setAttribute('onclick', `pauseTask('${activeTask.id}')`);
+    if (completeBtn) {
+      completeBtn.textContent = isMulti ? `✔ ${curCount + 1}/${targetTimes}回目完了` : '✔ 完了';
+      completeBtn.setAttribute('onclick', `completeTask('${activeTask.id}')`);
+    }
+    updateActiveTimerDisplay(activeTask);
+  } else if (activeHabit) {
+    const curCount = getItemDayCount(activeHabit, targetDateKey);
+    const targetTimes = getItemTargetTimes(activeHabit);
+    const isMulti = targetTimes > 1;
 
-    const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
-    const timerBadgeHtml = `<span class="m-slim-timer-badge ${isPaused ? 'paused' : ''}" id="active-bar-timer">${timeFormatted}</span>`;
-
-    const statusLineHtml = isInProgress
-      ? `<span class="top-status-line running"><span class="active-bar-pulse"></span>RUNNING</span>`
-      : `<span class="top-status-line paused">\u23F8 PAUSED</span>`;
-
-    const actionBtnHtml = isInProgress
-      ? `<button class="btn-slim btn-slim-warning" onclick="pauseTask('${activeTask.id}')">\u23F8 \u4E2D\u65AD</button>
-         <button class="btn-slim btn-slim-success" onclick="completeTask('${activeTask.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
-      : `<button class="btn-slim btn-slim-pause-resume" onclick="startTask('${activeTask.id}')">\u25B6 \u518D\u958B</button>
-         <button class="btn-slim btn-slim-success" onclick="completeTask('${activeTask.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`;
-
-    bar.innerHTML = `
-      <div class="top-sticky-card ${isInProgress ? 'in-progress' : 'paused'}" id="top-t-card-${activeTask.id}">
-        <div class="top-card-left" onclick="${isInProgress ? `completeTask('${activeTask.id}')` : `startTask('${activeTask.id}')`}" style="cursor:pointer;">
-          <span class="m-slim-icon" style="font-size: 16px;">${isInProgress ? '\u26A1' : '\u23F8\uFE0F'}</span>
-          <div class="top-card-meta">
-            ${statusLineHtml}
-            <span class="top-card-title">${activeTask.title}</span>
-          </div>
-          ${countBadgeHtml}
-          ${timerBadgeHtml}
-        </div>
-        <div class="top-card-actions">
-          ${actionBtnHtml}
-        </div>
-      </div>
-    `;
+    if (titleEl) titleEl.textContent = isMulti ? `🌿 ${activeHabit.name} (${curCount + 1}/${targetTimes}回目)` : `🌿 ${activeHabit.name}`;
+    if (pauseBtn) pauseBtn.setAttribute('onclick', `pauseHabit('${activeHabit.id}')`);
+    if (completeBtn) {
+      completeBtn.textContent = isMulti ? `✔ ${curCount + 1}/${targetTimes}回目完了` : '✔ 完了';
+      completeBtn.setAttribute('onclick', `completeHabit('${activeHabit.id}')`);
+    }
+    updateActiveTimerDisplay(activeHabit);
   }
 }
 
 function updateActiveTimerDisplay(item) {
   const timerEl = document.getElementById('active-bar-timer');
   const badgeEl = document.getElementById(`timer-badge-${item.id}`);
-  if (!item) return;
-  const isInProgress = item.status === 'in_progress';
-  const elapsedSec = (item.accumulatedSeconds || (item.actMin ? item.actMin * 60 : 0)) +
-    (isInProgress && item.startTimestamp ? Math.max(0, Math.floor((Date.now() - item.startTimestamp) / 1000)) : 0);
+  if (!item || !item.startTimestamp) return;
+
+  const elapsedSec = (item.accumulatedSeconds || (item.actMin ? item.actMin * 60 : 0)) + Math.floor((Date.now() - item.startTimestamp) / 1000);
   const timeFormatted = formatTime(elapsedSec);
   if (timerEl) timerEl.textContent = timeFormatted;
   if (badgeEl) badgeEl.textContent = timeFormatted;
@@ -1308,17 +1246,16 @@ function updateActiveTimerDisplay(item) {
 
 function renderList() {
   const container = document.getElementById('m-cards-list');
-  const indicatorSlot = document.getElementById('sticky-indicator-slot');
   if (!container) return;
 
   const targetDateKey = getTodayDateString(mState.selectedDateOffset);
   const currentSecId = detectCurrentSectionId();
   const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
 
-  const isToday = mState.selectedDateOffset === 0;
+    const isToday = mState.selectedDateOffset === 0;
   const isPast = mState.selectedDateOffset < 0;
 
-  // 1. Get Today's Uncompleted Tasks (strictly checks multi-count progress)
+    // 1. Get Today's Uncompleted Tasks (strictly checks multi-count progress)
   const todayTasks = mState.tasks.filter(t => {
     if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'skipped') return false;
     const targetTimes = getItemTargetTimes(t);
@@ -1333,120 +1270,106 @@ function renderList() {
   });
 
   // 2. Get Today's Uncompleted Habits (strictly checks multi-count progress)
-  const targetDateObj = new Date();
-  targetDateObj.setDate(targetDateObj.getDate() - mState.selectedDateOffset);
-  const todayHabits = getMobileTodayHabits(targetDateObj, targetDateKey);
+  const targetDateObj = new Date(); targetDateObj.setDate(targetDateObj.getDate() - mState.selectedDateOffset); const todayHabits = getMobileTodayHabits(targetDateObj, targetDateKey);
 
   const scope = mState.activeScope || 'section';
   const type = mState.activeType || 'task';
 
-  // Current top fixed ID (excluded from scrollable list)
-  const topHabitId = mState.activeHabitId ? String(mState.activeHabitId) : null;
-  const topTaskId = mState.activeTaskId ? String(mState.activeTaskId) : null;
-
   // =========================================================================
-  // 4 Explicit Rendering Modes (Scope: Section/Daily x Type: Task/Habit)
+  // 4 Explicit Rendering Modes (Scope: Section/Daily × Type: Task/Habit)
   // =========================================================================
 
   if (scope === 'section' && type === 'task') {
-    // 1. Section x Task
+    // 1. Section × Task: そのセクションの未完タスク（過去セクション未完了も自動合流）
     const secTasks = getMobileSectionTasks(todayTasks, currentSecObj);
     const headerHtml = `
       <div class="m-section-indicator">
-        <span class="m-sec-left">\u26A1 <b>${currentSecObj.name}</b> \u306E\u672A\u5B8C\u30BF\u30B9\u30AF</span>
-        <span class="m-sec-count-tag">${secTasks.length}\u4EF6</span>
+        <span class="m-sec-left">⚡ <b>${currentSecObj.name}</b> の未完了タスク</span>
+        <span class="m-sec-count-tag">${secTasks.length}件</span>
       </div>
     `;
-    if (indicatorSlot) indicatorSlot.innerHTML = headerHtml;
 
-    const displayTasks = secTasks.filter(t => String(t.id) !== topTaskId);
-
-    if (displayTasks.length === 0) {
-      container.innerHTML = secTasks.length === 0 ? `
+    if (secTasks.length === 0) {
+      container.innerHTML = `
+        ${headerHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">\uD83C\uDF89</span>
-          <b style="color: var(--text-muted); font-size: 14px;">\u73FE\u30BB\u30AF\u30B7\u30E7\u30F3(${currentSecObj.name})\u306E\u672A\u5B8C\u30BF\u30B9\u30AF\u306F\u3042\u308A\u307E\u305B\u3093</b>
-          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">\u3053\u306E\u30BB\u30AF\u30B7\u30E7\u30F3\u306E\u30BF\u30B9\u30AF\u306F\u5168\u3066\u5B8C\u4E86\u3067\u3059\uFF01</p>
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">✨</span>
+          <b style="color: var(--text-muted); font-size: 14px;">現在セクション（${currentSecObj.name}）の未完了タスクはありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">このセクションのタスクは全完了です！</p>
         </div>
-      ` : '';
+      `;
       return;
     }
-    container.innerHTML = displayTasks.map(t => renderSlimTaskCard(t)).join('');
+    container.innerHTML = headerHtml + secTasks.map(t => renderSlimTaskCard(t)).join('');
 
   } else if (scope === 'section' && type === 'habit') {
-    // 2. Section x Habit
+        // 2. Section × Habit: そのセクションの未完ハビット（いつでもハビット＆過去セクション未完了も自動合流）
     const secHabits = getMobileSectionHabits(todayHabits, currentSecObj);
     const headerHtml = `
       <div class="m-section-indicator habit-indicator">
-        <span class="m-sec-left">\uD83C\uDF3F <b>${currentSecObj.name}</b> \u306E\u672A\u5B8C\u30CF\u30D3\u30C3\u30C8</span>
-        <span class="m-sec-count-tag">${secHabits.length}\u4EF6</span>
+        <span class="m-sec-left">🌿 <b>${currentSecObj.name}</b> の未完了ハビット</span>
+        <span class="m-sec-count-tag">${secHabits.length}件</span>
       </div>
     `;
-    if (indicatorSlot) indicatorSlot.innerHTML = headerHtml;
 
-    const displayHabits = secHabits.filter(h => String(h.id) !== topHabitId);
-
-    if (displayHabits.length === 0) {
-      container.innerHTML = secHabits.length === 0 ? `
+    if (secHabits.length === 0) {
+      container.innerHTML = `
+        ${headerHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">\uD83C\uDF3F</span>
-          <b style="color: var(--text-muted); font-size: 14px;">\u73FE\u30BB\u30AF\u30B7\u30E7\u30F3(${currentSecObj.name})\u306E\u7FD2\u6163\u306F\u3042\u308A\u307E\u305B\u3093</b>
-          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">\u3053\u306E\u30BB\u30AF\u30B7\u30E7\u30F3\u306E\u7FD2\u6163\u306F\u3059\u3079\u3066\u9054\u6210\u6E08\u307F\u3067\u3059\uFF01</p>
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">🌱</span>
+          <b style="color: var(--text-muted); font-size: 14px;">現在セクション（${currentSecObj.name}）の習慣はありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">このセクションの習慣はすべて達成済みです！</p>
         </div>
-      ` : '';
+      `;
       return;
     }
-    container.innerHTML = displayHabits.map(h => renderSlimHabitCard(h)).join('');
+    container.innerHTML = headerHtml + secHabits.map(h => renderSlimHabitCard(h)).join('');
 
   } else if (scope === 'daily' && type === 'task') {
-    // 3. Daily x Task
+    // 3. Daily × Task: 今日一日の全未完タスク
     const sortedTasks = secSortedTasks(todayTasks);
     const headerHtml = `
       <div class="m-section-indicator task-indicator">
-        <span class="m-sec-left">\u26A1 <b>\u672C\u65E5\u306E\u5168\u672A\u5B8C\u4E86\u30BF\u30B9\u30AF</b> (\u5168\u30BB\u30AF\u30B7\u30E7\u30F3)</span>
-        <span class="m-sec-count-tag">${sortedTasks.length}\u4EF6</span>
+        <span class="m-sec-left">🎯 <b>本日の全未完了タスク</b> (全セクション)</span>
+        <span class="m-sec-count-tag">${sortedTasks.length}件</span>
       </div>
     `;
-    if (indicatorSlot) indicatorSlot.innerHTML = headerHtml;
 
-    const displayTasks = sortedTasks.filter(t => String(t.id) !== topTaskId);
-
-    if (displayTasks.length === 0) {
-      container.innerHTML = sortedTasks.length === 0 ? `
+    if (sortedTasks.length === 0) {
+      container.innerHTML = `
+        ${headerHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">\uD83C\uDF1F</span>
-          <b style="color: var(--text-muted); font-size: 14px;">\u672C\u65E5\u306E\u30BF\u30B9\u30AF\u306F\u3059\u3079\u3066\u5B8C\u4E86\u3057\u307E\u3057\u305F\uFF01</b>
-          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">\u7D20\u6674\u3089\u3057\u3044\u4E00\u65E5\u3067\u3059\u2728</p>
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">🎉</span>
+          <b style="color: var(--text-muted); font-size: 14px;">本日のタスクはすべて完了しました！</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">素晴らしい一日です⚡</p>
         </div>
-      ` : '';
+      `;
       return;
     }
-    container.innerHTML = displayTasks.map(t => renderSlimTaskCard(t)).join('');
+    container.innerHTML = headerHtml + sortedTasks.map(t => renderSlimTaskCard(t)).join('');
 
   } else if (scope === 'daily' && type === 'habit') {
-    // 4. Daily x Habit
+    // 4. Daily × Habit: 今日一日の全未完ハビット
     const sortedHabits = secSortedHabits(todayHabits);
     const headerHtml = `
       <div class="m-section-indicator habit-indicator">
-        <span class="m-sec-left">\uD83C\uDF3F <b>\u672C\u65E5\u306E\u5168\u672A\u5B8C\u4E86\u30CF\u30D3\u30C3\u30C8</b> (\u5168\u30BB\u30AF\u30B7\u30E7\u30F3)</span>
-        <span class="m-sec-count-tag">${sortedHabits.length}\u4EF6</span>
+        <span class="m-sec-left">🌿 <b>本日の全未完了ハビット</b> (全セクション)</span>
+        <span class="m-sec-count-tag">${sortedHabits.length}件</span>
       </div>
     `;
-    if (indicatorSlot) indicatorSlot.innerHTML = headerHtml;
 
-    const displayHabits = sortedHabits.filter(h => String(h.id) !== topHabitId);
-
-    if (displayHabits.length === 0) {
-      container.innerHTML = sortedHabits.length === 0 ? `
+    if (sortedHabits.length === 0) {
+      container.innerHTML = `
+        ${headerHtml}
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">\uD83C\uDF3F</span>
-          <b style="color: var(--text-muted); font-size: 14px;">\u4ECA\u65E5\u306E\u30CF\u30D3\u30C3\u30C8\u306F\u3042\u308A\u307E\u305B\u3093</b>
-          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">\u4ECA\u65E5\u306E\u7FD2\u6163\u306F\u3059\u3079\u3066\u9054\u6210\u6E08\u307F\u3067\u3059\uFF01</p>
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">🌿</span>
+          <b style="color: var(--text-muted); font-size: 14px;">未完了のハビットはありません</b>
+          <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">今日の習慣はすべて達成済みです！</p>
         </div>
-      ` : '';
+      `;
       return;
     }
-    container.innerHTML = displayHabits.map(h => renderSlimHabitCard(h)).join('');
+    container.innerHTML = headerHtml + sortedHabits.map(h => renderSlimHabitCard(h)).join('');
   }
 }
 
@@ -1462,6 +1385,7 @@ function secSortedHabits(habits) {
   });
 }
 
+
 function renderSlimHabitCard(habit) {
   const isInProgress = habit.status === 'in_progress';
   const isPaused = habit.status === 'paused';
@@ -1471,18 +1395,18 @@ function renderSlimHabitCard(habit) {
   const isMulti = targetTimes > 1;
 
   const cardCls = isInProgress ? 'in-progress' : (isPaused ? 'paused' : '');
-  const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
-  const timerBadgeHtml = isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>` : (isPaused && (habit.accumulatedSeconds || habit.actMin) ? `<span class="m-slim-timer-badge paused">${formatTime(habit.accumulatedSeconds || (habit.actMin * 60))}</span>` : '');
+  const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}回</span>` : '';
+  const timerBadgeHtml = isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>` : '';
   const actionBtnHtml = isInProgress
-    ? `<button class="btn-slim btn-slim-success" onclick="completeHabit('${habit.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
+    ? `<button class="btn-slim btn-slim-success" onclick="completeHabit('${habit.id}')">✔ ${isMulti ? (curCount + 1) + '回目完了' : '完了'}</button>`
     : (isPaused
-      ? `<button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${habit.id}')">\u25B6 \u518D\u958B</button>`
-      : `<button class="btn-slim btn-slim-primary" onclick="startHabit('${habit.id}')">\u25B6 \u958B\u59CB</button>`);
+      ? `<button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${habit.id}')">▶ 再開</button>`
+      : `<button class="btn-slim btn-slim-primary" onclick="startHabit('${habit.id}')">▶ 開始</button>`);
 
   return `
     <div class="m-card-slim ${cardCls}" id="h-card-${habit.id}">
       <div class="m-card-left" onclick="${isInProgress ? `completeHabit('${habit.id}')` : `startHabit('${habit.id}')`}" style="cursor:pointer;">
-        <span class="m-slim-icon">${isInProgress ? '\u26A1' : (isPaused ? '\u23F8\uFE0F' : '\uD83C\uDF3F')}</span>
+        <span class="m-slim-icon">${isInProgress ? '⚡' : (isPaused ? '⏸' : '🌿')}</span>
         <span class="m-slim-title">${habit.name}</span>
         ${countBadgeHtml}
         ${timerBadgeHtml}
@@ -1501,21 +1425,21 @@ function renderSlimTaskCard(task) {
   const curCount = getItemDayCount(task, targetDateKey);
   const targetTimes = getItemTargetTimes(task);
   const isMulti = targetTimes > 1;
-  const carryBadge = task._carriedOverFrom ? `<span style="font-size: 10px; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); padding: 1px 5px; border-radius: 4px; margin-left: 6px; font-weight: normal;">\u21AA ${task._carriedOverFrom}</span>` : '';
+  const carryBadge = task._carriedOverFrom ? `<span style="font-size: 10px; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); padding: 1px 5px; border-radius: 4px; margin-left: 6px; font-weight: normal;">↩ ${task._carriedOverFrom}</span>` : '';
 
   const cardCls = isInProgress ? 'in-progress' : (isPaused ? 'paused' : '');
-  const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
-  const timerBadgeHtml = isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : (isPaused && (task.accumulatedSeconds || task.actMin) ? `<span class="m-slim-timer-badge paused">${formatTime(task.accumulatedSeconds || (task.actMin * 60))}</span>` : '');
+  const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}回</span>` : '';
+  const timerBadgeHtml = isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : '';
   const actionBtnHtml = isInProgress
-    ? `<button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
+    ? `<button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">✔ ${isMulti ? (curCount + 1) + '回目完了' : '完了'}</button>`
     : (isPaused
-      ? `<button class="btn-slim btn-slim-pause-resume" onclick="startTask('${task.id}')">\u25B6 \u518D\u958B</button>`
-      : `<button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">\u25B6 \u958B\u59CB</button>`);
+      ? `<button class="btn-slim btn-slim-pause-resume" onclick="startTask('${task.id}')">▶ 再開</button>`
+      : `<button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">▶ 開始</button>`);
 
   return `
     <div class="m-card-slim ${cardCls}" id="t-card-${task.id}">
       <div class="m-card-left" onclick="${isInProgress ? `completeTask('${task.id}')` : `startTask('${task.id}')`}" style="cursor:pointer;">
-        <span class="m-slim-icon">${isInProgress ? '\u26A1' : (isPaused ? '\u23F8\uFE0F' : '\uD83D\uDCDD')}</span>
+        <span class="m-slim-icon">${isInProgress ? '⚡' : (isPaused ? '⏸' : '🎯')}</span>
         <span class="m-slim-title">${task.title}${carryBadge}</span>
         ${countBadgeHtml}
         ${timerBadgeHtml}
@@ -1526,7 +1450,6 @@ function renderSlimTaskCard(task) {
     </div>
   `;
 }
-
 function calculateHabitStreak(h) {
   if (!h || !h.history) return 0;
   let streak = 0;
