@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Habit Flow - Core Logic & Keyboard Engine
  * Fully customized for 哲生 (AI Company OS & Personal OS Engine)
  * Enhanced with 3-Way Timing Selector (Anytime / Section / Custom Range)

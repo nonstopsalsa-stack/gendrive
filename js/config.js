@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.2.5';
-const APP_VERSION_NAME = 'Embedded Cloud Sync & Zero-Config Mobile Connection';
+const APP_VERSION = 'v1.4.0';
+const APP_VERSION_NAME = 'Vision 2x2 Panorama & Preset Drag-and-Drop Engine';
 
 const SECTIONS_CONFIG = [
   { id: 'sec_1', name: '第1セッション', start: 3, end: 6, label: '🌅 第1セッション (03:00 - 06:00)', desc: '起床・静寂の自己投資・思考整理', startStr: '03:00', endStr: '06:00' },
