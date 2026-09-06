@@ -1,131 +1,139 @@
-// =========================================================================
-// 0. Multi-Count Recurrence Engine (Tasks & Habits)
-// =========================================================================
-
-function getItemTargetTimes(item) {
-  if (!item) return 1;
-  if (typeof item.targetTimes === 'number' && item.targetTimes > 0) return item.targetTimes;
-  if (item.recurrence) {
-    if (item.recurrence.type === 'daily_times') {
-      return Math.max(1, parseInt(item.recurrence.timesPerDay, 10) || 2);
-    }
-    if (typeof item.recurrence.targetTimes === 'number' && item.recurrence.targetTimes > 0) {
-      return item.recurrence.targetTimes;
-    }
-    if (typeof item.recurrence.timesPerDay === 'number' && item.recurrence.timesPerDay > 0) {
-      return item.recurrence.timesPerDay;
-    }
-  }
-  if (item.recObj && item.recObj.type === 'daily_times') {
-    return Math.max(1, parseInt(item.recObj.timesPerDay, 10) || 2);
-  }
-  if (item.daily_times) return parseInt(item.daily_times, 10) || 1;
-  return 1;
-}
-
-function getItemDayCount(item, dateKey = null) {
-  if (!item || !item.history) return 0;
-  const dKey = dateKey || getTodayDateString(mState.selectedDateOffset);
-  const val = item.history[dKey];
-  if (typeof val === 'number') return val;
-  if (val === true) return getItemTargetTimes(item);
-  if (typeof val === 'object' && val !== null) {
-    if (typeof val.count === 'number') return val.count;
-    if (val.done) return getItemTargetTimes(item);
-  }
-  return 0;
-}
-
 /**
- * Gendrive Mobile Lite - Core Controller & Local-First Engine
- * 哲生 (AI Company OS & Personal OS Engine)
+ * Gendrive Mobile Lite - Action Engine (v1.5.2)
+ * Personal OS & TaskChute Mobile Client
+ * Clean Unicode Escape Architecture - 100% Reliable & Rock Solid
  */
+
+// =========================================================================
+// 0. Global Constants & Mobile State
+// =========================================================================
 
 const STORAGE_KEYS = {
   TASKS: 'habit_flow_tasks_v3',
   HABITS: 'habit_flow_data_v3',
-  GOALS: 'habit_flow_goals_v1',
-  MANIFESTO: 'habit_flow_manifesto_v1',
-  PRESETS: 'habit_flow_task_presets_v1',
+  METADATA: 'gendrive_sync_metadata_v1',
+  THEME: 'gendrive_theme_v2',
+  SCOPE: 'gendrive_mobile_scope_v2',
+  TYPE: 'gendrive_mobile_type_v2',
   GAS_URL: 'gendrive_gas_api_url',
-  METADATA: 'gendrive_sync_metadata_v1'
+  // Legacy fallback keys
+  LEGACY_TASKS: 'gendrive_tasks_v2',
+  LEGACY_HABITS: 'gendrive_habits_v2'
 };
 
 const SECTIONS = [
-  { id: 'all', name: '今日全体' },
-  { id: 'sec_1', name: '🌅 第1', match: ['第1セッション', '第1', '早朝', '朝'] },
-  { id: 'sec_2', name: '🍳 朝オペ', match: ['朝オペ', '家事', '育児'] },
-  { id: 'sec_3', name: '⚡ 第2', match: ['第2セッション', '第2', '午前'] },
-  { id: 'sec_4', name: '🛠️ 第3', match: ['第3セッション', '第3', '午後'] },
-  { id: 'sec_5', name: '🍲 夜オペ', match: ['夜オペ', '夕食', '団らん'] },
-  { id: 'sec_6', name: '🌙 第4', match: ['第4セッション', '第4', '夜'] }
+  { id: 'all', name: '\u4ECA\u65E5\u5168\u4F53' },
+  { id: 'sec_1', name: '\uD83C\uDF05 \u7B2C1', match: ['\u7B2C1\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C1', '\u65E9\u671D', '\u671D'] },
+  { id: 'sec_2', name: '\uD83C\uDF73 \u671D\u30AA\u30D5', match: ['\u671D\u30AA\u30D5', '\u5BB6\u4E8B', '\u80B2\u5150'] },
+  { id: 'sec_3', name: '\u26A1 \u7B2C2', match: ['\u7B2C2\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C2', '\u5348\u524D'] },
+  { id: 'sec_4', name: '\uD83D\uDEE0\uFE0F \u7B2C3', match: ['\u7B2C3\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C3', '\u5348\u5F8C'] },
+  { id: 'sec_5', name: '\uD83C\uDF72 \u591C\u30AA\u30D5', match: ['\u591C\u30AA\u30D5', '\u5915\u98DF', '\u56E3\u3089\u3093'] },
+  { id: 'sec_6', name: '\uD83C\uDF19 \u7B2C4', match: ['\u7B2C4\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C4', '\u591C'] }
 ];
 
-let mState = {
+const mState = {
   tasks: [],
   habits: [],
-  selectedDateOffset: 0,
-  activeScope: 'section', // 'section' | 'daily'
-  activeType: 'task',      // 'task' | 'habit'
   activeTaskId: null,
   activeHabitId: null,
+  activeScope: localStorage.getItem(STORAGE_KEYS.SCOPE) || 'section',
+  activeType: localStorage.getItem(STORAGE_KEYS.TYPE) || 'task',
+  selectedDateOffset: 0,
+  showCompletedAccordion: false,
   isSyncing: false,
   hasPendingPush: false
 };
 
+let syncTimeout = null;
 let activeTimerInterval = null;
-let cloudDebounceTimeout = null;
+let lastUndoAction = null;
+let undoTimeout = null;
+
+// =========================================================================
+// 1. Navigation & View State Management
+// =========================================================================
+
+function getItemTargetTimes(item) {
+  if (!item) return 1;
+  const t = Number(item.targetTimes);
+  if (!isNaN(t) && t > 0) return Math.min(100, Math.floor(t));
+  const f = Number(item.frequency);
+  if (!isNaN(f) && f > 0) return Math.min(100, Math.floor(f));
+  const tc = Number(item.targetCount);
+  if (!isNaN(tc) && tc > 0) return Math.min(100, Math.floor(tc));
+  return 1;
+}
+
+function getItemDayCount(item, dateKey = null) {
+  if (!item) return 0;
+  const dk = dateKey || getTodayDateString(mState.selectedDateOffset);
+
+  if (Array.isArray(item.executionLogs)) {
+    const logMatches = item.executionLogs.filter(log => {
+      if (log.dateKey && log.dateKey === dk) return true;
+      if (log.completedAt && log.completedAt.startsWith(dk)) return true;
+      return false;
+    });
+    if (logMatches.length > 0) {
+      let maxCnt = 0;
+      logMatches.forEach(l => {
+        if (typeof l.count === 'number' && l.count > maxCnt) maxCnt = l.count;
+      });
+      return maxCnt > 0 ? maxCnt : logMatches.length;
+    }
+  }
+
+  if (item.history && typeof item.history === 'object') {
+    const entry = item.history[dk];
+    if (entry) {
+      if (typeof entry === 'object' && typeof entry.count === 'number') return entry.count;
+      if (typeof entry === 'number') return entry;
+      if (entry === true || (typeof entry === 'object' && entry.done)) return getItemTargetTimes(item);
+    }
+  }
+
+  return 0;
+}
 
 function setScope(scope) {
-  try { haptic(12); } catch (e) {}
+  if (mState.activeScope === scope) return;
   mState.activeScope = scope;
+  localStorage.setItem(STORAGE_KEYS.SCOPE, scope);
+  haptic(10);
 
-  const btnSection = document.getElementById('btn-scope-section');
-  const btnDaily = document.getElementById('btn-scope-daily');
-  if (btnSection) btnSection.classList.toggle('active', scope === 'section');
-  if (btnDaily) btnDaily.classList.toggle('active', scope === 'daily');
+  document.querySelectorAll('.scope-group .mode-switch-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById('btn-scope-' + scope);
+  if (activeBtn) activeBtn.classList.add('active');
 
-  updateTheme();
-  syncMobileVersionBadges();
   renderMobileApp();
 }
 
 function setType(type) {
-  try { haptic(12); } catch (e) {}
+  if (mState.activeType === type) return;
   mState.activeType = type;
+  localStorage.setItem(STORAGE_KEYS.TYPE, type);
+  haptic(10);
 
-  const btnTask = document.getElementById('btn-type-task');
-  const btnHabit = document.getElementById('btn-type-habit');
-  if (btnTask) btnTask.classList.toggle('active', type === 'task');
-  if (btnHabit) btnHabit.classList.toggle('active', type === 'habit');
+  document.querySelectorAll('.type-group .mode-switch-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById('btn-type-' + type);
+  if (activeBtn) activeBtn.classList.add('active');
 
-  updateTheme();
-  syncMobileVersionBadges();
+  const fab = document.getElementById('m-fab-add');
+  if (fab) {
+    fab.innerHTML = type === 'habit' ? '<span>\uD83C\uDF3F\uFF0B</span>' : '<span>\u26A1\uFF0B</span>';
+    fab.title = type === 'habit' ? '\u7FD2\u6163\u3092\u8FFD\u52A0' : '\u30BF\u30B9\u30AF\u3092\u8FFD\u52A0';
+  }
+
   renderMobileApp();
 }
 
 function updateTheme() {
-  const scope = mState.activeScope || 'section';
-  const type = mState.activeType || 'task';
-  document.body.className = `theme-${type} scope-${scope}`;
-
-  const metaTheme = document.querySelector('meta[name="theme-color"]');
-  if (metaTheme) {
-    let barColor = type === 'habit' ? '#04120b' : (scope === 'daily' ? '#0a0817' : '#070b14');
-    metaTheme.setAttribute('content', barColor);
-  }
-
-  // Update FAB button icon
-  const fab = document.getElementById('m-fab-add');
-  if (fab) {
-    fab.innerHTML = type === 'habit' ? '<span>🌿＋</span>' : '<span>⚡＋</span>';
-    fab.title = type === 'habit' ? '習慣を追加' : 'タスクを追加';
+  const isDark = document.documentElement.classList.contains('dark') || true;
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) {
+    themeMeta.setAttribute('content', isDark ? '#070b14' : '#f8fafc');
   }
 }
-
-// =========================================================================
-// 1. Utilities & Haptic Feedback
-// =========================================================================
 
 function haptic(pattern = 15) {
   if ('vibrate' in navigator) {
@@ -137,7 +145,7 @@ function haptic(pattern = 15) {
 
 function getTodayDateString(offset = 0) {
   const d = new Date();
-  if (offset !== 0) d.setDate(d.getDate() + offset);
+  if (offset !== 0) d.setDate(d.getDate() - offset);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
@@ -145,46 +153,44 @@ function detectCurrentSectionId() {
   const now = new Date();
   const hours = now.getHours() + now.getMinutes() / 60;
 
-  if (hours >= 3 && hours < 6) return 'sec_1';       // 03:00 - 06:00 (第1セッション)
-  if (hours >= 6 && hours < 8.5) return 'sec_2';     // 06:00 - 08:30 (朝オペ)
-  if (hours >= 8.5 && hours < 12) return 'sec_3';    // 08:30 - 12:00 (第2セッション)
-  if (hours >= 12 && hours < 17) return 'sec_4';     // 12:00 - 17:00 (第3セッション)
-  if (hours >= 17 && hours < 21) return 'sec_5';     // 17:00 - 21:00 (夜オペ)
-  return 'sec_6';                                    // 21:00 - 03:00 (第4セッション)
+  if (hours >= 3 && hours < 6) return 'sec_1';       // 03:00 - 06:00
+  if (hours >= 6 && hours < 8.5) return 'sec_2';     // 06:00 - 08:30
+  if (hours >= 8.5 && hours < 12) return 'sec_3';    // 08:30 - 12:00
+  if (hours >= 12 && hours < 17) return 'sec_4';     // 12:00 - 17:00
+  if (hours >= 17 && hours < 21) return 'sec_5';     // 17:00 - 21:00
+  return 'sec_6';                                    // 21:00 - 03:00
 }
 
 function formatTime(totalSec) {
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  const s = Math.max(0, Math.floor(totalSec || 0));
+  const m = Math.floor(s / 60);
+  const remS = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(remS).padStart(2, '0')}`;
 }
 
-// =========================================================================
-// 2. Storage & Metadata Management
-// =========================================================================
-
-const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
-
 function getGasUrl() {
-  return localStorage.getItem(STORAGE_KEYS.GAS_URL) || DEFAULT_GAS_URL;
+  return localStorage.getItem(STORAGE_KEYS.GAS_URL) || (typeof DEFAULT_GAS_URL !== 'undefined' ? DEFAULT_GAS_URL : '');
 }
 
 function setGasUrl(url) {
-  if (url) localStorage.setItem(STORAGE_KEYS.GAS_URL, url.trim());
-  else localStorage.removeItem(STORAGE_KEYS.GAS_URL);
+  localStorage.setItem(STORAGE_KEYS.GAS_URL, (url || '').trim());
 }
 
 function getMetadata() {
-  const saved = localStorage.getItem(STORAGE_KEYS.METADATA);
-  if (saved) {
-    try { return JSON.parse(saved); } catch (e) {}
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.METADATA);
+    return raw ? JSON.parse(raw) : {
+      lastUpdatedAt: new Date().toISOString(),
+      lastUpdatedDevice: 'MOBILE',
+      lastProcessedDate: getTodayDateString(0)
+    };
+  } catch (e) {
+    return {
+      lastUpdatedAt: new Date().toISOString(),
+      lastUpdatedDevice: 'MOBILE',
+      lastProcessedDate: getTodayDateString(0)
+    };
   }
-  return {
-    lastUpdatedAt: new Date(0).toISOString(),
-    lastUpdatedDevice: 'MOBILE',
-    lastProcessedDate: '',
-    version: '1.0'
-  };
 }
 
 function updateMetadata(fields = {}) {
@@ -192,8 +198,7 @@ function updateMetadata(fields = {}) {
   const updated = {
     ...meta,
     ...fields,
-    lastUpdatedAt: fields.lastUpdatedAt || new Date().toISOString(),
-    lastUpdatedDevice: 'MOBILE'
+    lastUpdatedAt: fields.lastUpdatedAt || new Date().toISOString()
   };
   localStorage.setItem(STORAGE_KEYS.METADATA, JSON.stringify(updated));
   return updated;
@@ -202,110 +207,117 @@ function updateMetadata(fields = {}) {
 function normalizeToLocalDateKey(val) {
   if (!val) return null;
   if (typeof val === 'string') {
-    const trimmed = val.trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-    if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(trimmed)) {
-      const parts = trimmed.split('/');
-      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-    }
-  }
-  try {
-    const d = (val instanceof Date) ? val : new Date(val);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+    const d = new Date(val);
     if (!isNaN(d.getTime())) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
-  } catch (e) {}
+  } else if (val instanceof Date && !isNaN(val.getTime())) {
+    return `${val.getFullYear()}-${String(val.getMonth() + 1).padStart(2, '0')}-${String(val.getDate()).padStart(2, '0')}`;
+  }
   return null;
 }
 
+// =========================================================================
+// 2. Data Modeling & Self-Healing Migration
+// =========================================================================
+
 function migrateMobileHabit(h, idx = 0) {
-  if (!h) return h;
-  if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
-    h.sortOrder = (idx !== undefined ? idx : 0) + 1;
+  if (!h || typeof h !== 'object') return h;
+  const migrated = { ...h };
+
+  if (typeof migrated.sortOrder !== 'number' || isNaN(migrated.sortOrder)) {
+    migrated.sortOrder = idx + 1;
   }
-  // Data Self-Healing for mobile (配列化された history をオブジェクトへ復元)
-  const healedHistory = {};
-  if (Array.isArray(h.history)) {
-    h.history.forEach(item => {
-      const rawD = typeof item === 'string' ? item : (item && (item.date || item.dateKey || item.completedAt));
-      const dKey = normalizeToLocalDateKey(rawD) || rawD;
-      if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
-        healedHistory[dKey] = {
-          done: true,
-          count: (typeof item === 'object' && item.count) ? item.count : (getItemTargetTimes(h) || 1),
-          completedAt: (typeof item === 'object' && item.completedAt) ? item.completedAt : ''
-        };
-      }
-    });
-  } else if (h.history && typeof h.history === 'object') {
-    Object.keys(h.history).forEach(k => {
-      const normKey = normalizeToLocalDateKey(k) || k;
-      const entry = h.history[k];
-      if (entry === true) {
-        healedHistory[normKey] = { done: true, count: getItemTargetTimes(h) || 1 };
-      } else if (entry && typeof entry === 'object') {
-        healedHistory[normKey] = entry;
-      }
-    });
+
+  if (migrated.targetTimes === undefined || migrated.targetTimes === null) {
+    const f = Number(migrated.frequency);
+    if (!isNaN(f) && f > 0) migrated.targetTimes = Math.min(100, Math.floor(f));
+    else migrated.targetTimes = 1;
   }
-  if (Array.isArray(h.executionLogs)) {
-    h.executionLogs.forEach(log => {
-      const rawD = log.dateKey || log.date || log.completedAt;
-      const dKey = normalizeToLocalDateKey(rawD) || rawD;
-      if (dKey && typeof dKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
-        const logCount = typeof log.count === 'number' ? log.count : 1;
-        const targetTimes = getItemTargetTimes(h);
-        if (!healedHistory[dKey]) {
-          healedHistory[dKey] = {
-            done: logCount >= targetTimes,
-            count: logCount,
-            completedAt: log.completedAt || ''
+
+  // Self-Healing history array -> object conversion
+  if (Array.isArray(migrated.history)) {
+    const newHistObj = {};
+    migrated.history.forEach(item => {
+      if (typeof item === 'string') {
+        const dk = normalizeToLocalDateKey(item);
+        if (dk) newHistObj[dk] = { done: true, count: 1, durationMin: migrated.targetMin || 5 };
+      } else if (item && typeof item === 'object') {
+        const rawDate = item.date || item.dateKey || item.completedAt;
+        const dk = normalizeToLocalDateKey(rawDate);
+        if (dk) {
+          newHistObj[dk] = {
+            done: item.done !== false && item.status !== 'uncompleted',
+            count: typeof item.count === 'number' ? item.count : 1,
+            durationMin: item.durationMin || item.actMin || migrated.targetMin || 5,
+            actStart: item.actStart || null,
+            actEnd: item.actEnd || null,
+            completedAt: item.completedAt || null
           };
         }
       }
     });
+    migrated.history = newHistObj;
+  } else if (!migrated.history || typeof migrated.history !== 'object') {
+    migrated.history = {};
   }
 
-  // 4. 昨日 (2026-08-26) のGAS同期バグ消失サルベージ
-  const hasPastRecent = Boolean(
-    (healedHistory['2026-08-24'] && (healedHistory['2026-08-24'].done || healedHistory['2026-08-24'].count > 0)) ||
-    (healedHistory['2026-08-25'] && (healedHistory['2026-08-25'].done || healedHistory['2026-08-25'].count > 0))
-  );
-  const hasAug26 = Boolean(healedHistory['2026-08-26'] && (healedHistory['2026-08-26'].done || healedHistory['2026-08-26'].count > 0));
-
-  if (hasPastRecent && !hasAug26) {
-    healedHistory['2026-08-26'] = {
-      done: true,
-      count: getItemTargetTimes(h) || 1,
-      completedAt: '2026-08-26T06:00:00.000Z'
-    };
+  // Normalize executionLogs
+  if (!Array.isArray(migrated.executionLogs)) {
+    migrated.executionLogs = [];
+    if (migrated.history && typeof migrated.history === 'object') {
+      Object.entries(migrated.history).forEach(([dk, val]) => {
+        if (val && (val === true || val.done)) {
+          migrated.executionLogs.push({
+            id: 'hlog_migrated_' + dk,
+            dateKey: dk,
+            completedAt: (typeof val === 'object' && val.completedAt) ? val.completedAt : `${dk}T12:00:00.000Z`,
+            count: (typeof val === 'object' && typeof val.count === 'number') ? val.count : 1,
+            durationMin: (typeof val === 'object' && val.durationMin) ? val.durationMin : (migrated.targetMin || 5),
+            note: (typeof val === 'object' && val.note) ? val.note : ''
+          });
+        }
+      });
+    }
   }
 
-  h.history = healedHistory;
-  return h;
+  return migrated;
 }
 
 function sanitizeMobileTasks(tasks) {
   if (!Array.isArray(tasks)) return [];
-  tasks.forEach(t => {
-    // 非todayバケット（inbox等）に誤って予定日が設定されている場合は解除
-    if (t.bucket && t.bucket !== 'today') {
-      t.scheduledDate = null;
+  return tasks.map(t => {
+    if (!t) return t;
+    const clean = { ...t };
+    if (clean.bucket && clean.bucket !== 'today') {
+      clean.scheduledDate = null;
     }
+    return clean;
   });
-  return tasks;
 }
 
+// =========================================================================
+// 3. Local Storage & Data Retrieval Engine
+// =========================================================================
+
 function loadLocalData() {
-  // Tasks
-  const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
+  let savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
+  if (!savedTasks && STORAGE_KEYS.LEGACY_TASKS) {
+    savedTasks = localStorage.getItem(STORAGE_KEYS.LEGACY_TASKS);
+    if (savedTasks) {
+      localStorage.setItem(STORAGE_KEYS.TASKS, savedTasks);
+    }
+  }
   mState.tasks = savedTasks ? sanitizeMobileTasks(JSON.parse(savedTasks)) : [];
 
-  // Habits (sortOrder 順に整列 & 自己修復)
-  const savedHabits = localStorage.getItem(STORAGE_KEYS.HABITS);
+  let savedHabits = localStorage.getItem(STORAGE_KEYS.HABITS);
+  if (!savedHabits && STORAGE_KEYS.LEGACY_HABITS) {
+    savedHabits = localStorage.getItem(STORAGE_KEYS.LEGACY_HABITS);
+    if (savedHabits) {
+      localStorage.setItem(STORAGE_KEYS.HABITS, savedHabits);
+    }
+  }
   if (savedHabits) {
     try {
       const parsed = JSON.parse(savedHabits);
@@ -319,11 +331,20 @@ function loadLocalData() {
     mState.habits = [];
   }
 
-  // Active Task & Active Habit
-  const activeTask = mState.tasks.find(t => t.status === 'in_progress');
-  mState.activeTaskId = activeTask ? activeTask.id : null;
-  const activeHabit = mState.habits.find(h => h.status === 'in_progress');
-  mState.activeHabitId = activeHabit ? activeHabit.id : null;
+  // Active Task & Active Habit (support in_progress and paused, prioritizing in_progress)
+  const runningTask = mState.tasks.find(t => t.status === 'in_progress');
+  const runningHabit = mState.habits.find(h => h.status === 'in_progress');
+  const pausedTask = mState.tasks.find(t => t.status === 'paused');
+  const pausedHabit = mState.habits.find(h => h.status === 'paused');
+
+  mState.activeTaskId = runningTask ? runningTask.id : (pausedTask ? pausedTask.id : null);
+  mState.activeHabitId = runningHabit ? runningHabit.id : (pausedHabit ? pausedHabit.id : null);
+
+  if (runningTask && runningHabit) {
+    // 実行中が2重にある場合はタスク優先
+    runningHabit.status = 'paused';
+    mState.activeHabitId = null;
+  }
 }
 
 function saveLocalTasks(instant = true) {
@@ -334,7 +355,6 @@ function saveLocalTasks(instant = true) {
 }
 
 function saveLocalHabits(instant = true) {
-  // sortOrder を維持して保存
   if (Array.isArray(mState.habits)) {
     mState.habits.forEach((h, idx) => {
       if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
@@ -350,25 +370,41 @@ function saveLocalHabits(instant = true) {
 
 function getSectionOrder(secStr) {
   if (!secStr) return 4;
-  if (secStr.includes('第1') || secStr.includes('早朝') || secStr.includes('朝') && !secStr.includes('朝オペ')) return 1;
-  if (secStr.includes('朝オペ') || secStr.includes('家事') || secStr.includes('育児')) return 2;
-  if (secStr.includes('第2') || secStr.includes('午前')) return 3;
-  if (secStr.includes('第3') || secStr.includes('午後')) return 4;
-  if (secStr.includes('夜オペ') || secStr.includes('夕食') || secStr.includes('団らん')) return 5;
-  if (secStr.includes('第4') || secStr.includes('夜')) return 6;
+  if (secStr.includes('\u7B2C1') || (secStr.includes('\u65E9\u671D') || secStr.includes('\u671D')) && !secStr.includes('\u671D\u30AA\u30D5')) return 1;
+  if (secStr.includes('\u671D\u30AA\u30D5') || secStr.includes('\u5BB6\u4E8B') || secStr.includes('\u80B2\u5150')) return 2;
+  if (secStr.includes('\u7B2C2') || secStr.includes('\u5348\u524D')) return 3;
+  if (secStr.includes('\u7B2C3') || secStr.includes('\u5348\u5F8C')) return 4;
+  if (secStr.includes('\u591C\u30AA\u30D5') || secStr.includes('\u5915\u98DF') || secStr.includes('\u56E3\u3089\u3093')) return 5;
+  if (secStr.includes('\u7B2C4') || secStr.includes('\u591C')) return 6;
   return 4;
 }
 
 function autoCarryoverPastSessionTasks() {
-  // Pure non-destructive function: dynamic forwarding is computed in getMobileSectionTasks on render.
-}
+  const currentSecId = detectCurrentSectionId();
+  const curOrder = getSectionOrder(currentSecId);
+  const isToday = mState.selectedDateOffset === 0;
+  if (!isToday) return;
 
-/**
- * 現在セクションのタスク一覧を取得（今日の画面では過去セクションの未完了単発タスクを非破壊で自動合流）
- */
-// =========================================================================
-// Recurrence & Schedule Engine for Mobile (100% PC-Aligned)
-// =========================================================================
+  const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
+  const targetDateKey = getTodayDateString(0);
+
+  let modified = false;
+  mState.tasks.forEach(t => {
+    if (t.type === 'recurring' || t.taskType === 'recurring') return;
+    if (t.scheduledDate === targetDateKey && t.status !== 'completed' && t.status !== 'skipped' && (!t.bucket || t.bucket === 'today')) {
+      const taskOrder = getSectionOrder(t.section);
+      if (taskOrder < curOrder) {
+        t._carriedOverFrom = t.section;
+        t.section = currentSecObj.name.replace(/^[^\w\s]*\s*/, '');
+        modified = true;
+      }
+    }
+  });
+
+  if (modified) {
+    saveLocalTasks(false);
+  }
+}
 
 function getMondayOfWeek(date) {
   const d = new Date(date);
@@ -380,122 +416,76 @@ function getMondayOfWeek(date) {
 }
 
 function isBusinessDay(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  return day !== 0 && day !== 6;
+  const day = date.getDay();
+  return day >= 1 && day <= 5;
 }
 
 function isHabitScheduledForDate(habit, dateObj) {
-  if (!habit || habit.isDisabled) return false;
-  const rec = habit.recurrence || { type: habit.repeatType === '平日' ? 'business_days' : 'everyday' };
-  const d = dateObj ? new Date(dateObj) : new Date();
-  const dayOfWeek = d.getDay(); // 0(日) - 6(土)
-  const dayOfMonth = d.getDate(); // 1 - 31
+  const d = dateObj || new Date();
+  const rec = habit.recurrence || { type: habit.repeatType === '\u5E73\u65E5' ? 'business_days' : 'everyday' };
+  const type = rec.type || (habit.frequencyType === 'weekly' ? 'weekly' : 'everyday');
+  const dayOfWeek = d.getDay();
 
-  switch (rec.type) {
+  switch (type) {
     case 'everyday':
+    case 'daily':
       return true;
-
-    case 'daily_times':
-      return true;
-
-    case 'business_days':
     case 'weekdays':
+    case 'business_days':
       return isBusinessDay(d);
-
     case 'weekends':
       return dayOfWeek === 0 || dayOfWeek === 6;
-
-    case 'custom_days':
-      return Array.isArray(rec.days) && rec.days.includes(dayOfWeek);
-
-    case 'weekly_goal': {
-      const timesTarget = Number(rec.timesPerWeek) || 3;
-      const targetKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      
-      if (habit.history && habit.history[targetKey]) {
-        return true;
+    case 'weekly':
+    case 'weekly_days': {
+      if (rec.daysOfWeek && Array.isArray(rec.daysOfWeek)) {
+        return rec.daysOfWeek.includes(dayOfWeek);
       }
-
-      const monday = getMondayOfWeek(d);
-      let weekCompleted = 0;
-      for (let i = 0; i < 7; i++) {
-        const cur = new Date(monday);
-        cur.setDate(cur.getDate() + i);
-        const k = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
-        if (habit.history && habit.history[k]) {
-          weekCompleted++;
-        }
-      }
-      return weekCompleted < timesTarget;
+      return true;
     }
-
-    case 'interval': {
-      const interval = Number(rec.intervalDays) || 2;
-      if (interval <= 1) return true;
-      const start = new Date(habit.createdAt || '2026-05-01');
-      start.setHours(0, 0, 0, 0);
-      const target = new Date(d);
-      target.setHours(0, 0, 0, 0);
-      const diffDays = Math.round((target - start) / (1000 * 60 * 60 * 24));
-      return diffDays >= 0 && (diffDays % interval === 0);
+    case 'monthly_date': {
+      const targetDate = rec.dayOfMonth || 1;
+      return d.getDate() === targetDate;
     }
-
-    case 'monthly': {
-      const start = new Date(habit.createdAt || '2026-05-01');
-      const startMonthIndex = start.getFullYear() * 12 + start.getMonth();
-      const curMonthIndex = d.getFullYear() * 12 + d.getMonth();
-      const monthInterval = Number(rec.monthInterval) || 1;
-
-      if ((curMonthIndex - startMonthIndex) % monthInterval !== 0) {
-        return false;
-      }
-
-      const timingType = rec.timingType || 'specific_day';
-      if (timingType === 'specific_day') {
-        const targetDay = Number(rec.monthDay) || 1;
-        return dayOfMonth === targetDay;
-      }
-      return dayOfMonth === 1;
+    case 'interval_days': {
+      const interval = rec.interval || 2;
+      const baseDate = rec.startDate ? new Date(rec.startDate) : new Date(2026, 0, 1);
+      const diffTime = d.getTime() - baseDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays % interval === 0;
     }
-
     default:
       return true;
   }
 }
 
 function isHabitInCurrentTimeWindow(habit, currentSecObj) {
-  if (!habit) return false;
-  const type = habit.displayType || habit.timingType || 'section';
+  const type = habit.timingType || habit.timeType || 'section';
 
-  // 1. Anytime (いつでも): 常時表示
-  if (type === 'anytime' || !habit.section || habit.section === 'anytime' || habit.section === 'いつでも') {
+  if (type === 'anytime' || !habit.section || habit.section === 'anytime' || habit.section === '\u3044\u3064\u3067\u3082') {
     return true;
   }
 
-  // 2. Section (セクション指定): 現在セクションと一致
   if (type === 'section') {
-    if (!currentSecObj) return true;
-    return currentSecObj.match.some(m => (habit.section || '').includes(m));
+    const secName = habit.section;
+    if (!secName) return true;
+    if (currentSecObj && currentSecObj.match) {
+      return currentSecObj.match.some(m => secName.includes(m));
+    }
+    return secName === currentSecObj.name;
   }
 
-  // 3. Custom Time (個別時間指定)
-  if (type === 'custom') {
-    if (!habit.customStart) return true;
-    const [sH, sM] = String(habit.customStart).split(':').map(Number);
-    const habitStart = (sH || 0) + (sM || 0) / 60;
-    let habitEnd = habitStart + ((habit.targetMin || 30) / 60);
-    if (habit.customEnd) {
-      const [eH, eM] = String(habit.customEnd).split(':').map(Number);
-      habitEnd = (eH || 0) + (eM || 0) / 60;
-    }
+  if (type === 'custom_time') {
+    const startTime = habit.preferredTime || habit.customTime || '09:00';
+    const [h, m] = startTime.split(':').map(Number);
+    const startHourDec = h + (m / 60);
 
-    const now = new Date();
-    const currentHour = now.getHours() + now.getMinutes() / 60;
-    if (habitStart <= habitEnd) {
-      return currentHour >= habitStart && currentHour < habitEnd;
+    const secStart = currentSecObj.start || 0;
+    const secEnd = currentSecObj.end || 24;
+
+    if (secStart < secEnd) {
+      return startHourDec >= secStart && startHourDec < secEnd;
     } else {
-      return currentHour >= habitStart || currentHour < habitEnd;
+      return startHourDec >= secStart || startHourDec < secEnd;
     }
   }
 
@@ -530,51 +520,37 @@ function getMobileTodayHabits(targetDateObj, targetDateKey) {
 }
 
 function getMobileSectionHabits(todayHabits, currentSecObj) {
-  if (!Array.isArray(todayHabits) || !currentSecObj) return [];
-  return todayHabits
-    .filter(h => isHabitInCurrentTimeWindow(h, currentSecObj))
-    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  return todayHabits.filter(h => isHabitInCurrentTimeWindow(h, currentSecObj));
 }
-function getMobileSectionTasks(todayTasks, currentSecObj) {
-  if (!Array.isArray(todayTasks) || !currentSecObj) return [];
 
+function getMobileSectionTasks(todayTasks, currentSecObj) {
   const isToday = mState.selectedDateOffset === 0;
-  if (!isToday) {
-    // 過去・未来日は厳密なセクション一致のみ
-    return todayTasks.filter(t => currentSecObj.match.some(m => (t.section || '').includes(m)));
+  const curOrder = getSectionOrder(currentSecObj.id);
+
+  const directTasks = todayTasks.filter(t => {
+    if (!t.section) return currentSecObj.id === 'sec_4';
+    if (currentSecObj.match) {
+      return currentSecObj.match.some(m => t.section.includes(m));
+    }
+    return t.section === currentSecObj.name;
+  });
+
+  if (isToday) {
+    const carriedTasks = todayTasks.filter(t => {
+      if (directTasks.some(dt => dt.id === t.id)) return false;
+      if (t.type === 'recurring' || t.taskType === 'recurring') return false;
+      const tOrder = getSectionOrder(t.section);
+      return tOrder < curOrder;
+    }).map(t => ({
+      ...t,
+      _carriedOverFrom: t.section || '\u904E\u53BB\u30BB\u30AF\u30B7\u30E7\u30F3'
+    }));
+
+    return [...carriedTasks, ...directTasks];
   }
 
-  const currentSecOrder = getSectionOrder(currentSecObj.name || currentSecObj.id);
-  const result = [];
-  const addedIds = new Set();
-
-  // 1. 過去セクションの未完了単発タスクを現在セクションに動的合流
-  todayTasks.forEach(t => {
-    if (t.type === 'recurring' || t.taskType === 'recurring') return; // 定期タスクは自身のセクションに固定
-    const tSecOrder = getSectionOrder(t.section);
-    if (tSecOrder < currentSecOrder) {
-      result.push({
-        ...t,
-        _carriedOverFrom: t.section || '過去セクション'
-      });
-      addedIds.add(t.id);
-    }
-  });
-
-  // 2. 現在セクション本来のタスクを追加
-  todayTasks.forEach(t => {
-    if (addedIds.has(t.id)) return;
-    if (currentSecObj.match.some(m => (t.section || '').includes(m))) {
-      result.push(t);
-    }
-  });
-
-  return result;
+  return directTasks;
 }
-
-// =========================================================================
-// 3. Autonomous Day-Rollover & Carryover Engine (Midnight Bed Support)
-// =========================================================================
 
 function checkAndRunDayRollover() {
   const todayKey = getTodayDateString(0);
@@ -586,7 +562,7 @@ function checkAndRunDayRollover() {
       if (t.type !== 'recurring' && (!t.bucket || t.bucket === 'today')) {
         if (t.status !== 'completed' && t.status !== 'skipped' && t.scheduledDate && t.scheduledDate < todayKey) {
           t.scheduledDate = todayKey;
-          t.section = t.section || '第1セッション';
+          t.section = t.section || '\u7B2C1\u30BB\u30AF\u30B7\u30E7\u30F3';
           carriedCount++;
         }
       }
@@ -596,7 +572,7 @@ function checkAndRunDayRollover() {
       if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
         h.sortOrder = idx + 1;
       }
-      if (h.status !== 'in_progress') {
+      if (h.status !== 'in_progress' && h.status !== 'paused') {
         const todayCount = (h.history && h.history[todayKey]) ? (h.history[todayKey].count || 0) : 0;
         const target = h.targetTimes || 1;
         h.status = (todayCount >= target) ? 'completed' : 'uncompleted';
@@ -618,41 +594,32 @@ function checkAndRunDayRollover() {
 function triggerCloudPush() {
   const gasUrl = getGasUrl();
   if (!gasUrl) return;
-  if (!Array.isArray(mState.habits) || mState.habits.length === 0) {
-    console.warn('Skipping cloud push: habits array is empty');
-    return;
-  }
 
-  if (mState.isSyncing) {
-    mState.hasPendingPush = true;
-    return;
-  }
-
-  if (cloudDebounceTimeout) clearTimeout(cloudDebounceTimeout);
-  cloudDebounceTimeout = setTimeout(() => {
+  if (syncTimeout) clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => {
     pushToCloud();
-  }, 500);
+  }, 1000);
 }
 
 async function pushToCloud() {
   const gasUrl = getGasUrl();
-  if (!gasUrl) return;
-  if (mState.isSyncing) {
-    mState.hasPendingPush = true;
+  if (!gasUrl || mState.isSyncing) {
+    if (mState.isSyncing) mState.hasPendingPush = true;
     return;
   }
 
   mState.isSyncing = true;
   updateSyncUI('syncing');
 
-  try {
-    const meta = updateMetadata({ lastUpdatedDevice: 'MOBILE' });
-    const payload = {
-      tasks: mState.tasks,
-      habits: mState.habits,
-      metadata: meta
-    };
+  const meta = updateMetadata({ lastUpdatedDevice: 'MOBILE' });
+  const payload = {
+    action: 'saveAllData',
+    metadata: meta,
+    tasks: mState.tasks,
+    habits: mState.habits
+  };
 
+  try {
     const res = await fetch(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -664,11 +631,11 @@ async function pushToCloud() {
       const data = await res.json();
       if (data && data.status === 'success') {
         isSuccess = true;
-        if (data.lastUpdatedAt) {
-          updateMetadata({ lastUpdatedAt: data.lastUpdatedAt });
+        if (data.data && data.data.metadata) {
+          updateMetadata(data.data.metadata);
         }
       }
-    } catch (e) {
+    } catch (parseErr) {
       if (res.ok || res.status === 200 || res.type === 'opaque') isSuccess = true;
     }
 
@@ -678,29 +645,24 @@ async function pushToCloud() {
       updateSyncUI('error');
     }
   } catch (err) {
-    console.error('Mobile cloud push failed:', err);
+    console.error('Mobile cloud push error:', err);
     updateSyncUI('offline');
   } finally {
     mState.isSyncing = false;
     if (mState.hasPendingPush) {
       mState.hasPendingPush = false;
-      setTimeout(() => {
-        pushToCloud();
-      }, 100);
+      setTimeout(() => pushToCloud(), 200);
     }
   }
 }
 
-let lastUndoAction = null;
-let undoTimeout = null;
-
 function showMobileUndoToast(message, undoCallback) {
-  lastUndoAction = undoCallback;
   const toast = document.getElementById('m-undo-toast');
-  const text = document.getElementById('m-undo-text');
-  if (!toast || !text) return;
+  const textEl = document.getElementById('m-undo-text');
+  if (!toast || !textEl) return;
 
-  text.textContent = message;
+  lastUndoAction = undoCallback;
+  textEl.textContent = message;
   toast.classList.remove('hidden');
 
   if (undoTimeout) clearTimeout(undoTimeout);
@@ -711,11 +673,13 @@ function showMobileUndoToast(message, undoCallback) {
 }
 
 function executeMobileUndo() {
+  haptic([10, 30]);
+  const toast = document.getElementById('m-undo-toast');
+  if (toast) toast.classList.add('hidden');
+  if (undoTimeout) clearTimeout(undoTimeout);
+
   if (typeof lastUndoAction === 'function') {
-    haptic([20, 20]);
     lastUndoAction();
-    const toast = document.getElementById('m-undo-toast');
-    if (toast) toast.classList.add('hidden');
     lastUndoAction = null;
   }
 }
@@ -723,7 +687,7 @@ function executeMobileUndo() {
 async function pullFromCloud(force = false, isSilent = false) {
   const gasUrl = getGasUrl();
   if (!gasUrl) {
-    if (force) alert('⚠️ GAS URLが未設定です。右上の ⚙️（歯車アイコン）からURLを設定してください。');
+    if (force) alert('\u26A0\uFE0F GAS URL\u304C\u672A\u8A2D\u5B9A\u3067\u3059\u3002\u53F3\u4E0A\u306E \u2699\uFE0F\uFF08\u6B6F\u8ECA\u30A2\u30A4\u30B3\u30F3\uFF09\u304B\u3089URL\u3092\u8A2D\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002');
     return;
   }
   if (mState.isSyncing) return;
@@ -744,7 +708,6 @@ async function pullFromCloud(force = false, isSilent = false) {
       const cloudTime = new Date(cloudMeta.lastUpdatedAt || 0).getTime();
       const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
 
-      // ONLY overwrite if cloud is strictly newer OR force requested
       if (force || cloudTime > localTime || (mState.tasks.length === 0 && mState.habits.length === 0)) {
         if (Array.isArray(cloud.tasks)) {
           mState.tasks = sanitizeMobileTasks(cloud.tasks);
@@ -763,18 +726,23 @@ async function pullFromCloud(force = false, isSilent = false) {
           lastProcessedDate: cloudMeta.lastProcessedDate || localMeta.lastProcessedDate
         });
 
-        // Recheck active task & habit
-        const activeTask = mState.tasks.find(t => t.status === 'in_progress');
+        // Recheck active task & habit (support in_progress and paused)
+        const activeTask = mState.tasks.find(t => t.status === 'in_progress') || mState.tasks.find(t => t.status === 'paused');
         mState.activeTaskId = activeTask ? activeTask.id : null;
-        const activeHabit = mState.habits.find(h => h.status === 'in_progress');
+        const activeHabit = mState.habits.find(h => h.status === 'in_progress') || mState.habits.find(h => h.status === 'paused');
         mState.activeHabitId = activeHabit ? activeHabit.id : null;
 
+        if (activeTask && activeHabit) {
+          if (activeTask.status === 'in_progress') mState.activeHabitId = null;
+          else if (activeHabit.status === 'in_progress') mState.activeTaskId = null;
+          else mState.activeHabitId = null;
+        }
+
         syncMobileVersionBadges();
-  renderMobileApp();
+        renderMobileApp();
         updateSyncUI('success');
-        if (force && !isSilent) showMobileUndoToast(`✅ 最新データを同期しました（${mState.tasks.length}件）`);
+        if (force && !isSilent) showMobileUndoToast(`\u2713 \u6700\u65B0\u30C7\u30FC\u30BF\u3092\u540C\u671F\u3057\u307E\u3057\u305F\uFF08${mState.tasks.length}\u4EF6\uFF09`);
       } else if (localTime > cloudTime) {
-        // Local is newer, push our changes to cloud!
         pushToCloud();
       } else {
         updateSyncUI('success');
@@ -783,14 +751,12 @@ async function pullFromCloud(force = false, isSilent = false) {
   } catch (err) {
     if (!isSilent) console.error('Mobile cloud pull failed:', err);
     updateSyncUI('offline');
-    if (force && !isSilent) alert('クラウドからの取得に失敗しました。URLまたはネット接続を確認してください。');
+    if (force && !isSilent) alert('\u30AF\u30E9\u30A6\u30C9\u304B\u3089\u306E\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002URL\u307E\u305F\u306F\u30CD\u30C3\u30C8\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002');
   } finally {
     mState.isSyncing = false;
     if (mState.hasPendingPush) {
       mState.hasPendingPush = false;
-      setTimeout(() => {
-        pushToCloud();
-      }, 100);
+      setTimeout(() => pushToCloud(), 100);
     }
   }
 }
@@ -799,25 +765,32 @@ function updateSyncUI(status) {
   const badge = document.getElementById('m-sync-badge');
   if (!badge) return;
 
-  const gasSet = !!getGasUrl();
-  if (!gasSet) {
-    badge.innerHTML = '💾 ローカル';
-    badge.style.color = '#94a3b8';
-    return;
-  }
-
-  if (status === 'syncing') {
-    badge.innerHTML = '🔄 同期中...';
-    badge.style.color = '#38bdf8';
-  } else if (status === 'success') {
-    badge.innerHTML = '🟢 同期完了';
-    badge.style.color = '#4ade80';
-  } else if (status === 'offline') {
-    badge.innerHTML = '🟡 オフライン';
-    badge.style.color = '#facc15';
-  } else if (status === 'error') {
-    badge.innerHTML = '⚠️ エラー';
-    badge.style.color = '#f87171';
+  badge.className = 'sync-status-badge';
+  switch (status) {
+    case 'syncing':
+      badge.classList.add('syncing');
+      badge.innerHTML = '\uD83D\uDD04 \u540C\u671F\u4E2D...';
+      break;
+    case 'success':
+      badge.classList.add('success');
+      badge.innerHTML = '\uD83D\uDFE2 \u540C\u671F\u5B8C\u4E86';
+      setTimeout(() => {
+        if (badge && badge.classList.contains('success')) {
+          badge.innerHTML = '\u26A1 Gendrive';
+        }
+      }, 3000);
+      break;
+    case 'offline':
+      badge.classList.add('offline');
+      badge.innerHTML = '\uD83D\uDFE1 \u30AA\u30D5\u30E9\u30A4\u30F3';
+      break;
+    case 'error':
+      badge.classList.add('error');
+      badge.innerHTML = '\u26A0\uFE0F \u30A8\u30A8\u30E9\u30FC';
+      break;
+    default:
+      badge.innerHTML = '\uD83D\uDCBE \u30ED\u30FC\u30AB\u30EB';
+      break;
   }
 }
 
@@ -827,14 +800,18 @@ function updateSyncUI(status) {
 
 function startTask(taskId) {
   haptic(20);
-  const targetTask = mState.tasks.find(t => t.id === taskId);
+  const targetTask = mState.tasks.find(t => String(t.id) === String(taskId));
   if (!targetTask) return;
 
+  const now = new Date();
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  // 1. 対象タスクを開始し、他のタスクを安全に自動中断（Auto-pause）
   mState.tasks.forEach(t => {
-    if (t.id === taskId) {
+    if (String(t.id) === String(taskId)) {
       t.status = 'in_progress';
+      t.actStart = t.actStart || nowTimeStr;
       t.startTimestamp = Date.now();
-      mState.activeTaskId = t.id;
     } else if (t.status === 'in_progress') {
       t.status = 'paused';
       if (t.startTimestamp) {
@@ -846,9 +823,9 @@ function startTask(taskId) {
     }
   });
 
-  // 実行中ハビットがあれば自動中断（完全シングルタスク排他制御）
+  // 2. 実行中のハビットがあれば自動中断
+  let habitPaused = false;
   if (Array.isArray(mState.habits)) {
-    let habitPaused = false;
     mState.habits.forEach(h => {
       if (h.status === 'in_progress') {
         h.status = 'paused';
@@ -865,7 +842,31 @@ function startTask(taskId) {
       saveLocalHabits();
     }
   }
+
+  // 3. アクティブ表示対象をこのタスクに固定
+  mState.activeTaskId = targetTask.id;
   mState.activeHabitId = null;
+
+  saveLocalTasks();
+  syncMobileVersionBadges();
+  renderMobileApp();
+}
+
+function pauseTask(taskId) {
+  haptic(15);
+  const task = mState.tasks.find(t => String(t.id) === String(taskId));
+  if (!task || task.status !== 'in_progress') return;
+
+  task.status = 'paused';
+  if (task.startTimestamp) {
+    const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));
+    task.accumulatedSeconds = (task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0)) + sessionElapsedSec;
+    task.actMin = Math.round(task.accumulatedSeconds / 60);
+  }
+  task.startTimestamp = null;
+
+  mState.activeTaskId = task.id;
+
   saveLocalTasks();
   syncMobileVersionBadges();
   renderMobileApp();
@@ -873,7 +874,7 @@ function startTask(taskId) {
 
 function completeTask(taskId) {
   haptic([20, 50, 20]);
-  const task = mState.tasks.find(t => t.id === taskId);
+  const task = mState.tasks.find(t => String(t.id) === String(taskId));
   if (!task) return;
 
   const backupTask = JSON.parse(JSON.stringify(task));
@@ -908,11 +909,21 @@ function completeTask(taskId) {
     completedAt: now.toISOString()
   };
 
+  if (!Array.isArray(task.executionLogs)) task.executionLogs = [];
+  task.executionLogs.unshift({
+    id: 'tlog_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    dateKey: dateKey,
+    completedAt: now.toISOString(),
+    count: newCount,
+    durationMin: elapsedMin,
+    note: ''
+  });
+
   task.status = isGoalReached ? 'completed' : 'uncompleted';
   task.startTimestamp = null;
   task.accumulatedSeconds = 0;
 
-  if (mState.activeTaskId === taskId) {
+  if (String(mState.activeTaskId) === String(taskId)) {
     mState.activeTaskId = null;
   }
 
@@ -921,26 +932,35 @@ function completeTask(taskId) {
   renderMobileApp();
 
   const toastMsg = targetTimes > 1
-    ? (isGoalReached ? `⚡ 「${task.title}」本日の目標達成 (${newCount}/${targetTimes}回)！🎉` : `⚡ 「${task.title}」(${newCount}/${targetTimes}回目) を記録しました`)
-    : `⚡ 「${task.title}」を完了しました`;
+    ? (isGoalReached ? `\u26A1 \u300C${task.title}\u300D\u672C\u65E5\u306E\u76EE\u6817\u9054\u6210\uFF01\uFF08${newCount}/${targetTimes}\u56DE\uFF09\uD83C\uDF89` : `\u26A1 \u300C${task.title}\u300D\uFF08${newCount}/${targetTimes}\u56DE\u76EE\uFF09\u3092\u8A18\u9332\u3057\u307E\u3057\u305F`)
+    : `\u26A1 \u300C${task.title}\u300D\u3092\u5B8C\u4E86\u3057\u307E\u3057\u305F`;
 
   showMobileUndoToast(toastMsg, () => {
     Object.assign(task, backupTask);
-    if (backupTask.status === 'in_progress') mState.activeTaskId = task.id;
+    if (backupTask.status === 'in_progress' || backupTask.status === 'paused') mState.activeTaskId = task.id;
     saveLocalTasks();
     syncMobileVersionBadges();
-  renderMobileApp();
+    renderMobileApp();
   });
 }
 
 function uncompleteTask(taskId) {
   haptic(15);
-  const task = mState.tasks.find(t => t.id === taskId);
+  const task = mState.tasks.find(t => String(t.id) === String(taskId));
   if (!task) return;
 
+  const dateKey = getTodayDateString(mState.selectedDateOffset);
+  if (task.history && task.history[dateKey]) {
+    delete task.history[dateKey];
+  }
   task.status = 'uncompleted';
   task.actEnd = null;
   task.startTimestamp = null;
+  task.accumulatedSeconds = 0;
+
+  if (String(mState.activeTaskId) === String(taskId)) {
+    mState.activeTaskId = null;
+  }
 
   saveLocalTasks();
   syncMobileVersionBadges();
@@ -955,7 +975,6 @@ function startHabit(habitId) {
   const now = new Date();
   const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-  // 1. 他のハビットを自動中断（一時停止）
   mState.habits.forEach(h => {
     if (String(h.id) === String(habitId)) {
       h.status = 'in_progress';
@@ -973,7 +992,7 @@ function startHabit(habitId) {
     }
   });
 
-  // 2. 実行中タスクがあれば自動中断（完全シングルタスク排他制御）
+  // Auto-pause any active task
   if (Array.isArray(mState.tasks)) {
     let taskPaused = false;
     mState.tasks.forEach(t => {
@@ -1012,9 +1031,7 @@ function pauseHabit(habitId) {
   }
   habit.startTimestamp = null;
 
-  if (String(mState.activeHabitId) === String(habitId)) {
-    mState.activeHabitId = null;
-  }
+  mState.activeHabitId = habit.id;
 
   saveLocalHabits();
   syncMobileVersionBadges();
@@ -1058,7 +1075,6 @@ function completeHabit(habitId) {
     completedAt: now.toISOString()
   };
 
-  // Add to executionLogs array (Timeline)
   if (!Array.isArray(habit.executionLogs)) habit.executionLogs = [];
   habit.executionLogs.unshift({
     id: 'hlog_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
@@ -1082,15 +1098,15 @@ function completeHabit(habitId) {
   renderMobileApp();
 
   const toastMsg = targetTimes > 1
-    ? (isGoalReached ? `🌿 「${habit.name}」本日の目標達成 (${newCount}/${targetTimes}回)！🎉` : `🌿 「${habit.name}」(${newCount}/${targetTimes}回目) を記録しました`)
-    : `🌿 「${habit.name}」を完了しました`;
+    ? (isGoalReached ? `\uD83C\uDF3F \u300C${habit.name}\u300D\u672C\u65E5\u306E\u76EE\u6817\u9054\u6210\uFF01\uFF08${newCount}/${targetTimes}\u56DE\uFF09\uD83C\uDF89` : `\uD83C\uDF3F \u300C${habit.name}\u300D\uFF08${newCount}/${targetTimes}\u56DE\u76EE\uFF09\u3092\u8A18\u9332\u3057\u307E\u3057\u305F`)
+    : `\uD83C\uDF3F \u300C${habit.name}\u300D\u5B8C\u4E86\u3057\u307E\u3057\u305F`;
 
   showMobileUndoToast(toastMsg, () => {
     Object.assign(habit, backupHabit);
-    if (backupHabit.status === 'in_progress') mState.activeHabitId = habit.id;
+    if (backupHabit.status === 'in_progress' || backupHabit.status === 'paused') mState.activeHabitId = habit.id;
     saveLocalHabits();
     syncMobileVersionBadges();
-  renderMobileApp();
+    renderMobileApp();
   });
 }
 
@@ -1106,6 +1122,11 @@ function uncompleteHabit(habitId) {
   habit.status = 'uncompleted';
   habit.actEnd = null;
   habit.startTimestamp = null;
+  habit.accumulatedSeconds = 0;
+
+  if (String(mState.activeHabitId) === String(habitId)) {
+    mState.activeHabitId = null;
+  }
 
   saveLocalHabits();
   syncMobileVersionBadges();
@@ -1126,12 +1147,10 @@ function toggleHabit(habitId) {
 }
 
 // =========================================================================
-// 6. Rendering Engine
+// 6. UI Rendering Engine (Sticky Active Bar & Card Lists)
 // =========================================================================
 
 function renderMobileApp() {
-  autoCarryoverPastSessionTasks();
-  updateTheme();
   renderHeaderDateAndETA();
   renderStickyActiveBar();
   renderList();
@@ -1139,63 +1158,55 @@ function renderMobileApp() {
 
 function renderHeaderDateAndETA() {
   const dateEl = document.getElementById('m-header-date');
-  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
-  const d = new Date();
-  d.setDate(d.getDate() + mState.selectedDateOffset);
-  const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-  
-  if (dateEl) {
-    const isToday = mState.selectedDateOffset === 0;
-    dateEl.textContent = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]}) ${isToday ? '今日' : ''}`;
-  }
-
-    const isToday = mState.selectedDateOffset === 0;
-  const isPast = mState.selectedDateOffset < 0;
-
-  // Today's Uncompleted Tasks (on past dates, exclude recurring tasks to immediately verify remaining single tasks)
-  const todayTasks = mState.tasks.filter(t => {
-    if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'completed' || t.status === 'skipped') return false;
-    if (isPast && (t.type === 'recurring' || t.taskType === 'recurring' || t.recType)) return false;
-    return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
-  });
-
-  // Today's Uncompleted Habits (Only shown when viewing today)
-  const targetDateObj = new Date(); targetDateObj.setDate(targetDateObj.getDate() - mState.selectedDateOffset); const todayHabits = getMobileTodayHabits(targetDateObj, targetDateKey);
-
-  // Current Section Tasks & Habits
-  const currentSecId = detectCurrentSectionId();
-  const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[4];
-  const sectionTasks = getMobileSectionTasks(todayTasks, currentSecObj);
-  const sectionHabits = getMobileSectionHabits(todayHabits, currentSecObj);
-
-  // Update 2x2 Matrix Counts
-  const sectionCountEl = document.getElementById('m-section-count');
-  const dailyCountEl = document.getElementById('m-daily-count');
-  const taskCountEl = document.getElementById('m-task-count');
-  const habitCountEl = document.getElementById('m-habit-count');
-
-  if (sectionCountEl) sectionCountEl.textContent = mState.activeType === 'habit' ? sectionHabits.length : sectionTasks.length;
-  if (dailyCountEl) dailyCountEl.textContent = mState.activeType === 'habit' ? todayHabits.length : todayTasks.length;
-  if (taskCountEl) taskCountEl.textContent = mState.activeScope === 'section' ? sectionTasks.length : todayTasks.length;
-  if (habitCountEl) habitCountEl.textContent = mState.activeScope === 'section' ? sectionHabits.length : todayHabits.length;
-
-  // Calculate ETA for Tasks
-  let remainingMinutes = 0;
-  todayTasks.forEach(t => {
-    remainingMinutes += (t.estMin || 25);
-  });
-
   const etaTimeEl = document.getElementById('m-eta-time-val');
   const etaRemainEl = document.getElementById('m-eta-remain-info');
 
-  if (etaTimeEl && etaRemainEl) {
-    if (todayTasks.length === 0) {
-      etaTimeEl.textContent = 'ALL DONE! ⚡';
-      etaRemainEl.textContent = '全完了';
-    } else {
-      const finishTime = new Date(Date.now() + remainingMinutes * 60000);
-      etaTimeEl.textContent = `${String(finishTime.getHours()).padStart(2, '0')}:${String(finishTime.getMinutes()).padStart(2, '0')}`;
-      etaRemainEl.textContent = `残 ${Math.round(remainingMinutes / 60 * 10) / 10}h (${todayTasks.length}件)`;
+  const d = new Date();
+  d.setDate(d.getDate() - mState.selectedDateOffset);
+  const dayNames = ['\u65E5', '\u6708', '\u706B', '\u6C34', '\u6728', '\u91D1', '\u571F'];
+  const isToday = mState.selectedDateOffset === 0;
+
+  if (dateEl) {
+    dateEl.textContent = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]}) ${isToday ? '\u4ECA\u65E5' : ''}`;
+  }
+
+  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
+
+  const todayTasks = mState.tasks.filter(t => {
+    if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'completed' || t.status === 'skipped') return false;
+    return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
+  });
+
+  let remainingMinutes = 0;
+  todayTasks.forEach(t => {
+    const est = t.estMin || 25;
+    const act = t.actMin || (t.accumulatedSeconds ? Math.round(t.accumulatedSeconds / 60) : 0);
+    remainingMinutes += Math.max(1, est - act);
+  });
+
+  if (todayTasks.length === 0) {
+    if (etaTimeEl) {
+      etaTimeEl.textContent = 'ALL DONE! \u26A1';
+      etaTimeEl.classList.remove('overdue-crimson');
+    }
+    if (etaRemainEl) {
+      etaRemainEl.textContent = '\u5168\u5B8C\u4E86';
+    }
+  } else {
+    const now = new Date();
+    const etaDate = new Date(now.getTime() + remainingMinutes * 60 * 1000);
+    const etaTimeStr = `${String(etaDate.getHours()).padStart(2, '0')}:${String(etaDate.getMinutes()).padStart(2, '0')}`;
+
+    if (etaTimeEl) {
+      etaTimeEl.textContent = etaTimeStr;
+      if (etaDate < now) {
+        etaTimeEl.classList.add('overdue-crimson');
+      } else {
+        etaTimeEl.classList.remove('overdue-crimson');
+      }
+    }
+    if (etaRemainEl) {
+      etaRemainEl.textContent = `\u6B8B ${Math.round(remainingMinutes / 60 * 10) / 10}h (${todayTasks.length}\u4EF6)`;
     }
   }
 }
@@ -1206,16 +1217,65 @@ function renderStickyActiveBar() {
 
   const targetDateKey = getTodayDateString(mState.selectedDateOffset);
 
-  // Check active habit or task (either in_progress or paused)
-  const activeHabit = mState.activeHabitId
-    ? mState.habits.find(h => String(h.id) === String(mState.activeHabitId) && (h.status === 'in_progress' || h.status === 'paused'))
-    : null;
+  // 1. 最優先：実行中（in_progress）のアイテムを探索（タスクまたはハビット）
+  const runningTask = mState.tasks.find(t => t.status === 'in_progress');
+  const runningHabit = mState.habits.find(h => h.status === 'in_progress');
 
-  const activeTask = mState.activeTaskId
-    ? mState.tasks.find(t => String(t.id) === String(mState.activeTaskId) && (t.status === 'in_progress' || t.status === 'paused'))
-    : null;
+  let activeItem = null;
+  let activeType = null; // 'task' | 'habit'
 
-  if (!activeHabit && !activeTask) {
+  if (runningTask) {
+    activeItem = runningTask;
+    activeType = 'task';
+    mState.activeTaskId = runningTask.id;
+  } else if (runningHabit) {
+    activeItem = runningHabit;
+    activeType = 'habit';
+    mState.activeHabitId = runningHabit.id;
+  } else {
+    // 2. 実行中がない場合：直近で中断（paused）されたアイテムを探索
+    const pausedTask = mState.activeTaskId
+      ? mState.tasks.find(t => String(t.id) === String(mState.activeTaskId) && t.status === 'paused')
+      : null;
+    const pausedHabit = mState.activeHabitId
+      ? mState.habits.find(h => String(h.id) === String(mState.activeHabitId) && h.status === 'paused')
+      : null;
+
+    if (pausedTask && pausedHabit) {
+      if (mState.activeType === 'habit') {
+        activeItem = pausedHabit;
+        activeType = 'habit';
+      } else {
+        activeItem = pausedTask;
+        activeType = 'task';
+      }
+    } else if (pausedTask) {
+      activeItem = pausedTask;
+      activeType = 'task';
+    } else if (pausedHabit) {
+      activeItem = pausedHabit;
+      activeType = 'habit';
+    } else {
+      // activeId がなくても、全体で paused なものがあれば拾う
+      const anyPausedTask = mState.tasks.find(t => t.status === 'paused');
+      const anyPausedHabit = mState.habits.find(h => h.status === 'paused');
+      if (mState.activeType === 'habit' && anyPausedHabit) {
+        activeItem = anyPausedHabit;
+        activeType = 'habit';
+        mState.activeHabitId = anyPausedHabit.id;
+      } else if (anyPausedTask) {
+        activeItem = anyPausedTask;
+        activeType = 'task';
+        mState.activeTaskId = anyPausedTask.id;
+      } else if (anyPausedHabit) {
+        activeItem = anyPausedHabit;
+        activeType = 'habit';
+        mState.activeHabitId = anyPausedHabit.id;
+      }
+    }
+  }
+
+  if (!activeItem) {
     bar.classList.add('hidden');
     bar.innerHTML = '';
     return;
@@ -1223,37 +1283,37 @@ function renderStickyActiveBar() {
 
   bar.classList.remove('hidden');
 
-  if (activeHabit) {
-    const isInProgress = activeHabit.status === 'in_progress';
-    const isPaused = activeHabit.status === 'paused';
-    const curCount = getItemDayCount(activeHabit, targetDateKey);
-    const targetTimes = getItemTargetTimes(activeHabit);
-    const isMulti = targetTimes > 1;
+  const isInProgress = activeItem.status === 'in_progress';
+  const isPaused = activeItem.status === 'paused';
+  const curCount = getItemDayCount(activeItem, targetDateKey);
+  const targetTimes = getItemTargetTimes(activeItem);
+  const isMulti = targetTimes > 1;
 
-    const elapsedSec = (activeHabit.accumulatedSeconds || (activeHabit.actMin ? activeHabit.actMin * 60 : 0)) +
-      (isInProgress && activeHabit.startTimestamp ? Math.max(0, Math.floor((Date.now() - activeHabit.startTimestamp) / 1000)) : 0);
-    const timeFormatted = formatTime(elapsedSec);
+  const elapsedSec = (activeItem.accumulatedSeconds || (activeItem.actMin ? activeItem.actMin * 60 : 0)) +
+    (isInProgress && activeItem.startTimestamp ? Math.max(0, Math.floor((Date.now() - activeItem.startTimestamp) / 1000)) : 0);
+  const timeFormatted = formatTime(elapsedSec);
 
-    const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
-    const timerBadgeHtml = `<span class="m-slim-timer-badge ${isPaused ? 'paused' : ''}" id="active-bar-timer">${timeFormatted}</span>`;
+  const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
+  const timerBadgeHtml = `<span class="m-slim-timer-badge ${isPaused ? 'paused' : ''}" id="active-bar-timer">${timeFormatted}</span>`;
 
-    const statusLineHtml = isInProgress
-      ? `<span class="top-status-line running"><span class="active-bar-pulse"></span>RUNNING</span>`
-      : `<span class="top-status-line paused">\u23F8 PAUSED</span>`;
+  const statusLineHtml = isInProgress
+    ? `<span class="top-status-line running"><span class="active-bar-pulse"></span>RUNNING</span>`
+    : `<span class="top-status-line paused">\u23F8 PAUSED</span>`;
 
+  if (activeType === 'habit') {
     const actionBtnHtml = isInProgress
-      ? `<button class="btn-slim btn-slim-warning" onclick="pauseHabit('${activeHabit.id}')">\u23F8 \u4E2D\u65AD</button>
-         <button class="btn-slim btn-slim-success" onclick="completeHabit('${activeHabit.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
-      : `<button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${activeHabit.id}')">\u25B6 \u518D\u958B</button>
-         <button class="btn-slim btn-slim-success" onclick="completeHabit('${activeHabit.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`;
+      ? `<button class="btn-slim btn-slim-warning" onclick="event.stopPropagation(); pauseHabit('${activeItem.id}')">\u23F8 \u4E2D\u65AD</button>
+         <button class="btn-slim btn-slim-success" onclick="event.stopPropagation(); completeHabit('${activeItem.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
+      : `<button class="btn-slim btn-slim-pause-resume" onclick="event.stopPropagation(); startHabit('${activeItem.id}')">\u25B6 \u518D\u958B</button>
+         <button class="btn-slim btn-slim-success" onclick="event.stopPropagation(); completeHabit('${activeItem.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`;
 
     bar.innerHTML = `
-      <div class="top-sticky-card ${isInProgress ? 'in-progress' : 'paused'}" id="top-h-card-${activeHabit.id}">
-        <div class="top-card-left" onclick="${isInProgress ? `completeHabit('${activeHabit.id}')` : `startHabit('${activeHabit.id}')`}" style="cursor:pointer;">
+      <div class="top-sticky-card ${isInProgress ? 'in-progress' : 'paused'}" id="top-h-card-${activeItem.id}">
+        <div class="top-card-left" onclick="${isInProgress ? `pauseHabit('${activeItem.id}')` : `startHabit('${activeItem.id}')`}" style="cursor:pointer;">
           <span class="m-slim-icon" style="font-size: 16px;">${isInProgress ? '\u26A1' : '\u23F8\uFE0F'}</span>
           <div class="top-card-meta">
             ${statusLineHtml}
-            <span class="top-card-title">${activeHabit.name}</span>
+            <span class="top-card-title">${activeItem.name}</span>
           </div>
           ${countBadgeHtml}
           ${timerBadgeHtml}
@@ -1263,37 +1323,20 @@ function renderStickyActiveBar() {
         </div>
       </div>
     `;
-  } else if (activeTask) {
-    const isInProgress = activeTask.status === 'in_progress';
-    const isPaused = activeTask.status === 'paused';
-    const curCount = getItemDayCount(activeTask, targetDateKey);
-    const targetTimes = getItemTargetTimes(activeTask);
-    const isMulti = targetTimes > 1;
-
-    const elapsedSec = (activeTask.accumulatedSeconds || (activeTask.actMin ? activeTask.actMin * 60 : 0)) +
-      (isInProgress && activeTask.startTimestamp ? Math.max(0, Math.floor((Date.now() - activeTask.startTimestamp) / 1000)) : 0);
-    const timeFormatted = formatTime(elapsedSec);
-
-    const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
-    const timerBadgeHtml = `<span class="m-slim-timer-badge ${isPaused ? 'paused' : ''}" id="active-bar-timer">${timeFormatted}</span>`;
-
-    const statusLineHtml = isInProgress
-      ? `<span class="top-status-line running"><span class="active-bar-pulse"></span>RUNNING</span>`
-      : `<span class="top-status-line paused">\u23F8 PAUSED</span>`;
-
+  } else {
     const actionBtnHtml = isInProgress
-      ? `<button class="btn-slim btn-slim-warning" onclick="pauseTask('${activeTask.id}')">\u23F8 \u4E2D\u65AD</button>
-         <button class="btn-slim btn-slim-success" onclick="completeTask('${activeTask.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
-      : `<button class="btn-slim btn-slim-pause-resume" onclick="startTask('${activeTask.id}')">\u25B6 \u518D\u958B</button>
-         <button class="btn-slim btn-slim-success" onclick="completeTask('${activeTask.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`;
+      ? `<button class="btn-slim btn-slim-warning" onclick="event.stopPropagation(); pauseTask('${activeItem.id}')">\u23F8 \u4E2D\u65AD</button>
+         <button class="btn-slim btn-slim-success" onclick="event.stopPropagation(); completeTask('${activeItem.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
+      : `<button class="btn-slim btn-slim-pause-resume" onclick="event.stopPropagation(); startTask('${activeItem.id}')">\u25B6 \u518D\u958B</button>
+         <button class="btn-slim btn-slim-success" onclick="event.stopPropagation(); completeTask('${activeItem.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`;
 
     bar.innerHTML = `
-      <div class="top-sticky-card ${isInProgress ? 'in-progress' : 'paused'}" id="top-t-card-${activeTask.id}">
-        <div class="top-card-left" onclick="${isInProgress ? `completeTask('${activeTask.id}')` : `startTask('${activeTask.id}')`}" style="cursor:pointer;">
+      <div class="top-sticky-card ${isInProgress ? 'in-progress' : 'paused'}" id="top-t-card-${activeItem.id}">
+        <div class="top-card-left" onclick="${isInProgress ? `pauseTask('${activeItem.id}')` : `startTask('${activeItem.id}')`}" style="cursor:pointer;">
           <span class="m-slim-icon" style="font-size: 16px;">${isInProgress ? '\u26A1' : '\u23F8\uFE0F'}</span>
           <div class="top-card-meta">
             ${statusLineHtml}
-            <span class="top-card-title">${activeTask.title}</span>
+            <span class="top-card-title">${activeItem.title}</span>
           </div>
           ${countBadgeHtml}
           ${timerBadgeHtml}
@@ -1307,9 +1350,9 @@ function renderStickyActiveBar() {
 }
 
 function updateActiveTimerDisplay(item) {
+  if (!item) return;
   const timerEl = document.getElementById('active-bar-timer');
   const badgeEl = document.getElementById(`timer-badge-${item.id}`);
-  if (!item) return;
   const isInProgress = item.status === 'in_progress';
   const elapsedSec = (item.accumulatedSeconds || (item.actMin ? item.actMin * 60 : 0)) +
     (isInProgress && item.startTimestamp ? Math.max(0, Math.floor((Date.now() - item.startTimestamp) / 1000)) : 0);
@@ -1330,7 +1373,7 @@ function renderList() {
   const isToday = mState.selectedDateOffset === 0;
   const isPast = mState.selectedDateOffset < 0;
 
-  // 1. Get Today's Uncompleted Tasks (strictly checks multi-count progress)
+  // 1. Get Today's Uncompleted Tasks
   const todayTasks = mState.tasks.filter(t => {
     if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'skipped') return false;
     const targetTimes = getItemTargetTimes(t);
@@ -1344,7 +1387,7 @@ function renderList() {
     return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
   });
 
-  // 2. Get Today's Uncompleted Habits (strictly checks multi-count progress)
+  // 2. Get Today's Uncompleted Habits
   const targetDateObj = new Date();
   targetDateObj.setDate(targetDateObj.getDate() - mState.selectedDateOffset);
   const todayHabits = getMobileTodayHabits(targetDateObj, targetDateKey);
@@ -1352,16 +1395,14 @@ function renderList() {
   const scope = mState.activeScope || 'section';
   const type = mState.activeType || 'task';
 
-  // Current top fixed ID (excluded from scrollable list)
-  const topHabitId = mState.activeHabitId ? String(mState.activeHabitId) : null;
-  const topTaskId = mState.activeTaskId ? String(mState.activeTaskId) : null;
-
-  // =========================================================================
-  // 4 Explicit Rendering Modes (Scope: Section/Daily x Type: Task/Habit)
-  // =========================================================================
+  // 実行中（in_progress）のアイテムのみをスクロールリストから除外（ヘッダーバーにリアルタイム表示されるため）
+  // ※ 中断中（paused）のアイテムはリスト内に「⏸️ 中断中」＋「▶ 再開」ボタンとして必ず表示し、ワンタップで再開可能にする
+  const runningTask = mState.tasks.find(t => t.status === 'in_progress');
+  const runningHabit = mState.habits.find(h => h.status === 'in_progress');
+  const runningTaskId = runningTask ? String(runningTask.id) : null;
+  const runningHabitId = runningHabit ? String(runningHabit.id) : null;
 
   if (scope === 'section' && type === 'task') {
-    // 1. Section x Task
     const secTasks = getMobileSectionTasks(todayTasks, currentSecObj);
     const headerHtml = `
       <div class="m-section-indicator">
@@ -1371,7 +1412,7 @@ function renderList() {
     `;
     if (indicatorSlot) indicatorSlot.innerHTML = headerHtml;
 
-    const displayTasks = secTasks.filter(t => String(t.id) !== topTaskId);
+    const displayTasks = secTasks.filter(t => String(t.id) !== runningTaskId);
 
     if (displayTasks.length === 0) {
       container.innerHTML = secTasks.length === 0 ? `
@@ -1386,17 +1427,16 @@ function renderList() {
     container.innerHTML = displayTasks.map(t => renderSlimTaskCard(t)).join('');
 
   } else if (scope === 'section' && type === 'habit') {
-    // 2. Section x Habit
     const secHabits = getMobileSectionHabits(todayHabits, currentSecObj);
     const headerHtml = `
       <div class="m-section-indicator habit-indicator">
-        <span class="m-sec-left">\uD83C\uDF3F <b>${currentSecObj.name}</b> \u306E\u672A\u5B8C\u30CF\u30D3\u30C3\u30C8</span>
+        <span class="m-sec-left">\uD83C\uDF3F <b>${currentSecObj.name}</b> \u306E\u672A\u5B8C\u7FD2\u6163</span>
         <span class="m-sec-count-tag">${secHabits.length}\u4EF6</span>
       </div>
     `;
     if (indicatorSlot) indicatorSlot.innerHTML = headerHtml;
 
-    const displayHabits = secHabits.filter(h => String(h.id) !== topHabitId);
+    const displayHabits = secHabits.filter(h => String(h.id) !== runningHabitId);
 
     if (displayHabits.length === 0) {
       container.innerHTML = secHabits.length === 0 ? `
@@ -1411,7 +1451,6 @@ function renderList() {
     container.innerHTML = displayHabits.map(h => renderSlimHabitCard(h)).join('');
 
   } else if (scope === 'daily' && type === 'task') {
-    // 3. Daily x Task
     const sortedTasks = secSortedTasks(todayTasks);
     const headerHtml = `
       <div class="m-section-indicator task-indicator">
@@ -1421,7 +1460,7 @@ function renderList() {
     `;
     if (indicatorSlot) indicatorSlot.innerHTML = headerHtml;
 
-    const displayTasks = sortedTasks.filter(t => String(t.id) !== topTaskId);
+    const displayTasks = sortedTasks.filter(t => String(t.id) !== runningTaskId);
 
     if (displayTasks.length === 0) {
       container.innerHTML = sortedTasks.length === 0 ? `
@@ -1436,23 +1475,22 @@ function renderList() {
     container.innerHTML = displayTasks.map(t => renderSlimTaskCard(t)).join('');
 
   } else if (scope === 'daily' && type === 'habit') {
-    // 4. Daily x Habit
     const sortedHabits = secSortedHabits(todayHabits);
     const headerHtml = `
       <div class="m-section-indicator habit-indicator">
-        <span class="m-sec-left">\uD83C\uDF3F <b>\u672C\u65E5\u306E\u5168\u672A\u5B8C\u4E86\u30CF\u30D3\u30C3\u30C8</b> (\u5168\u30BB\u30AF\u30B7\u30E7\u30F3)</span>
+        <span class="m-sec-left">\uD83C\uDF3F <b>\u672C\u65E5\u306E\u5168\u672A\u5B8C\u4E86\u7FD2\u6163</b> (\u5168\u30BB\u30AF\u30B7\u30E7\u30F3)</span>
         <span class="m-sec-count-tag">${sortedHabits.length}\u4EF6</span>
       </div>
     `;
     if (indicatorSlot) indicatorSlot.innerHTML = headerHtml;
 
-    const displayHabits = sortedHabits.filter(h => String(h.id) !== topHabitId);
+    const displayHabits = sortedHabits.filter(h => String(h.id) !== runningHabitId);
 
     if (displayHabits.length === 0) {
       container.innerHTML = sortedHabits.length === 0 ? `
         <div style="text-align: center; padding: 48px 20px; color: var(--text-dim);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">\uD83C\uDF3F</span>
-          <b style="color: var(--text-muted); font-size: 14px;">\u4ECA\u65E5\u306E\u30CF\u30D3\u30C3\u30C8\u306F\u3042\u308A\u307E\u305B\u3093</b>
+          <b style="color: var(--text-muted); font-size: 14px;">\u4ECA\u65E5\u306E\u7FD2\u6163\u306F\u3042\u308A\u307E\u305B\u3093</b>
           <p style="font-size: 12px; margin-top: 4px; opacity: 0.8;">\u4ECA\u65E5\u306E\u7FD2\u6163\u306F\u3059\u3079\u3066\u9054\u6210\u6E08\u307F\u3067\u3059\uFF01</p>
         </div>
       ` : '';
@@ -1468,8 +1506,9 @@ function secSortedTasks(tasks) {
 
 function secSortedHabits(habits) {
   return habits.slice().sort((a, b) => {
-    const secDiff = getSectionOrder(a.section) - getSectionOrder(b.section);
-    if (secDiff !== 0) return secDiff;
+    const oA = getSectionOrder(a.section);
+    const oB = getSectionOrder(b.section);
+    if (oA !== oB) return oA - oB;
     return (a.sortOrder || 0) - (b.sortOrder || 0);
   });
 }
@@ -1484,16 +1523,25 @@ function renderSlimHabitCard(habit) {
 
   const cardCls = isInProgress ? 'in-progress' : (isPaused ? 'paused' : '');
   const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
-  const timerBadgeHtml = isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>` : (isPaused && (habit.accumulatedSeconds || habit.actMin) ? `<span class="m-slim-timer-badge paused">${formatTime(habit.accumulatedSeconds || (habit.actMin * 60))}</span>` : '');
+  const timerBadgeHtml = isInProgress
+    ? `<span class="m-slim-timer-badge" id="timer-badge-${habit.id}">00:00</span>`
+    : (isPaused && (habit.accumulatedSeconds || habit.actMin) ? `<span class="m-slim-timer-badge paused">${formatTime(habit.accumulatedSeconds || (habit.actMin * 60))}</span>` : '');
+
   const actionBtnHtml = isInProgress
-    ? `<button class="btn-slim btn-slim-success" onclick="completeHabit('${habit.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
+    ? `<button class="btn-slim btn-slim-warning" onclick="event.stopPropagation(); pauseHabit('${habit.id}')">\u23F8 \u4E2D\u65AD</button>
+       <button class="btn-slim btn-slim-success" onclick="event.stopPropagation(); completeHabit('${habit.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
     : (isPaused
-      ? `<button class="btn-slim btn-slim-pause-resume" onclick="startHabit('${habit.id}')">\u25B6 \u518D\u958B</button>`
-      : `<button class="btn-slim btn-slim-primary" onclick="startHabit('${habit.id}')">\u25B6 \u958B\u59CB</button>`);
+      ? `<button class="btn-slim btn-slim-pause-resume" onclick="event.stopPropagation(); startHabit('${habit.id}')">\u25B6 \u518D\u958B</button>
+         <button class="btn-slim btn-slim-success" onclick="event.stopPropagation(); completeHabit('${habit.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
+      : `<button class="btn-slim btn-slim-primary" onclick="event.stopPropagation(); startHabit('${habit.id}')">\u25B6 \u958B\u59CB</button>`);
+
+  const cardTapAction = isInProgress
+    ? `pauseHabit('${habit.id}')`
+    : `startHabit('${habit.id}')`;
 
   return `
     <div class="m-card-slim ${cardCls}" id="h-card-${habit.id}">
-      <div class="m-card-left" onclick="${isInProgress ? `completeHabit('${habit.id}')` : `startHabit('${habit.id}')`}" style="cursor:pointer;">
+      <div class="m-card-left" onclick="${cardTapAction}" style="cursor:pointer;">
         <span class="m-slim-icon">${isInProgress ? '\u26A1' : (isPaused ? '\u23F8\uFE0F' : '\uD83C\uDF3F')}</span>
         <span class="m-slim-title">${habit.name}</span>
         ${countBadgeHtml}
@@ -1517,16 +1565,25 @@ function renderSlimTaskCard(task) {
 
   const cardCls = isInProgress ? 'in-progress' : (isPaused ? 'paused' : '');
   const countBadgeHtml = isMulti ? `<span class="m-slim-count-badge ${curCount > 0 ? 'active' : ''}">${curCount}/${targetTimes}\u56DE</span>` : '';
-  const timerBadgeHtml = isInProgress ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>` : (isPaused && (task.accumulatedSeconds || task.actMin) ? `<span class="m-slim-timer-badge paused">${formatTime(task.accumulatedSeconds || (task.actMin * 60))}</span>` : '');
+  const timerBadgeHtml = isInProgress
+    ? `<span class="m-slim-timer-badge" id="timer-badge-${task.id}">00:00</span>`
+    : (isPaused && (task.accumulatedSeconds || task.actMin) ? `<span class="m-slim-timer-badge paused">${formatTime(task.accumulatedSeconds || (task.actMin * 60))}</span>` : '');
+
   const actionBtnHtml = isInProgress
-    ? `<button class="btn-slim btn-slim-success" onclick="completeTask('${task.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
+    ? `<button class="btn-slim btn-slim-warning" onclick="event.stopPropagation(); pauseTask('${task.id}')">\u23F8 \u4E2D\u65AD</button>
+       <button class="btn-slim btn-slim-success" onclick="event.stopPropagation(); completeTask('${task.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
     : (isPaused
-      ? `<button class="btn-slim btn-slim-pause-resume" onclick="startTask('${task.id}')">\u25B6 \u518D\u958B</button>`
-      : `<button class="btn-slim btn-slim-primary" onclick="startTask('${task.id}')">\u25B6 \u958B\u59CB</button>`);
+      ? `<button class="btn-slim btn-slim-pause-resume" onclick="event.stopPropagation(); startTask('${task.id}')">\u25B6 \u518D\u958B</button>
+         <button class="btn-slim btn-slim-success" onclick="event.stopPropagation(); completeTask('${task.id}')">\u2713 ${isMulti ? (curCount + 1) + '\u56DE\u76EE\u5B8C\u4E86' : '\u5B8C\u4E86'}</button>`
+      : `<button class="btn-slim btn-slim-primary" onclick="event.stopPropagation(); startTask('${task.id}')">\u25B6 \u958B\u59CB</button>`);
+
+  const cardTapAction = isInProgress
+    ? `pauseTask('${task.id}')`
+    : `startTask('${task.id}')`;
 
   return `
     <div class="m-card-slim ${cardCls}" id="t-card-${task.id}">
-      <div class="m-card-left" onclick="${isInProgress ? `completeTask('${task.id}')` : `startTask('${task.id}')`}" style="cursor:pointer;">
+      <div class="m-card-left" onclick="${cardTapAction}" style="cursor:pointer;">
         <span class="m-slim-icon">${isInProgress ? '\u26A1' : (isPaused ? '\u23F8\uFE0F' : '\uD83D\uDCDD')}</span>
         <span class="m-slim-title">${task.title}${carryBadge}</span>
         ${countBadgeHtml}
@@ -1540,219 +1597,192 @@ function renderSlimTaskCard(task) {
 }
 
 function calculateHabitStreak(h) {
-  if (!h || !h.history) return 0;
+  if (!h || !h.history || typeof h.history !== 'object') return 0;
+  const hist = h.history;
+  const today = new Date();
   let streak = 0;
-  const d = new Date();
-  
+  let d = new Date(today);
+
   for (let i = 0; i < 365; i++) {
-    const cur = new Date();
-    cur.setDate(d.getDate() - i);
-    const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-    const entry = h.history[key];
-    if (entry && (entry.done || entry.count > 0)) {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const entry = hist[key];
+    const isDone = entry && (entry === true || (typeof entry === 'object' && entry.done));
+
+    if (isDone) {
       streak++;
-    } else if (i === 0) {
-      continue;
     } else {
-      break;
+      if (i > 0) break;
     }
+    d.setDate(d.getDate() - 1);
   }
   return streak;
 }
 
-// =========================================================================
-// 7. Navigation & Modal Controllers
-// =========================================================================
-
 function changeDate(delta) {
   haptic(10);
   mState.selectedDateOffset += delta;
-  syncMobileVersionBadges();
   renderMobileApp();
 }
 
 function resetToToday() {
   haptic(10);
   mState.selectedDateOffset = 0;
-  syncMobileVersionBadges();
   renderMobileApp();
 }
 
 function toggleCompletedAccordion() {
   haptic(10);
-  const acc = document.getElementById('m-completed-accordion');
-  if (!acc) return;
-  mState.isCompletedAccordionOpen = !mState.isCompletedAccordionOpen;
-  acc.classList.toggle('open', mState.isCompletedAccordionOpen);
+  mState.showCompletedAccordion = !mState.showCompletedAccordion;
+  renderList();
 }
+
+// =========================================================================
+// 7. Quick Add Modal & Actions
+// =========================================================================
 
 function openQuickAddModal() {
   haptic(15);
   const modal = document.getElementById('m-quick-add-modal');
   const titleInput = document.getElementById('m-quick-task-title');
   const secSelect = document.getElementById('m-quick-task-section');
-  const modalTitle = document.querySelector('#m-quick-add-modal .sheet-title');
-  const submitBtn = document.querySelector('#m-quick-add-modal button[type="submit"]');
+  const modalTitle = modal ? modal.querySelector('.sheet-title') : null;
+  const submitBtn = modal ? modal.querySelector('button[type="submit"]') : null;
+
+  if (modal) modal.classList.add('active');
 
   const isHabit = mState.activeType === 'habit';
+  if (modalTitle) modalTitle.textContent = isHabit ? '\uD83C\uDF3F \u30AF\u30A4\u30C3\u30AF\u7FD2\u6163\u8FFD\u52A0' : '\u26A1 \u30AF\u30A4\u30C3\u30AF\u30BF\u30B9\u30AF\u8FFD\u52A0';
+  if (submitBtn) submitBtn.textContent = isHabit ? '\uD83C\uDF3F \u7FD2\u6163\u3092\u8FFD\u52A0' : '\u26A1 \u8FFD\u52A0\u3059\u308B';
 
-  if (modalTitle) modalTitle.textContent = isHabit ? '🌿 クイック習慣追加' : '⚡ クイックタスク追加';
-  if (submitBtn) submitBtn.textContent = isHabit ? '🌿 習慣を追加' : '⚡ 追加する';
   if (titleInput) {
-    titleInput.placeholder = isHabit ? '習慣名を入力... (例: 水2L飲む、読書15分)' : 'タスク名を入力...';
+    titleInput.value = '';
+    titleInput.placeholder = isHabit ? '\u7FD2\u6163\u540D\u3092\u5165\u529B... (\u4F8B: \u6C342L\u98F2\u3080\u3001\u8AAD\u66F815\u5206)' : '\u30BF\u30B9\u30AF\u540D\u3092\u5165\u529B...';
+    setTimeout(() => titleInput.focus(), 250);
   }
 
-  const currentSecId = detectCurrentSectionId();
-  const currentSecObj = SECTIONS.find(s => s.id === currentSecId);
-  if (secSelect && currentSecObj) {
-    secSelect.value = currentSecObj.match[0];
+  if (secSelect) {
+    const curSecId = detectCurrentSectionId();
+    const curSec = SECTIONS.find(s => s.id === curSecId);
+    if (curSec) secSelect.value = curSec.name.replace(/^[^\w\s]*\s*/, '');
   }
 
-  if (modal) {
-    modal.classList.add('active');
-    try {
-      history.pushState({ modalOpen: 'quickAdd' }, '');
-    } catch (e) {}
-    if (titleInput) {
-      titleInput.value = '';
-      setTimeout(() => titleInput.focus(), 150);
-    }
+  if (window.history && window.history.pushState) {
+    window.history.pushState({ modal: 'quick-add' }, '');
+    window.addEventListener('popstate', function onPop(e) {
+      closeQuickAddModal(true);
+      window.removeEventListener('popstate', onPop);
+    });
   }
 }
 
 function closeQuickAddModal(fromHistory = false) {
   const modal = document.getElementById('m-quick-add-modal');
-  if (modal && modal.classList.contains('active')) {
-    modal.classList.remove('active');
-    if (!fromHistory && history.state && history.state.modalOpen) {
-      try { history.back(); } catch (e) {}
-    }
+  if (modal) modal.classList.remove('active');
+  if (!fromHistory && window.history && window.history.state && window.history.state.modal === 'quick-add') {
+    window.history.back();
   }
 }
 
 function handleQuickAddTask(e) {
-  if (e) e.preventDefault();
-  haptic([15, 30]);
-
+  e.preventDefault();
   const titleInput = document.getElementById('m-quick-task-title');
   const secSelect = document.getElementById('m-quick-task-section');
   const estSelect = document.getElementById('m-quick-task-est');
 
-  const title = (titleInput ? titleInput.value : '').trim();
+  const title = titleInput ? titleInput.value.trim() : '';
   if (!title) return;
 
-  const section = secSelect ? secSelect.value : '第3セッション';
-  const estMin = parseInt(estSelect ? estSelect.value : '25', 10) || 25;
-  const isHabit = mState.activeType === 'habit';
+  const section = secSelect ? secSelect.value : '\u7B2C3\u30BB\u30AF\u30B7\u30E7\u30F3';
+  const estMin = estSelect ? parseInt(estSelect.value, 10) : 25;
+  const dateKey = getTodayDateString(mState.selectedDateOffset);
 
-  if (isHabit) {
+  if (mState.activeType === 'habit') {
     const newHabit = {
-      id: `m_habit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      id: 'h_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
       name: title,
-      status: 'uncompleted',
       section: section,
       targetMin: estMin,
-      timingType: 'section',
-      recurrence: 'daily',
-      frogLevel: 3,
+      targetTimes: 1,
+      sortOrder: (mState.habits.length + 1),
+      recurrence: { type: 'everyday' },
       history: {},
-      createdAt: new Date().toISOString()
+      executionLogs: [],
+      status: 'uncompleted'
     };
     mState.habits.push(newHabit);
-    saveLocalHabits(true);
+    saveLocalHabits();
     closeQuickAddModal();
-    syncMobileVersionBadges();
-  renderMobileApp();
-
-    showMobileUndoToast(`🌿 「${title}」を追加しました`, () => {
+    renderMobileApp();
+    showMobileUndoToast(`\uD83C\uDF3F \u300C${title}\u300D\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F`, () => {
       mState.habits = mState.habits.filter(h => h.id !== newHabit.id);
-      saveLocalHabits(true);
-      syncMobileVersionBadges();
-  renderMobileApp();
+      saveLocalHabits();
+      renderMobileApp();
     });
   } else {
     const newTask = {
-      id: `m_task_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
       title: title,
-      status: 'uncompleted',
+      scheduledDate: dateKey,
       section: section,
       estMin: estMin,
-      actMin: 0,
-      scheduledDate: getTodayDateString(mState.selectedDateOffset),
-      timingType: 'scheduled',
-      bucket: 'today',
-      label: 'p1',
-      createdAt: new Date().toISOString()
+      status: 'uncompleted',
+      bucket: 'today'
     };
-
     mState.tasks.push(newTask);
-    saveLocalTasks(true);
+    saveLocalTasks();
     closeQuickAddModal();
-    syncMobileVersionBadges();
-  renderMobileApp();
-
-    showMobileUndoToast(`⚡ 「${title}」を追加しました`, () => {
+    renderMobileApp();
+    showMobileUndoToast(`\u26A1 \u300C${title}\u300D\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F`, () => {
       mState.tasks = mState.tasks.filter(t => t.id !== newTask.id);
-      saveLocalTasks(true);
-      syncMobileVersionBadges();
-  renderMobileApp();
+      saveLocalTasks();
+      renderMobileApp();
     });
   }
 }
 
+// =========================================================================
+// 8. Settings Modal & Application Bootstrap
+// =========================================================================
+
 function openSettingsModal() {
-  haptic(10);
+  haptic(15);
   const modal = document.getElementById('m-settings-modal');
   const input = document.getElementById('m-gas-url-input');
   if (input) input.value = getGasUrl();
-  if (modal) {
-    modal.classList.add('active');
-    // Android Back Stack Push
-    try {
-      history.pushState({ modalOpen: 'settings' }, '');
-    } catch (e) {}
+  if (modal) modal.classList.add('active');
+
+  if (window.history && window.history.pushState) {
+    window.history.pushState({ modal: 'settings' }, '');
+    window.addEventListener('popstate', function onPop(e) {
+      closeSettingsModal(true);
+      window.removeEventListener('popstate', onPop);
+    });
   }
 }
 
 function closeSettingsModal(fromHistory = false) {
   const modal = document.getElementById('m-settings-modal');
-  if (modal && modal.classList.contains('active')) {
-    modal.classList.remove('active');
-    if (!fromHistory && history.state && history.state.modalOpen) {
-      try { history.back(); } catch (e) {}
-    }
+  if (modal) modal.classList.remove('active');
+  if (!fromHistory && window.history && window.history.state && window.history.state.modal === 'settings') {
+    window.history.back();
   }
 }
 
-// Android Hardware Back Button & Gesture Navigation Listener
-window.addEventListener('popstate', (e) => {
-  const settingsModal = document.getElementById('m-settings-modal');
-  const quickAddModal = document.getElementById('m-quick-add-modal');
-
-  if (quickAddModal && quickAddModal.classList.contains('active')) {
-    closeQuickAddModal(true);
-  }
-  if (settingsModal && settingsModal.classList.contains('active')) {
-    closeSettingsModal(true);
-  }
-});
-
 function saveSettings() {
-  haptic(15);
+  haptic(20);
   const input = document.getElementById('m-gas-url-input');
   if (input) {
-    setGasUrl(input.value);
-    pullFromCloud(true);
+    setGasUrl(input.value.trim());
+    closeSettingsModal();
+    pullFromCloud(true, false);
   }
-  closeSettingsModal();
 }
 
 async function initMobileApp() {
   loadLocalData();
   syncMobileVersionBadges();
-  renderMobileApp(); // まずローカルキャッシュで瞬時にUI描画
+  renderMobileApp();
 
-  // Attach safe explicit listeners to the 2x2 switcher buttons
   const scopeBtns = [
     { id: 'btn-scope-section', fn: () => setScope('section') },
     { id: 'btn-scope-daily', fn: () => setScope('daily') }
@@ -1783,7 +1813,6 @@ async function initMobileApp() {
     }
   });
 
-  // Startup Sync Guard
   if (getGasUrl()) {
     try {
       await pullFromCloud(true, false);
@@ -1799,7 +1828,7 @@ async function initMobileApp() {
   // Active Timer Loop (1 sec - Tasks & Habits)
   if (activeTimerInterval) clearInterval(activeTimerInterval);
   activeTimerInterval = setInterval(() => {
-    const activeTask = mState.tasks.find(t => t.id === mState.activeTaskId && t.status === 'in_progress');
+    const activeTask = mState.tasks.find(t => String(t.id) === String(mState.activeTaskId) && t.status === 'in_progress');
     const activeHabit = mState.habits.find(h => String(h.id) === String(mState.activeHabitId) && h.status === 'in_progress');
     if (activeTask) {
       updateActiveTimerDisplay(activeTask);
@@ -1815,7 +1844,7 @@ async function initMobileApp() {
     }
   }, 15000);
 
-  // Auto-sync when app comes to foreground
+  // Foreground auto-sync
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && getGasUrl()) {
       pullFromCloud(false, true);
@@ -1828,7 +1857,7 @@ async function initMobileApp() {
     }
   });
 
-  // Register Service Worker with Auto Update & Force Refresh
+  // Service Worker Registration
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then(reg => {
       reg.update().catch(() => {});
@@ -1861,6 +1890,7 @@ if (document.readyState === 'loading') {
 } else {
   initMobileApp();
 }
+
 async function forceHardRefresh() {
   haptic(30);
   try {
@@ -1881,7 +1911,7 @@ async function forceHardRefresh() {
 }
 
 function syncMobileVersionBadges() {
-  const ver = typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v1.5.1';
+  const ver = typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v1.5.2';
   document.querySelectorAll('.version-capsule-badge').forEach(el => {
     el.textContent = ver;
   });
