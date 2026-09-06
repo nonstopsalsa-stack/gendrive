@@ -86,6 +86,7 @@ function setScope(scope) {
   if (btnDaily) btnDaily.classList.toggle('active', scope === 'daily');
 
   updateTheme();
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
@@ -99,6 +100,7 @@ function setType(type) {
   if (btnHabit) btnHabit.classList.toggle('active', type === 'habit');
 
   updateTheme();
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
@@ -767,7 +769,8 @@ async function pullFromCloud(force = false, isSilent = false) {
         const activeHabit = mState.habits.find(h => h.status === 'in_progress');
         mState.activeHabitId = activeHabit ? activeHabit.id : null;
 
-        renderMobileApp();
+        syncMobileVersionBadges();
+  renderMobileApp();
         updateSyncUI('success');
         if (force && !isSilent) showMobileUndoToast(`✅ 最新データを同期しました（${mState.tasks.length}件）`);
       } else if (localTime > cloudTime) {
@@ -864,6 +867,7 @@ function startTask(taskId) {
   }
   mState.activeHabitId = null;
   saveLocalTasks();
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
@@ -913,6 +917,7 @@ function completeTask(taskId) {
   }
 
   saveLocalTasks();
+  syncMobileVersionBadges();
   renderMobileApp();
 
   const toastMsg = targetTimes > 1
@@ -923,7 +928,8 @@ function completeTask(taskId) {
     Object.assign(task, backupTask);
     if (backupTask.status === 'in_progress') mState.activeTaskId = task.id;
     saveLocalTasks();
-    renderMobileApp();
+    syncMobileVersionBadges();
+  renderMobileApp();
   });
 }
 
@@ -937,6 +943,7 @@ function uncompleteTask(taskId) {
   task.startTimestamp = null;
 
   saveLocalTasks();
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
@@ -988,6 +995,7 @@ function startHabit(habitId) {
   mState.activeTaskId = null;
 
   saveLocalHabits();
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
@@ -1009,6 +1017,7 @@ function pauseHabit(habitId) {
   }
 
   saveLocalHabits();
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
@@ -1069,6 +1078,7 @@ function completeHabit(habitId) {
   }
 
   saveLocalHabits();
+  syncMobileVersionBadges();
   renderMobileApp();
 
   const toastMsg = targetTimes > 1
@@ -1079,7 +1089,8 @@ function completeHabit(habitId) {
     Object.assign(habit, backupHabit);
     if (backupHabit.status === 'in_progress') mState.activeHabitId = habit.id;
     saveLocalHabits();
-    renderMobileApp();
+    syncMobileVersionBadges();
+  renderMobileApp();
   });
 }
 
@@ -1097,6 +1108,7 @@ function uncompleteHabit(habitId) {
   habit.startTimestamp = null;
 
   saveLocalHabits();
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
@@ -1555,12 +1567,14 @@ function calculateHabitStreak(h) {
 function changeDate(delta) {
   haptic(10);
   mState.selectedDateOffset += delta;
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
 function resetToToday() {
   haptic(10);
   mState.selectedDateOffset = 0;
+  syncMobileVersionBadges();
   renderMobileApp();
 }
 
@@ -1647,12 +1661,14 @@ function handleQuickAddTask(e) {
     mState.habits.push(newHabit);
     saveLocalHabits(true);
     closeQuickAddModal();
-    renderMobileApp();
+    syncMobileVersionBadges();
+  renderMobileApp();
 
     showMobileUndoToast(`🌿 「${title}」を追加しました`, () => {
       mState.habits = mState.habits.filter(h => h.id !== newHabit.id);
       saveLocalHabits(true);
-      renderMobileApp();
+      syncMobileVersionBadges();
+  renderMobileApp();
     });
   } else {
     const newTask = {
@@ -1672,12 +1688,14 @@ function handleQuickAddTask(e) {
     mState.tasks.push(newTask);
     saveLocalTasks(true);
     closeQuickAddModal();
-    renderMobileApp();
+    syncMobileVersionBadges();
+  renderMobileApp();
 
     showMobileUndoToast(`⚡ 「${title}」を追加しました`, () => {
       mState.tasks = mState.tasks.filter(t => t.id !== newTask.id);
       saveLocalTasks(true);
-      renderMobileApp();
+      syncMobileVersionBadges();
+  renderMobileApp();
     });
   }
 }
@@ -1731,6 +1749,7 @@ function saveSettings() {
 
 async function initMobileApp() {
   loadLocalData();
+  syncMobileVersionBadges();
   renderMobileApp(); // まずローカルキャッシュで瞬時にUI描画
 
   // Attach safe explicit listeners to the 2x2 switcher buttons
@@ -1774,6 +1793,7 @@ async function initMobileApp() {
   }
 
   checkAndRunDayRollover();
+  syncMobileVersionBadges();
   renderMobileApp();
 
   // Active Timer Loop (1 sec - Tasks & Habits)
@@ -1858,4 +1878,11 @@ async function forceHardRefresh() {
     console.error('Error clearing cache:', e);
   }
   window.location.href = window.location.pathname + '?r=' + Date.now();
+}
+
+function syncMobileVersionBadges() {
+  const ver = typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v1.5.1';
+  document.querySelectorAll('.version-capsule-badge').forEach(el => {
+    el.textContent = ver;
+  });
 }
