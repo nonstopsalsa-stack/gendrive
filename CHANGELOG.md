@@ -2,6 +2,14 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.5.6] - 2026-09-07
+### Added
+- **Dual Task Resume Memo Engine**: 実行中タスクがある状態で中断中タスクを再開した際、中断タスクの白紙メモ（次の一手入力）と再開タスクの前回メモ（作業状況確認）を画面中央左右に並列で同時表示するデュアルモーダルを新設。
+- **Context Switch Cognitive Acceleration**: モーダル起動時に左側の中断メモ入力欄へ自動フォーカス。右側の前回メモを視界で確認しながら即座に中断メモを打鍵でき、Enter一発で保存・作業開始へシームレスに復帰するゼロ・フリクション設計を実現。
+- **Smart Modal State Machine**: 単独中断（入力のみ）、単独再開（閲覧のみ）、デュアル切替（入力＋閲覧並列）を自動判定・描画する状態遷移マシンを `resumeNoteService.js` に確立。
+- **Automated Verification Suite (40/40 PASS)**: 単独手動中断、単独再開、自動中断、デュアル並列展開、左右データ分離保存、空保存、タスク完了時消去の全40テストケースを網羅する自動ヘッドレステストを構築し 100% PASS を達成。
+- **Release Notes**: `docs/release_notes/2026-09-07_v1.5.6_dual_task_resume_memo_engine.md` を発行。
+
 ---
 
 ## [v1.5.5] - 2026-09-07

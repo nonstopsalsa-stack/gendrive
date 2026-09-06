@@ -1,14 +1,14 @@
 /**
  * Gendrive Mobile Lite - Service Worker
- * Offline Cache & High-Speed Launch Engine (v1.5.5)
+ * Offline Cache & High-Speed Launch Engine (v1.5.6)
  */
 
-const CACHE_NAME = 'gendrive-lite-v155';
+const CACHE_NAME = 'gendrive-lite-v156';
 const ASSETS_TO_CACHE = [
   './mobile.html',
-  './mobile.css?v=20260907_v155',
-  './mobile.js?v=20260907_v155',
-  './js/config.js?v=20260907_v155',
+  './mobile.css?v=20260907_v156',
+  './mobile.js?v=20260907_v156',
+  './js/config.js?v=20260907_v156',
   './manifest.json'
 ];
 
