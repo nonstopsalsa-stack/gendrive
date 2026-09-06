@@ -591,7 +591,7 @@ function toggleTagInInput(inputId, containerId, tagName) {
 
 
 function sanitizeDailyState() {
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toLocaleDateString('sv');
   let changed = false;
 
   (state.tasks || []).forEach(task => {
@@ -608,9 +608,21 @@ function sanitizeDailyState() {
   });
 
   (state.habits || []).forEach(habit => {
-    if (habit.status === 'completed') {
-      const curCount = typeof getHabitDayCount === 'function' ? getHabitDayCount(habit, todayKey) : 0;
-      const targetTimes = typeof getHabitTargetTimes === 'function' ? getHabitTargetTimes(habit) : 1;
+    const curCount = typeof getHabitDayCount === 'function' ? getHabitDayCount(habit, todayKey) : 0;
+    const targetTimes = typeof getHabitTargetTimes === 'function' ? getHabitTargetTimes(habit) : 1;
+
+    // 複数回ハビット（targetTimes > 1）の目標未達時の自動自己修復（今朝の誤完了救済）
+    if (targetTimes > 1 && curCount < targetTimes) {
+      if (habit.history && habit.history[todayKey] && habit.history[todayKey].done) {
+        habit.history[todayKey].done = false;
+        changed = true;
+      }
+      if (habit.status === 'completed') {
+        habit.status = 'uncompleted';
+        habit.accumulatedSeconds = 0;
+        changed = true;
+      }
+    } else if (habit.status === 'completed') {
       const hasTodayHistory = Boolean(habit.history && (habit.history[todayKey] === true || habit.history[todayKey]?.done));
       if (curCount < targetTimes && !hasTodayHistory) {
         habit.status = 'uncompleted';
@@ -638,6 +650,12 @@ function getHabitStatusForSelectedDate(habit) {
   // 2. Check multi-count progress
   const curCount = getHabitDayCount(habit, k);
   const targetTimes = getHabitTargetTimes(habit);
+  if (targetTimes > 1) {
+    if (curCount >= targetTimes) return 'completed';
+    if (habit.status === 'in_progress' && state.selectedDateOffset === 0) return 'in_progress';
+    if (habit.status === 'paused' && state.selectedDateOffset === 0) return 'paused';
+    return 'uncompleted';
+  }
   if (curCount >= targetTimes && targetTimes > 0) return 'completed';
 
   // 3. Check history object for exact date completion
@@ -647,6 +665,9 @@ function getHabitStatusForSelectedDate(habit) {
   // 4. In progress check
   if (habit.status === 'in_progress' && state.selectedDateOffset === 0) {
     return 'in_progress';
+  }
+  if (habit.status === 'paused' && state.selectedDateOffset === 0) {
+    return 'paused';
   }
 
   // 5. If no history and count is not reached, it's ALWAYS uncompleted

@@ -121,16 +121,20 @@ function isHabitScheduledForDate(habit, dateObj) {
 
 function getHabitTargetTimes(habit) {
   if (!habit) return 1;
-  if (typeof habit.targetTimes === 'number' && habit.targetTimes > 0) return habit.targetTimes;
   if (habit.recurrence) {
     if (habit.recurrence.type === 'daily_times') {
-      return Math.max(1, parseInt(habit.recurrence.timesPerDay, 10) || 2);
+      const tpd = parseInt(habit.recurrence.timesPerDay, 10);
+      if (!isNaN(tpd) && tpd > 0) return tpd;
+      const rtt = parseInt(habit.recurrence.targetTimes, 10);
+      if (!isNaN(rtt) && rtt > 0) return rtt;
+      return 2;
     }
     if (typeof habit.recurrence.targetTimes === 'number' && habit.recurrence.targetTimes > 0) {
       return habit.recurrence.targetTimes;
     }
   }
   if (typeof habit.dailyTimes === 'number' && habit.dailyTimes > 0) return habit.dailyTimes;
+  if (typeof habit.targetTimes === 'number' && habit.targetTimes > 0) return habit.targetTimes;
   return 1;
 }
 

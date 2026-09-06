@@ -4,6 +4,17 @@ All notable changes to Gendrive project will be documented in this file.
 
 ---
 
+## [v1.5.4] - 2026-09-07
+### Fixed
+- **Multi-Count Habit Lifecycle Restoration**: 「1日N回（`daily_times`）」ハビットが1回で完了・非表示になってしまう不具合を根本修正。`recurrence.timesPerDay` を最優先で解決するアーキテクチャを確立。
+- **Mobile TargetTimes Truncation & Self-Healing Migration**: `mobile.js` 内の `getItemTargetTimes` に `daily_times` 解決ロジックを復旧。旧バージョンで `targetTimes: 1` に破壊的縮退したハビットデータを起動時に本来の目標回数へ自己修復（Self-Healing）するマイグレーションを実装。
+- **Cloud Sync Cross-Pollution Guard**: スマホ版で汚染された `targetTimes: 1` が GAS クラウド同期経由で PC 版へ逆流しても、`recurrence.timesPerDay` を最優先評価して無視・自己修復する二重防壁を展開。
+- **Premature Done Flag Auto-Recovery**: 今朝1回実行して誤って `done: true`（完了）となった目標未達ハビット（`count < targetTimes`）を、実行実績カウントを保持したまま未完了へ自動救済。
+- **JST Local Date Daily Reset Guard**: `app.js` の `sanitizeDailyState` を `getTodayKey()`（JSTローカル日付）に統一し、UTC依存による早朝（0〜9時前）の日次リセット不発を完全排除。
+- **Release Notes**: `docs/release_notes/2026-09-07_v1.5.4_multi_count_habit_lifecycle_and_jst_daily_isolation.md` を発行。
+
+---
+
 ## [v1.5.3] - 2026-09-06
 ### Fixed
 - **Mobile Task Interruption & Resumption Lifecycle**: `mobile.js` 内のタスク中断・再開ライフサイクルを完全刷新。中断（`paused`）後の「▶ 再開」が何度でも確実に動作する状態遷移マシンを確立。
