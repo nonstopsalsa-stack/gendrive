@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -104,7 +104,7 @@
           <span class="logo-badge">ACTION ENGINE</span>
         </div>
 
-        <div class="version-badge" id="app-version-badge" onclick="openReleaseNotesModal()" title="📜 バージョン v1.4.0 (クリックで更新履歴を表示)">v1.4.0</div>
+        <div class="version-badge" id="app-version-badge" onclick="openReleaseNotesModal()" title="&#x30D0;&#x30FC;&#x30B8;&#x30E7;&#x30F3; v1.5.1 (&#x30AF;&#x30EA;&#x30C3;&#x30AF;&#x3067;&#x66F4;&#x65B0;&#x5C65;&#x6B74;&#x8868;&#x793A;)">v1.5.1</div>
 
         <!-- Date Navigation Bar -->
         <div class="date-nav-bar">
@@ -120,14 +120,32 @@
 
       <div class="header-right">
         <!-- TaskChute Dynamic Daily ETA (Full-Day End-Time Estimate) -->
-        <div class="header-daily-eta-badge" id="header-daily-eta-badge" title="今日の全未完了アイテムを今すぐ順に実行した場合の終了見込み時刻">
-          <div class="daily-eta-top">
-            <span class="daily-eta-icon">🏁</span>
-            <span class="daily-eta-label">今日完了見込み:</span>
-            <b class="daily-eta-time" id="daily-eta-time-val">--:--</b>
+        <div class="tc-eta-unified-badge" id="header-daily-eta-badge" title="&#x4eca;&#x65e5;&#x5168;&#x4f53;&#x306e;&#x6b8b;&#x308a;&#x6642;&#x9593;&#x30fb;&#x5b8c;&#x4e86;&#x898b;&#x8fbc;&#x307f;">
+          <div class="tc-eta-main-row">
+            <div class="tc-eta-item tc-eta-remain-item">
+              <span class="tc-eta-icon">&#x23F1;&#xFE0F;</span>
+              <span class="tc-eta-label">&#x6b8b;:</span>
+              <b class="tc-eta-val" id="daily-remain-minutes">0&#x5206;</b>
+            </div>
+            <span class="tc-eta-arrow">&#x279C;</span>
+            <div class="tc-eta-item tc-eta-finish-item">
+              <span class="tc-eta-icon">&#x1F3C1;</span>
+              <span class="tc-eta-label" id="daily-eta-label">&#x898b;&#x8fbc;:</span>
+              <b class="tc-eta-val tc-eta-highlight" id="daily-eta-time-val">--:--</b>
+            </div>
           </div>
-          <div class="daily-eta-sub">
-            <span id="daily-eta-remain-info">残り --分 (--件)</span>
+          <div class="tc-eta-sub-row">
+            <span class="tc-eta-breakdown-item" id="daily-task-breakdown" title="&#x672c;&#x65e5;&#x306e;&#x672a;&#x5b8c;&#x4e86;&#x30bf;&#x30b9;&#x30af;&#x6b8b;&#x5408;&#x8a08;">
+              <span class="tc-eta-sub-icon">&#x1F4CB;</span>
+              <span class="tc-eta-sub-label">&#x30bf;&#x30b9;&#x30af;:</span>
+              <b class="tc-eta-sub-val" id="daily-task-remain-val">0&#x5206; (0)</b>
+            </span>
+            <span class="tc-eta-divider">|</span>
+            <span class="tc-eta-breakdown-item" id="daily-habit-breakdown" title="&#x672c;&#x65e5;&#x306e;&#x672a;&#x5b8c;&#x4e86;&#x30cf;&#x30d3;&#x30c3;&#x30c8;&#x6b8b;&#x5408;&#x8a08;">
+              <span class="tc-eta-sub-icon">&#x1F504;</span>
+              <span class="tc-eta-sub-label">&#x30cf;&#x30d3;&#x30c3;&#x30c8;:</span>
+              <b class="tc-eta-sub-val" id="daily-habit-remain-val">0&#x5206; (0)</b>
+            </span>
           </div>
         </div>
 
@@ -410,13 +428,33 @@
             <div class="banner-info">
               <div class="banner-title-line">
                 <h2 id="section-title">🌅 第1セッション (03:00 - 06:00)</h2>
-                <div class="section-eta-badge" id="section-eta-badge" title="このセクションの未完了アイテムを今すぐ順に実行した場合の終了見込み">
-                  <span class="eta-icon">⏱️</span>
-                  <span class="eta-label">残り:</span>
-                  <b class="eta-val" id="section-remain-minutes">0分</b>
-                  <span class="eta-arrow">➔</span>
-                  <span class="eta-label">終了見込み:</span>
-                  <b class="eta-val eta-highlight" id="section-eta-time">--:--</b>
+                <div class="tc-eta-unified-badge" id="section-eta-badge" title="&#x5f53;&#x30bb;&#x30af;&#x30b7;&#x30e7;&#x30f3;&#x306e;&#x6b8b;&#x308a;&#x6642;&#x9593;&#x30fb;&#x5b8c;&#x4e86;&#x898b;&#x8fbc;&#x307f;">
+                  <div class="tc-eta-main-row">
+                    <div class="tc-eta-item tc-eta-remain-item">
+                      <span class="tc-eta-icon">&#x23F1;&#xFE0F;</span>
+                      <span class="tc-eta-label">&#x6b8b;:</span>
+                      <b class="tc-eta-val" id="section-remain-minutes">0&#x5206;</b>
+                    </div>
+                    <span class="tc-eta-arrow">&#x279C;</span>
+                    <div class="tc-eta-item tc-eta-finish-item">
+                      <span class="tc-eta-icon">&#x1F3C1;</span>
+                      <span class="tc-eta-label" id="section-eta-label">&#x898b;&#x8fbc;:</span>
+                      <b class="tc-eta-val tc-eta-highlight" id="section-eta-time">--:--</b>
+                    </div>
+                  </div>
+                  <div class="tc-eta-sub-row">
+                    <span class="tc-eta-breakdown-item" id="section-task-breakdown" title="&#x5f53;&#x30bb;&#x30af;&#x30b7;&#x30e7;&#x30f3;&#x306e;&#x672a;&#x5b8c;&#x4e86;&#x30bf;&#x30b9;&#x30af;&#x6b8b;&#x5408;&#x8a08;">
+                      <span class="tc-eta-sub-icon">&#x1F4CB;</span>
+                      <span class="tc-eta-sub-label">&#x30bf;&#x30b9;&#x30af;:</span>
+                      <b class="tc-eta-sub-val" id="section-task-remain-val">0&#x5206; (0)</b>
+                    </span>
+                    <span class="tc-eta-divider">|</span>
+                    <span class="tc-eta-breakdown-item" id="section-habit-breakdown" title="&#x5f53;&#x30bb;&#x30af;&#x30b7;&#x30e7;&#x30f3;&#x306e;&#x672a;&#x5b8c;&#x4e86;&#x30cf;&#x30d3;&#x30c3;&#x30c8;&#x6b8b;&#x5408;&#x8a08;">
+                      <span class="tc-eta-sub-icon">&#x1F504;</span>
+                      <span class="tc-eta-sub-label">&#x30cf;&#x30d3;&#x30c3;&#x30c8;:</span>
+                      <b class="tc-eta-sub-val" id="section-habit-remain-val">0&#x5206; (0)</b>
+                    </span>
+                  </div>
                 </div>
               </div>
               <p id="section-desc">起床、静寂の自己投資、思考整理</p>
@@ -721,15 +759,13 @@
                 </div>
                 <span class="sort-label" style="margin-left: 8px;">並び替え:</span>
                 <div class="sort-select-wrapper">
-                  <select id="analytics-sort-select" class="sort-select" onchange="handleAnalyticsSortSelectChange(this.value)">
-                    <option value="master" selected>&#x1F4DC; &#x30DE;&#x30B9;&#x30BF;&#x30FC;&#x8A2D;&#x5B9A;&#x9806; (&#x30C7;&#x30D5;&#x30A9;&#x30EB;&#x30C8;)</option>
-                    <option value="streak">&#x1F525; &#x9023;&#x7D9A;&#x65E5;&#x6570; (&#x9AD8;)</option>
-                    <option value="r3">&#x26A1; 3&#x65E5;&#x9054;&#x6210;&#x5EA6; (&#x9AD8;)</option>
-                    <option value="r7">&#x1F4C5; 7&#x65E5;&#x9054;&#x6210;&#x5EA6; (&#x9AD8;)</option>
-                    <option value="r30">&#x1FA99; 30&#x65E5;&#x9054;&#x6210;&#x5EA6; (&#x9AD8;)</option>
-                    <option value="r90">&#x1F3C6; 90&#x65E5;&#x9054;&#x6210;&#x5EA6; (&#x9AD8;)</option>
-                    <option value="status">&#x1F31F; &#x72B6;&#x614B;&#x8A55;&#x4FA1; (&#x7D76;&#x597D;&#x8ABF;&#xFF5E;)</option>
-                    <option value="name">&#x540D;&#x524D;&#x9806; (50&#x97F3;)</option>
+                  <select id="analytics-sort-select" class="sort-select" onchange="renderTableAnalyticsView()">
+                    <option value="streak_desc">🔥 連続日数（ストリーク）順</option>
+                    <option value="rate7_desc">⚡ 7日達成率（高い順）</option>
+                    <option value="rate30_desc">🌕 30日達成率（高い順）</option>
+                    <option value="rate90_desc">🏆 90日達成率（高い順）</option>
+                    <option value="rate7_asc">⚠️ 7日達成率（低い順・要テコ入れ）</option>
+                    <option value="name_asc">名前順（50音）</option>
                   </select>
                 </div>
                 <button type="button" class="btn-toggle-visual-mode" onclick="toggleAnalyticsVisualMode()" title="表示切替: 棒グラフ ⇄ ニコちゃんマーク (キーボード: V または S)">
@@ -2266,6 +2302,40 @@
   </div>
 
   <!-- Modal: Edit Task (Task Profile & TaskChute Timer) -->
+    <!-- Task Resume Memo Modal (蜀埼幕繝｡繝｢繝ｻ荳ｭ譁ｭ繝｡繝｢) -->
+  <div class="modal-overlay hidden" id="modal-resume-note">
+    <div class="modal-content resume-note-modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h3 id="resume-note-modal-title">&#x1F4DD; &#x518D;&#x958B;&#x30E1;&#x30E2;&#x306E;&#x8A18;&#x9332; (&#x4E2D;&#x65AD;)</h3>
+          <span class="resume-note-task-badge" id="resume-note-task-name">&#x30BF;&#x30B9;&#x30AF;</span>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="handleSaveResumeNote()" title="&#x4FDD;&#x5B58;&#x3057;&#x3066;&#x9589;&#x3058;&#x308B; (ESC / Enter)">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Input Panel (荳ｭ譁ｭ譎ゅ・逋ｽ邏吶Γ繝｢蜈･蜉・ -->
+        <div id="resume-note-input-panel">
+          <textarea id="resume-note-textarea" class="resume-note-textarea" rows="3" placeholder="&#x6B21;&#x306B;&#x518D;&#x958B;&#x3059;&#x308B;&#x3068;&#x304D;&#x306E;&#x624B;&#x304C;&#x304B;&#x308A;&#x30FB;&#x72B6;&#x6CC1;&#x3092;&#x30E1;&#x30E2;... (Enter&#x3067;&#x5373;&#x4FDD;&#x5B58;)"></textarea>
+          <div class="resume-note-tips">
+            <span>&#x1F4A1; <b>Enter</b> &#x307E;&#x305F;&#x306F; <b>ESC</b> &#x3067;&#x7D20;&#x65E9;&#x304F;&#x4FDD;&#x5B58;&#x3057;&#x3066;&#x9589;&#x3058;&#x3089;&#x308C;&#x307E;&#x3059;</span>
+          </div>
+        </div>
+        <!-- View Panel (蜀埼幕譎ゅ・蜑榊屓縺ｮ繝｡繝｢遒ｺ隱・ -->
+        <div id="resume-note-view-panel" class="hidden">
+          <div class="resume-note-view-box">
+            <div class="resume-note-view-label">&#x524D;&#x56DE;&#x306E;&#x4F5C;&#x696D;&#x30E1;&#x30E2;:</div>
+            <div class="resume-note-view-content" id="resume-note-view-content"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer resume-note-footer">
+        <button type="button" class="btn-subtle" onclick="handleSaveResumeNote()">&#x9589;&#x3058;&#x308B;</button>
+        <button type="button" class="btn-primary" id="btn-resume-note-save" onclick="handleSaveResumeNote()">&#x1F4BE; &#x4FDD;&#x5B58;&#x3057;&#x3066;&#x9589;&#x3058;&#x308B; (Enter)</button>
+        <button type="button" class="btn-primary" id="btn-resume-note-confirm" onclick="closeResumeNoteModal()">&#x1F680; &#x4F5C;&#x696D;&#x3092;&#x958B;&#x59CB;&#x3059;&#x308B; (Enter)</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-edit-task">
     <div class="modal-card modal-wide">
       <div class="modal-header">
@@ -3333,6 +3403,7 @@
   <script src="js/engine/keyboardShortcuts.js"></script>
   <script src="js/services/undoService.js"></script>
   <script src="js/services/storageService.js"></script>
+  <script src="js/services/resumeNoteService.js"></script>
   <script src="js/services/taskTimerService.js"></script>
   <script src="js/components/cardRenderers.js"></script>
   <script src="js/components/modalService.js"></script>

@@ -1,4 +1,4 @@
-﻿// =========================================================================
+// =========================================================================
 // 1. Render All View (Today Screen with Robust Flat Mode & Section Groups)
 // =========================================================================
 
@@ -138,7 +138,7 @@ function renderAllView() {
     });
 
     // 2. Collect ALL Habits (Active only on Today)
-    const flatHabits = isToday ? getFilteredHabits('all').sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) : [];
+    const flatHabits = isToday ? getFilteredHabits('all') : [];
 
     let flatContentHtml = `
       ${toolbarHtml}
@@ -192,7 +192,7 @@ function renderAllView() {
       return true;
     });
 
-    const secHabits = isToday ? getFilteredHabits('all').filter(h => isHabitInDailySection(h, s.name)).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) : [];
+    const secHabits = isToday ? getFilteredHabits('all').filter(h => isHabitInDailySection(h, s.name)) : [];
 
     if (state.filters.status !== 'all' && secTasks.length === 0 && secHabits.length === 0) {
       continue;
@@ -201,64 +201,166 @@ function renderAllView() {
     let secEtaBadgeHtml = '';
 
     if (isToday) {
-      let secRemainMin = 0;
-      let secRemainCount = 0;
+      let secTaskRemainMin = 0;
+      let secTaskRemainCount = 0;
       secTasksAll.forEach(t => {
         const st = getTaskStatusForSelectedDate(t);
         if (st !== 'completed' && st !== 'skipped') {
-          secRemainMin += getItemRemainingMinutes(t, 'task');
-          secRemainCount++;
+          secTaskRemainMin += getItemRemainingMinutes(t, 'task');
+          secTaskRemainCount++;
         }
       });
+
+      let secHabitRemainMin = 0;
+      let secHabitRemainCount = 0;
       secHabits.forEach(h => {
         const st = getHabitStatusForSelectedDate(h);
         if (st !== 'completed' && st !== 'skipped') {
-          secRemainMin += getItemRemainingMinutes(h, 'habit');
-          secRemainCount++;
+          secHabitRemainMin += getItemRemainingMinutes(h, 'habit');
+          secHabitRemainCount++;
         }
       });
+
+      const secRemainMin = secTaskRemainMin + secHabitRemainMin;
+      const secRemainCount = secTaskRemainCount + secHabitRemainCount;
       const now = new Date();
       const secEtaDate = new Date(now.getTime() + secRemainMin * 60000);
-      const secEtaTimeStr = `${String(secEtaDate.getHours()).padStart(2, '0')}:${String(secEtaDate.getMinutes()).padStart(2, '0')}`;
-      const sH = Math.floor(secRemainMin / 60);
-      const sM = secRemainMin % 60;
-      const secRemainFormatted = sH > 0 ? `${sH}h${sM}m` : `${sM}分`;
+      const sH = String(secEtaDate.getHours()).padStart(2, '0');
+      const sM = String(secEtaDate.getMinutes()).padStart(2, '0');
+      const secEtaTimeStr = sH + ':' + sM;
 
-      secEtaBadgeHtml = secRemainCount > 0
-        ? `<span class="section-group-eta" style="font-size: 11px; font-weight: 700; color: #38bdf8; background: rgba(0, 0, 0, 0.35); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.35); font-family: 'JetBrains Mono', monospace;" title="このセクションの未完了アイテムを今すぐ順に実行した場合の終了見込み">⏱️ 残り ${secRemainFormatted} ➔ 見込み ${secEtaTimeStr}</span>`
-        : `<span style="font-size: 10.5px; font-weight: 700; color: #34d399; background: rgba(16, 185, 129, 0.2); padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(52, 211, 153, 0.4);">✓ 全完了</span>`;
+      let isSecOverdue = false;
+      if (s && secRemainCount > 0) {
+        const secEndHourDec = s.end;
+        const secEtaHourDec = secEtaDate.getHours() + (secEtaDate.getMinutes() / 60);
+        const curHourDec = now.getHours() + (now.getMinutes() / 60);
+        if (secEtaDate.getDate() !== now.getDate() || secEtaHourDec > secEndHourDec || curHourDec >= secEndHourDec) {
+          isSecOverdue = true;
+        }
+      }
+
+      const secTaskFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secTaskRemainMin) : (secTaskRemainMin + '\u5206');
+      const secHabitFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secHabitRemainMin) : (secHabitRemainMin + '\u5206');
+      const secTotalFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secRemainMin) : (secRemainMin + '\u5206');
+
+      if (secRemainCount > 0) {
+        const overdueCls = isSecOverdue ? ' eta-alert-overdue' : '';
+        secEtaBadgeHtml = '<div class="tc-eta-unified-badge tc-eta-compact' + overdueCls + '" title="\u5F53\u30BB\u30AF\u30B7\u30E7\u30F3\u6B8B\u308A\u6642\u9593: ' + secTotalFormatted + ' / \u5B8C\u4E86\u898B\u8FBC\u307F: ' + secEtaTimeStr + '">' +
+          '<div class="tc-eta-main-row">' +
+            '<div class="tc-eta-item tc-eta-remain-item">' +
+              '<span class="tc-eta-icon">&#x23F1;&#xFE0F;</span>' +
+              '<span class="tc-eta-label">\u6B8B:</span>' +
+              '<b class="tc-eta-val">' + secTotalFormatted + '</b>' +
+            '</div>' +
+            '<span class="tc-eta-arrow">&#x279C;</span>' +
+            '<div class="tc-eta-item tc-eta-finish-item">' +
+              '<span class="tc-eta-icon">&#x1F3C1;</span>' +
+              '<span class="tc-eta-label">\u898B\u8FBC:</span>' +
+              '<b class="tc-eta-val tc-eta-highlight">' + secEtaTimeStr + '</b>' +
+            '</div>' +
+          '</div>' +
+          '<div class="tc-eta-sub-row">' +
+            '<span class="tc-eta-breakdown-item">' +
+              '<span class="tc-eta-sub-icon">&#x1F4CB;</span>' +
+              '<span class="tc-eta-sub-label">\u30BF\u30B9\u30AF:</span>' +
+              '<b class="tc-eta-sub-val">' + secTaskFormatted + ' (' + secTaskRemainCount + ')</b>' +
+            '</span>' +
+            '<span class="tc-eta-divider">|</span>' +
+            '<span class="tc-eta-breakdown-item">' +
+              '<span class="tc-eta-sub-icon">&#x1F504;</span>' +
+              '<span class="tc-eta-sub-label">\u30CF\u30D3\u30C3\u30C8:</span>' +
+              '<b class="tc-eta-sub-val">' + secHabitFormatted + ' (' + secHabitRemainCount + ')</b>' +
+            '</span>' +
+          '</div>' +
+        '</div>';
+      } else {
+        secEtaBadgeHtml = '<span style="font-size: 10.5px; font-weight: 700; color: #34d399; background: rgba(16, 185, 129, 0.2); padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(52, 211, 153, 0.4);">&#x2714;&#xFE0F; \u5168\u9054\u6210!\uD83C\uDF89</span>';
+      }
     } else if (isPast) {
-      let secActMins = 0;
-      let secDoneCount = 0;
+      let secTaskActMins = 0;
+      let secDoneTaskCount = 0;
       secTasksAll.forEach(t => {
         if (getTaskStatusForSelectedDate(t) === 'completed') {
-          secDoneCount++;
-          secActMins += t.actMin || t.estMin || 25;
+          secDoneTaskCount++;
+          secTaskActMins += t.actMin || t.estMin || 15;
         }
       });
       const k = getSelectedDateKey();
+      let secHabitActMins = 0;
+      let secDoneHabitCount = 0;
       secHabits.forEach(h => {
         if (getHabitStatusForSelectedDate(h) === 'completed') {
-          secDoneCount++;
-          secActMins += (h.history && typeof h.history[k] === 'object' && h.history[k]?.durationMin) ? h.history[k].durationMin : (h.targetMin || 15);
+          secDoneHabitCount++;
+          secHabitActMins += (h.history && typeof h.history[k] === 'object' && h.history[k]?.durationMin) ? h.history[k].durationMin : (h.targetMin || 5);
         }
       });
-      const sH = Math.floor(secActMins / 60);
-      const sM = secActMins % 60;
-      const actFormatted = sH > 0 ? `${sH}h${sM}m` : `${sM}分`;
 
-      secEtaBadgeHtml = `<span class="section-group-eta" style="font-size: 11px; font-weight: 700; color: #fbbf24; background: rgba(0, 0, 0, 0.35); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(251, 191, 36, 0.35); font-family: 'JetBrains Mono', monospace;">📜 実績: ${secDoneCount}/${secTasksAll.length + secHabits.length}件 (${actFormatted})</span>`;
+      const secActualMins = secTaskActMins + secHabitActMins;
+      const secDoneCount = secDoneTaskCount + secDoneHabitCount;
+      const totalCount = secTasksAll.length + secHabits.length;
+      const actFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secActualMins) : (secActualMins + '\u5206');
+      const taskActFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secTaskActMins) : (secTaskActMins + '\u5206');
+      const habitActFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secHabitActMins) : (secHabitActMins + '\u5206');
+
+      secEtaBadgeHtml = '<div class="tc-eta-unified-badge tc-eta-compact">' +
+        '<div class="tc-eta-main-row">' +
+          '<div class="tc-eta-item">' +
+            '<span class="tc-eta-label">\u5B8C\u4E86:</span>' +
+            '<b class="tc-eta-val">' + secDoneCount + '/' + totalCount + '\u4EF6</b>' +
+          '</div>' +
+          '<span class="tc-eta-arrow">&#x279C;</span>' +
+          '<div class="tc-eta-item">' +
+            '<span class="tc-eta-label">\u5B9F\u7E3E:</span>' +
+            '<b class="tc-eta-val tc-eta-highlight">' + actFormatted + '</b>' +
+          '</div>' +
+        '</div>' +
+        '<div class="tc-eta-sub-row">' +
+          '<span class="tc-eta-breakdown-item">' +
+            '<span class="tc-eta-sub-label">\u30BF\u30B9\u30AF:</span>' +
+            '<b class="tc-eta-sub-val">' + taskActFormatted + ' (' + secDoneTaskCount + ')</b>' +
+          '</span>' +
+          '<span class="tc-eta-divider">|</span>' +
+          '<span class="tc-eta-breakdown-item">' +
+            '<span class="tc-eta-sub-label">\u30CF\u30D3\u30C3\u30C8:</span>' +
+            '<b class="tc-eta-sub-val">' + habitActFormatted + ' (' + secDoneHabitCount + ')</b>' +
+          '</span>' +
+        '</div>' +
+      '</div>';
     } else if (isFuture) {
-      let secPlanMins = 0;
-      secTasksAll.forEach(t => { secPlanMins += getEstimatedDuration(t, 'task').targetMin; });
-      secHabits.forEach(h => { secPlanMins += getEstimatedDuration(h, 'habit').targetMin; });
-      const sH = Math.floor(secPlanMins / 60);
-      const sM = secPlanMins % 60;
-      const planFormatted = sH > 0 ? `${sH}h${sM}m` : `${sM}分`;
+      let secTaskPlanMins = 0;
+      secTasksAll.forEach(t => { secTaskPlanMins += getEstimatedDuration(t, 'task').targetMin; });
+      let secHabitPlanMins = 0;
+      secHabits.forEach(h => { secHabitPlanMins += getEstimatedDuration(h, 'habit').targetMin; });
+      const secPlanMins = secTaskPlanMins + secHabitPlanMins;
+      const planFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secPlanMins) : (secPlanMins + '\u5206');
+      const taskPlanFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secTaskPlanMins) : (secTaskPlanMins + '\u5206');
+      const habitPlanFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secHabitPlanMins) : (secHabitPlanMins + '\u5206');
 
-      secEtaBadgeHtml = `<span class="section-group-eta" style="font-size: 11px; font-weight: 700; color: #38bdf8; background: rgba(0, 0, 0, 0.35); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.35); font-family: 'JetBrains Mono', monospace;">📅 予定: 全${secTasksAll.length + secHabits.length}件 (${planFormatted})</span>`;
+      secEtaBadgeHtml = '<div class="tc-eta-unified-badge tc-eta-compact">' +
+        '<div class="tc-eta-main-row">' +
+          '<div class="tc-eta-item">' +
+            '<span class="tc-eta-label">\u4E88\u5B9A\u4EF6\u6570:</span>' +
+            '<b class="tc-eta-val">' + (secTasksAll.length + secHabits.length) + '\u4EF6</b>' +
+          '</div>' +
+          '<span class="tc-eta-arrow">&#x279C;</span>' +
+          '<div class="tc-eta-item">' +
+            '<span class="tc-eta-label">\u7DCF\u6642\u9593:</span>' +
+            '<b class="tc-eta-val tc-eta-highlight">' + planFormatted + '</b>' +
+          '</div>' +
+        '</div>' +
+        '<div class="tc-eta-sub-row">' +
+          '<span class="tc-eta-breakdown-item">' +
+            '<span class="tc-eta-sub-label">\u30BF\u30B9\u30AF:</span>' +
+            '<b class="tc-eta-sub-val">' + taskPlanFormatted + ' (' + secTasksAll.length + ')</b>' +
+          '</span>' +
+          '<span class="tc-eta-divider">|</span>' +
+          '<span class="tc-eta-breakdown-item">' +
+            '<span class="tc-eta-sub-label">\u30CF\u30D3\u30C3\u30C8:</span>' +
+            '<b class="tc-eta-sub-val">' + habitPlanFormatted + ' (' + secHabits.length + ')</b>' +
+          '</span>' +
+        '</div>' +
+      '</div>';
     }
-
     const secPct = (typeof getSectionTimeProgress === 'function') ? getSectionTimeProgress(s.name) : null;
     const isActiveSec = secPct !== null;
     const isWarningSec = isActiveSec && secPct >= 70;

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive Mobile Lite - Service Worker
  * Offline Cache & High-Speed Launch Engine
  */

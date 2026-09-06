@@ -406,7 +406,7 @@ function renderTaskCardHtml(task) {
   let actionsHtml = '';
   if (isToday) {
     if (isInProgress) {
-      actionsHtml = `<button class="btn-task-action done" onclick="promptCompleteTask('${task.id}', event)">✓ 完了</button>`;
+      actionsHtml = `<button type="button" class="btn-task-action pause" onclick="pauseTask('${task.id}')" title="\u4E00\u6642\u4E2D\u65AD">\u23F8\uFE0F \u4E2D\u65AD</button><button type="button" class="btn-task-action done" onclick="promptCompleteTask('${task.id}', event)">\u2714\uFE0F \u5B8C\u4E86</button>`;
     } else if (isPaused) {
       actionsHtml = `<button class="btn-task-action resume" onclick="startTask('${task.id}')" title="作業を再開">▶ 再開</button>`;
     } else if (isCompleted) {
@@ -437,6 +437,7 @@ function renderTaskCardHtml(task) {
          onclick="openEditTaskModal('${task.id}')">
       <div class="task-card-header">
         <div class="task-labels-row">
+          ${task.resumeNote ? `<button type="button" class="btn-task-resume-note-chip" onclick="event.stopPropagation(); openResumeNoteViewModal('${task.id}')" title="\u518D\u958B\u30E1\u30E2\u3092\u78BA\u8A8D">\uD83D\uDCDD \u518D\u958B\u30E1\u30E2</button>` : ''}
           ${task._carriedOverFrom ? `<span class="badge-carryover" title="${task._carriedOverFrom}から自動繰越">⏪ 繰越 (${task._carriedOverFrom}より)</span>` : ''}
           ${labelBadge ? `<span class="badge-eisenhower ${labelBadge.cls}">${labelBadge.text}</span>` : ''}
           <span class="badge-frog">🐸 ${task.frog || 3}</span>
