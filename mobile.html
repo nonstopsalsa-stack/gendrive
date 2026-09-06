@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="mobile.css?v=20260830_v125_rev7">
+  <link rel="stylesheet" href="mobile.css?v=20260906_v153">
 </head>
 <body>
 
@@ -35,7 +35,7 @@
           <span class="brand-title">GENDRIVE</span>
           <span class="brand-sub-lite">LITE</span>
         </div>
-        <span class="version-capsule-badge">v1.2.5</span>
+        <span class="version-capsule-badge">v1.5.3</span>
       </div>
       <div class="header-meta-actions">
         <div class="sync-badge" id="m-sync-badge" onclick="pullFromCloud(true)" title="タップで強制再同期">
@@ -59,23 +59,13 @@
         <span id="m-eta-remain-info" style="font-size: 11px; opacity: 0.85;">(残 --)</span>
       </div>
     </div>
+    <!-- Sticky Section / Daily Slim Indicator (Fixed) -->
+    <div class="sticky-indicator-slot" id="sticky-indicator-slot"></div>
+
+    <!-- Sticky Active Habit / Task Bar (Fixed, styled like habit card) -->
+    <div class="sticky-active-wrapper hidden" id="sticky-active-bar"></div>
   </header>
 
-  <!-- Sticky Top Active Task Bar (Shown when task is running) -->
-  <div class="sticky-active-bar hidden" id="sticky-active-bar">
-    <div class="active-bar-info">
-      <div class="active-bar-tag">
-        <span class="active-bar-pulse"></span>
-        <span>RUNNING</span>
-        <span class="active-bar-timer" id="active-bar-timer">00:00</span>
-      </div>
-      <div class="active-bar-title" id="active-bar-title">タスクタイトル</div>
-    </div>
-    <div class="active-bar-actions">
-      <button class="btn-touch btn-touch-pause" onclick="pauseTask(mState.activeTaskId)">⏸ 中断</button>
-      <button class="btn-touch btn-touch-success" onclick="completeTask(mState.activeTaskId)">✔ 完了</button>
-    </div>
-  </div>
 
   <!-- Mobile Main Content -->
   <main class="mobile-content">
@@ -190,7 +180,7 @@
       <!-- 2. バージョン情報表示 -->
       <div class="settings-version-card" style="text-align: center; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 10px; margin-bottom: 24px;">
         <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); font-family: var(--font-mono);">
-          ⚡ Gendrive Lite <span style="color: #38bdf8; background: rgba(56,189,248,0.15); padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(56,189,248,0.35); margin-left: 4px;">v1.2.5</span>
+          ⚡ Gendrive Lite <span style="color: #38bdf8; background: rgba(56,189,248,0.15); padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(56,189,248,0.35); margin-left: 4px;">v1.5.3</span>
         </div>
         <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 4px;">
           Company OS & Personal OS Engine
@@ -198,7 +188,7 @@
       </div>
 
       <!-- 3. 最下部クリアランス余白（トーストバー被り完全防御） -->
-      <div style="height: 40px;"></div>
+      <div style="height: 85px;"></div>
     </div>
   </div>
 
@@ -208,6 +198,7 @@
     <button class="m-undo-btn" id="m-undo-action-btn" onclick="executeMobileUndo()">↩️ 元に戻す</button>
   </div>
 
-  <script src="mobile.js?v=20260830_v125_rev7"></script>
+  <script src="js/config.js?v=20260906_v153"></script>
+  <script src="mobile.js?v=20260906_v153"></script>
 </body>
 </html>

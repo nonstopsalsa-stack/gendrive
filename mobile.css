@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive Mobile Lite - Solid Neon Dark Theme & Touch Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -182,22 +182,71 @@ body {
   flex-shrink: 0;
 }
 
-.eta-summary-badge {
+/* Date & ETA Info Bar (1 Row Compact) */
+.header-info-bar {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.date-selector-group {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 2px 6px;
+  gap: 4px;
+}
+
+.btn-date-nav {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-date-nav:active {
+  color: #fff;
+  transform: scale(0.9);
+}
+
+.date-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.eta-summary-badge {
+  display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-family: var(--font-mono);
   color: var(--accent-amber);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .eta-time {
   font-weight: 700;
   color: #fff;
-  background: rgba(251, 191, 36, 0.15);
-  padding: 2px 6px;
+  background: rgba(251, 191, 36, 0.18);
+  padding: 1.5px 5.5px;
   border-radius: 4px;
-  border: 1px solid rgba(251, 191, 36, 0.3);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  font-size: 12px;
 }
 
 /* =========================================================================
@@ -674,25 +723,26 @@ body.theme-habit .m-card-slim {
 
 .m-undo-toast {
   position: fixed;
-  bottom: calc(var(--safe-bottom) + 16px);
-  left: 14px;
-  right: 14px;
-  background: rgba(15, 23, 42, 0.96);
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  border-radius: 12px;
-  padding: 10px 14px;
+  bottom: calc(var(--safe-bottom, 8px) + 64px);
+  left: 10px;
+  right: 10px;
+  background: rgba(15, 23, 42, 0.97);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  border-radius: 9px;
+  padding: 9px 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 16px rgba(56, 189, 248, 0.25);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75), 0 0 16px rgba(56, 189, 248, 0.3);
   backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 9999;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
 }
 
 .m-undo-toast.hidden {
-  transform: translateY(120%);
+  transform: translateY(30px);
   opacity: 0;
   pointer-events: none;
 }
@@ -997,4 +1047,129 @@ body.theme-habit .m-fab-add {
 @keyframes slideDown {
   from { transform: translateY(-100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* =========================================================================
+   Fixed Top Indicator Slot & Active Habit/Task Card Styles
+   ========================================================================= */
+
+.sticky-indicator-slot {
+  margin-top: 6px;
+}
+
+.sticky-indicator-slot:empty {
+  display: none;
+  margin-top: 0;
+}
+
+.sticky-indicator-slot .m-section-indicator {
+  margin-bottom: 0 !important;
+}
+
+.sticky-active-wrapper {
+  margin-top: 6px;
+}
+
+.sticky-active-wrapper.hidden {
+  display: none !important;
+  margin-top: 0;
+}
+
+.top-sticky-card {
+  min-height: 48px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.top-sticky-card.in-progress {
+  background: linear-gradient(135deg, rgba(14, 45, 90, 0.95), rgba(20, 60, 120, 0.95)) !important;
+  border: 1px solid #38bdf8 !important;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.4), inset 0 0 12px rgba(56, 189, 248, 0.15) !important;
+  animation: pulseNeonGlow 2.4s infinite ease-in-out;
+}
+
+.top-sticky-card.paused {
+  background: rgba(45, 35, 15, 0.95) !important;
+  border: 1px solid var(--accent-amber) !important;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.3) !important;
+}
+
+.top-card-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.top-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.top-status-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.top-status-line.running {
+  color: var(--accent-cyan);
+}
+
+.top-status-line.paused {
+  color: var(--accent-amber);
+}
+
+.top-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.top-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-slim-warning {
+  background: linear-gradient(135deg, #d97706, #f59e0b) !important;
+  color: #1e1202 !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35) !important;
+  font-weight: 800;
+}
+
+.btn-slim-warning:active {
+  transform: scale(0.93);
+}
+
+.m-slim-timer-badge.paused {
+  color: var(--accent-amber) !important;
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+.mobile-content {
+  padding: 8px 10px 0 10px;
 }

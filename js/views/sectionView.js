@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Section View Renderer
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -134,7 +134,7 @@ function renderSectionView() {
   if (secProgBarEl) secProgBarEl.style.width = `${progressPercent}%`;
 
   if (showHabits) {
-    const filteredHabits = getFilteredHabits('section');
+    const filteredHabits = getFilteredHabits('section').sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
     const ghostAddHabitHtml = renderGhostAddHabitHtml(state.currentSection);
 
     if (filteredHabits.length === 0) {

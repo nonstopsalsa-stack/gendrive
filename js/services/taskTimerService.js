@@ -1,8 +1,3 @@
-﻿/**
- * Gendrive - TaskChute Live Timer & Execution State Service
- * 哲生 (AI Company OS & Personal OS Engine)
- */
-
 let activeTaskTimerInterval = null;
 
 function moveTaskToTopOfSection(taskId) {
@@ -11,7 +6,6 @@ function moveTaskToTopOfSection(taskId) {
   if (targetTaskIdx === -1) return;
   const targetTask = state.tasks[targetTaskIdx];
 
-  // Find index of the very first task in the same section / group
   const firstSectionTaskIdx = state.tasks.findIndex(t => {
     if (targetTask.section) {
       return t.section === targetTask.section;
@@ -28,19 +22,23 @@ function moveTaskToTopOfSection(taskId) {
 
 function startTask(taskId) {
   const now = new Date();
-  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const nowTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
 
-  // Automatically promote started task to the top of its section
   moveTaskToTopOfSection(taskId);
+
+  let autoPausedTaskId = null;
+  let isResumingWithNote = false;
 
   state.tasks.forEach(t => {
     if (t.id === taskId) {
+      if (t.status === 'paused' && t.resumeNote && t.resumeNote.trim()) {
+        isResumingWithNote = true;
+      }
       t.status = 'in_progress';
       t.actStart = t.actStart || nowTimeStr;
       t.startTimestamp = Date.now();
       state.activeTaskId = taskId;
     } else if (t.status === 'in_progress') {
-      // Auto-pause previously active task and accumulate exact seconds
       t.status = 'paused';
       if (t.startTimestamp) {
         const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - t.startTimestamp) / 1000));
@@ -48,10 +46,10 @@ function startTask(taskId) {
         t.actMin = Math.round(t.accumulatedSeconds / 60);
       }
       t.startTimestamp = null;
+      autoPausedTaskId = t.id;
     }
   });
 
-  // 実行中ハビットがあれば自動中断（完全シングルタスク排他制御）
   if (Array.isArray(state.habits)) {
     let habitPaused = false;
     state.habits.forEach(h => {
@@ -70,8 +68,15 @@ function startTask(taskId) {
       saveHabits();
     }
   }
+
   saveTasks();
   renderApp();
+
+  if (isResumingWithNote && typeof openResumeNoteViewModal === 'function') {
+    openResumeNoteViewModal(taskId);
+  } else if (autoPausedTaskId && typeof openResumeNoteInputModal === 'function') {
+    openResumeNoteInputModal(autoPausedTaskId);
+  }
 }
 
 function pauseTask(taskId) {
@@ -91,14 +96,18 @@ function pauseTask(taskId) {
 
   saveTasks();
   renderApp();
+
+  if (typeof openResumeNoteInputModal === 'function') {
+    openResumeNoteInputModal(taskId);
+  }
 }
 
-function completeTask(taskId, userNote = '', userDurationMin = null) {
+function completeTask(taskId, userNote, userDurationMin) {
   const task = state.tasks.find(t => t.id === taskId);
   if (!task) return;
 
   const now = new Date();
-  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const nowTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
   task.actEnd = nowTimeStr;
   
   if (task.startTimestamp) {
@@ -107,14 +116,14 @@ function completeTask(taskId, userNote = '', userDurationMin = null) {
   }
 
   const finalTotalSec = task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : (task.estMin || 25) * 60);
-  task.actMin = userDurationMin !== null ? Number(userDurationMin) : Math.max(1, Math.round(finalTotalSec / 60));
+  task.actMin = (userDurationMin !== undefined && userDurationMin !== null) ? Number(userDurationMin) : Math.max(1, Math.round(finalTotalSec / 60));
   task.status = 'completed';
   task.startTimestamp = null;
+  task.resumeNote = '';
 
   const dateKey = getSelectedDateKey();
   const logId = 'tlog_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
 
-  // Save to task history (for moving average calculations)
   if (!Array.isArray(task.history)) task.history = [];
   task.history.push({
     date: dateKey,
@@ -123,7 +132,6 @@ function completeTask(taskId, userNote = '', userDurationMin = null) {
     note: userNote ? userNote.trim() : ''
   });
 
-  // Save to executionLogs (Timeline)
   if (!Array.isArray(task.executionLogs)) task.executionLogs = [];
   task.executionLogs.unshift({
     id: logId,
@@ -138,7 +146,7 @@ function completeTask(taskId, userNote = '', userDurationMin = null) {
   }
 
   pushUndoAction({
-    description: `タスク「${task.title}」を完了`,
+    description: '\u30BF\u30B9\u30AF\u300C' + (task.title || '') + '\u300D\u3092\u5B8C\u4E86',
     undo: () => {
       task.status = 'uncompleted';
       task.actEnd = null;
@@ -160,7 +168,7 @@ function toggleTask(taskId) {
     completeTask(taskId);
     return;
   } else if (task.status === 'paused') {
-    startTask(taskId); // Resume
+    startTask(taskId);
     return;
   } else {
     startTask(taskId);
@@ -175,6 +183,7 @@ function skipTask(taskId) {
   if (!task) return;
   task.status = 'skipped';
   task.startTimestamp = null;
+  task.resumeNote = '';
   if (state.activeTaskId === taskId) {
     state.activeTaskId = null;
   }

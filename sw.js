@@ -1,13 +1,14 @@
-﻿/**
+/**
  * Gendrive Mobile Lite - Service Worker
- * Offline Cache & High-Speed Launch Engine
+ * Offline Cache & High-Speed Launch Engine (v1.5.3)
  */
 
-const CACHE_NAME = 'gendrive-lite-v125-rev7';
+const CACHE_NAME = 'gendrive-lite-v153';
 const ASSETS_TO_CACHE = [
   './mobile.html',
-  './mobile.css',
-  './mobile.js',
+  './mobile.css?v=20260906_v153',
+  './mobile.js?v=20260906_v153',
+  './js/config.js?v=20260906_v153',
   './manifest.json'
 ];
 
@@ -26,6 +27,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
+            console.log('[SW] Deleting old cache:', cache);
             return caches.delete(cache);
           }
         })
@@ -44,7 +46,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone);
