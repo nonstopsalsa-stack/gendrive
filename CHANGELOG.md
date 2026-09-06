@@ -4,6 +4,15 @@ All notable changes to Gendrive project will be documented in this file.
 
 ---
 
+## [v1.5.5] - 2026-09-07
+### Fixed
+- **Task Tag Filter Pipeline Integrity**: セクションビュー（`sectionView.js`）およびデイリータイムラインビュー（`allView.js`）において、タスクフィルター内のステータス肯定早期リターン（`return true`）により後続のタグ判定が短絡・スキップされていた不具合を是正。否定早期除外（`return false`）方式へ統一し、スマートタグの 3-Way トグル（Include / Exclude / Reset）がすべてのタスクビューで確実に連動するパイプラインを確立。
+- **Compound Filter Harmonization**: ステータスフィルター（未完了/完了）とドメイン・部門・PJ・タグフィルターの複合絞り込みが正常に AND 条件で機能するよう改善。
+- **Automated Verification Suite**: Anytimeブロック、セクションビュー、デイリーセクション分割、デイリーフラット、スマートタグサイクルの全16単体テストケースを導入し 100% PASS を達成。
+- **Release Notes**: `docs/release_notes/2026-09-07_v1.5.5_task_tag_filter_pipeline_integrity.md` を発行。
+
+---
+
 ## [v1.5.4] - 2026-09-07
 ### Fixed
 - **Multi-Count Habit Lifecycle Restoration**: 「1日N回（`daily_times`）」ハビットが1回で完了・非表示になってしまう不具合を根本修正。`recurrence.timesPerDay` を最優先で解決するアーキテクチャを確立。

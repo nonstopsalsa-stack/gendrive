@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive - Section View Renderer
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -21,8 +21,11 @@ function renderAnytimeBlock() {
 
   const activeTasks = anytimeTasks.filter(t => {
     const st = getTaskStatusForSelectedDate(t);
-    if (state.filters.status === 'uncompleted') return st !== 'completed' && st !== 'skipped';
-    if (state.filters.status === 'completed') return st === 'completed';
+    if (state.filters.status === 'uncompleted') {
+      if (st === 'completed' || st === 'skipped') return false;
+    } else if (state.filters.status === 'completed') {
+      if (st !== 'completed') return false;
+    }
     if (state.filters.domain && t.domainMajor !== state.filters.domain && t.domainMinor !== state.filters.domain) return false;
     if (state.filters.dept && t.deptMajor !== state.filters.dept && t.deptMinor !== state.filters.dept) return false;
     if (state.filters.proj && t.projMajor !== state.filters.proj && t.projMinor !== state.filters.proj) return false;
@@ -94,8 +97,11 @@ function renderSectionView() {
   if (showTasks) {
     const filteredTasks = allSectionTasks.filter(t => {
       const st = getTaskStatusForSelectedDate(t);
-      if (state.filters.status === 'uncompleted') return st !== 'completed' && st !== 'skipped';
-      if (state.filters.status === 'completed') return st === 'completed';
+      if (state.filters.status === 'uncompleted') {
+        if (st === 'completed' || st === 'skipped') return false;
+      } else if (state.filters.status === 'completed') {
+        if (st !== 'completed') return false;
+      }
       if (state.filters.domain && t.domainMajor !== state.filters.domain && t.domainMinor !== state.filters.domain) return false;
       if (state.filters.dept && t.deptMajor !== state.filters.dept && t.deptMinor !== state.filters.dept) return false;
       if (state.filters.proj && t.projMajor !== state.filters.proj && t.projMinor !== state.filters.proj) return false;
