@@ -281,6 +281,30 @@ function migrateMobileHabit(h, idx = 0) {
     migrated.history = {};
   }
 
+  // Self-Healing: Multi-count habit premature completion recovery
+  if (migrated.history && typeof migrated.history === 'object') {
+    const targetT = getItemTargetTimes(migrated);
+    const todayKey = normalizeToLocalDateKey(new Date());
+
+    Object.keys(migrated.history).forEach(dk => {
+      const entry = migrated.history[dk];
+      if (entry && typeof entry === 'object') {
+        const c = typeof entry.count === 'number' ? entry.count : (parseInt(entry.count, 10) || 0);
+        if (targetT > 1 && c < targetT && entry.done) {
+          entry.done = false;
+        }
+      }
+    });
+
+    const todayEntry = migrated.history[todayKey];
+    const todayCount = todayEntry ? (typeof todayEntry.count === 'number' ? todayEntry.count : (parseInt(todayEntry.count, 10) || 0)) : 0;
+    if (targetT > 1 && todayCount < targetT) {
+      if (migrated.status === 'completed') {
+        migrated.status = 'uncompleted';
+      }
+    }
+  }
+
   // Normalize executionLogs
   if (!Array.isArray(migrated.executionLogs)) {
     migrated.executionLogs = [];
