@@ -607,7 +607,35 @@ function sanitizeDailyState() {
     }
   });
 
+  const isWaterCoffeeResetDone = localStorage.getItem('gendrive_reset_water_coffee_20260907') === 'true';
+
   (state.habits || []).forEach(habit => {
+    const hName = habit.name || '';
+    // 特例対応 (2026-09-07): 水・コーヒーの本日実行カウント0回（完全未実行）初期化
+    if (!isWaterCoffeeResetDone && todayKey === '2026-09-07' && (hName.includes('水') || hName.includes('コーヒー'))) {
+      if (habit.history && habit.history[todayKey]) {
+        delete habit.history[todayKey];
+        changed = true;
+      }
+      if (Array.isArray(habit.executionLogs)) {
+        const origLen = habit.executionLogs.length;
+        habit.executionLogs = habit.executionLogs.filter(l => {
+          const lk = l.dateKey || l.date || (l.completedAt && l.completedAt.slice(0, 10));
+          return lk !== todayKey;
+        });
+        if (habit.executionLogs.length !== origLen) changed = true;
+      }
+      habit.status = 'uncompleted';
+      habit.accumulatedSeconds = 0;
+      habit.actEnd = null;
+      habit.startTimestamp = null;
+      if (String(state.activeHabitId) === String(habit.id)) {
+        state.activeHabitId = null;
+      }
+      if (typeof recalculateHabitRates === 'function') recalculateHabitRates(habit);
+      changed = true;
+    }
+
     const curCount = typeof getHabitDayCount === 'function' ? getHabitDayCount(habit, todayKey) : 0;
     const targetTimes = typeof getHabitTargetTimes === 'function' ? getHabitTargetTimes(habit) : 1;
 
@@ -631,6 +659,10 @@ function sanitizeDailyState() {
       }
     }
   });
+
+  if (!isWaterCoffeeResetDone && todayKey === '2026-09-07') {
+    localStorage.setItem('gendrive_reset_water_coffee_20260907', 'true');
+  }
 
   if (changed) {
     saveTasks();

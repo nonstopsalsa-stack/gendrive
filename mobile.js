@@ -303,6 +303,24 @@ function migrateMobileHabit(h, idx = 0) {
         migrated.status = 'uncompleted';
       }
     }
+
+    // 特例対応 (2026-09-07): 水・コーヒーの本日実行カウント0回（完全未実行）初期化
+    const hName = migrated.name || '';
+    if (todayKey === '2026-09-07' && (hName.includes('水') || hName.includes('コーヒー'))) {
+      if (!localStorage.getItem('gendrive_reset_water_coffee_20260907')) {
+        delete migrated.history[todayKey];
+        if (Array.isArray(migrated.executionLogs)) {
+          migrated.executionLogs = migrated.executionLogs.filter(l => {
+            const lk = l.dateKey || l.date || (l.completedAt && l.completedAt.slice(0, 10));
+            return lk !== todayKey;
+          });
+        }
+        migrated.status = 'uncompleted';
+        migrated.accumulatedSeconds = 0;
+        migrated.actEnd = null;
+        migrated.startTimestamp = null;
+      }
+    }
   }
 
   // Normalize executionLogs
