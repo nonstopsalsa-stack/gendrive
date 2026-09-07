@@ -2,6 +2,15 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.5.7] - 2026-09-07
+### Fixed & Improved
+- **Preset Task Interrupt Resume Memo Engine**: プリセットタスク（緊急割り込みタスク）起動時において、直後の全モーダル一括クローズ（`closeModal()`）により先行タスクの中断メモ入力モーダルが消滅していた不具合を解消。プリセットモーダルのみを先行クローズし、中断メモモーダル（単独入力／デュアル）を安全に表示・入力可能にするシーケンス制御を確立。
+- **Nested Interrupt Context Preservation**: プリセットタスク実行中にさらに別のプリセットタスクを起動する多重割り込みシナリオにおいても、先行タスクの中断メモが安全に保持・記録されるライフサイクルを保証。
+- **Automated Verification Suite (56/56 PASS)**: プリセット起動時の先行タスク中断メモ起動、白紙入力保存、アイドル時起動、入れ子起動の全16テストケース（Test 8シリーズ）を追加し、全56テストケースで 100% PASS を達成。
+- **Release Notes**: `docs/release_notes/2026-09-07_v1.5.7_preset_task_interrupt_resume_memo_engine.md` を発行。
+
+---
+
 ## [v1.5.6] - 2026-09-07
 ### Added
 - **Dual Task Resume Memo Engine**: 実行中タスクがある状態で中断中タスクを再開した際、中断タスクの白紙メモ（次の一手入力）と再開タスクの前回メモ（作業状況確認）を画面中央左右に並列で同時表示するデュアルモーダルを新設。

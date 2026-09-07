@@ -372,7 +372,15 @@ function executePresetTask(presetId) {
   state.tasks.push(newTask);
   saveTasks();
 
-  // Instantly start this task (which automatically pauses any other task!)
+  // プリセットタスク選択モーダルのみを個別クローズ（先行タスク中断メモモーダルの巻き込みクローズを防止）
+  const presetModal = document.getElementById('modal-task-presets');
+  if (presetModal) {
+    presetModal.classList.remove('active');
+  } else if (typeof closeModal === 'function') {
+    closeModal();
+  }
+
+  // Instantly start this task (which automatically pauses any other task and triggers resume note modal if present)
   startTask(newId);
 
   pushUndoAction({
@@ -385,7 +393,6 @@ function executePresetTask(presetId) {
     }
   });
 
-  closeModal();
   renderApp();
 }
 

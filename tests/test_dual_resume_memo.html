@@ -91,16 +91,24 @@
     </div>
   </div>
 
+  <!-- Modal Container for Task Presets -->
+  <div class="modal-overlay" id="modal-task-presets"></div>
+
   <script>
     // State mock
     const state = {
       activeTaskId: null,
+      currentSection: '第2セッション',
       tasks: [
         { id: 'task-1', title: '動画素材のカット割り編集', status: 'uncompleted', resumeNote: '' },
         { id: 'task-2', title: 'テロップ装飾とアニメーション付与', status: 'paused', resumeNote: '3分20秒までテロップ入れ完了。次はBGM選定から' },
         { id: 'task-3', title: 'サムネイル画像作成', status: 'uncompleted', resumeNote: '' }
       ],
-      habits: []
+      habits: [],
+      taskPresets: [
+        { id: 'preset-1', title: '緊急の修正対応', icon: '🚨', section: 'current', estMin: 15, tags: ['urgent'] },
+        { id: 'preset-2', title: '突発クライアントMTG', icon: '📞', section: 'current', estMin: 30, tags: ['mtg'] }
+      ]
     };
 
     let saveTasksCalled = 0;
@@ -110,10 +118,19 @@
     function renderApp() { renderAppCalled++; }
     function getSelectedDateKey() { return '2026-09-07'; }
     function pushUndoAction() {}
+    function loadTaskPresets() { return state.taskPresets; }
+    function normalizeTags(t) { return Array.isArray(t) ? t : []; }
+    function detectCurrentSection() { return '第2セッション'; }
+    function saveTaskPresets() {}
+    function showPresetListView() {}
+    function closeModal() {
+      document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+    }
   </script>
 
   <script src="../js/services/resumeNoteService.js"></script>
   <script src="../js/services/taskTimerService.js"></script>
+  <script src="../js/components/taskPresetsService.js"></script>
 
   <script>
     const results = [];
@@ -232,6 +249,55 @@
       // Test 7: タスク完了時のクリア
       completeTask(t3.id);
       assert(t3.resumeNote === '', 'Test 7.1: Task 3 resumeNote cleared upon completion');
+
+      // Test 8: プリセットタスク実行（緊急割り込み）時の再開メモ動作検証
+      // 8.1: 実行中タスク(t2)がある状態でプリセットタスク起動 -> プリセットモーダルのみ閉じ、中断メモモーダルが安全に開く
+      t2.status = 'in_progress';
+      state.activeTaskId = t2.id;
+      const presetModal = document.getElementById('modal-task-presets');
+      presetModal.classList.add('active');
+
+      executePresetTask('preset-1');
+
+      assert(!presetModal.classList.contains('active'), 'Test 8.1: Preset modal is closed');
+      assert(t2.status === 'paused', 'Test 8.2: Prior task t2 is auto-paused');
+      assert(currentResumeMode === 'input', 'Test 8.3: currentResumeMode is input for prior task');
+      assert(document.getElementById('modal-resume-note').classList.contains('active'), 'Test 8.4: Resume note modal is ACTIVE (not erroneously closed by closeModal)');
+      assert(!document.getElementById('modal-resume-note').classList.contains('hidden'), 'Test 8.5: Resume note modal is NOT hidden');
+
+      // 中断メモを打鍵して保存
+      document.getElementById('resume-note-textarea').value = 'BGMの選定まで完了、緊急対応後に音量調整';
+      handleSaveResumeNote();
+
+      assert(t2.resumeNote === 'BGMの選定まで完了、緊急対応後に音量調整', 'Test 8.6: Prior task t2 saved resume note successfully');
+      assert(document.getElementById('modal-resume-note').classList.contains('hidden'), 'Test 8.7: Resume note modal closed after save');
+      const newlyCreatedTask = state.tasks[state.tasks.length - 1];
+      assert(newlyCreatedTask.status === 'in_progress', 'Test 8.8: Newly created preset task is now in_progress');
+
+      // 8.2: 実行中タスクがない（アイドル状態）でプリセットタスク起動 -> 中断メモモーダルは開かず即座に開始
+      state.tasks.forEach(t => { if (t.status === 'in_progress') t.status = 'paused'; });
+      state.activeTaskId = null;
+      presetModal.classList.add('active');
+
+      executePresetTask('preset-2');
+
+      assert(!presetModal.classList.contains('active'), 'Test 8.9: Preset modal is closed on idle start');
+      assert(document.getElementById('modal-resume-note').classList.contains('hidden'), 'Test 8.10: Resume note modal is NOT opened on idle start');
+      const idlePresetTask = state.tasks.find(t => t.id === state.activeTaskId);
+      assert(idlePresetTask && idlePresetTask.status === 'in_progress', 'Test 8.11: Idle preset task starts in_progress immediately');
+
+      // 8.3: プリセットタスク実行中に、さらに別のプリセットタスクを起動（割り込みの入れ子）
+      presetModal.classList.add('active');
+      executePresetTask('preset-1');
+
+      assert(idlePresetTask.status === 'paused', 'Test 8.12: Prior preset task is auto-paused on nested preset start');
+      assert(currentResumeMode === 'input', 'Test 8.13: Nested preset triggers input mode for prior preset task');
+      assert(document.getElementById('modal-resume-note').classList.contains('active'), 'Test 8.14: Resume note modal is ACTIVE on nested preset');
+      document.getElementById('resume-note-textarea').value = 'MTG議事録作成中、後で共有';
+      handleSaveResumeNote();
+      assert(idlePresetTask.resumeNote === 'MTG議事録作成中、後で共有', 'Test 8.15: Prior preset task saved resume note');
+      const nestedPresetTask = state.tasks.find(t => t.id === state.activeTaskId);
+      assert(nestedPresetTask && nestedPresetTask.status === 'in_progress', 'Test 8.16: Nested preset task is in_progress');
 
     } catch (err) {
       assert(false, 'Unexpected exception during tests: ' + err.message + '\n' + err.stack);
