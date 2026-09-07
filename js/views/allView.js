@@ -128,8 +128,11 @@ function renderAllView() {
 
     const flatTasks = sortedTasks.filter(t => {
       const st = getTaskStatusForSelectedDate(t);
-      if (state.filters.status === 'uncompleted') return st !== 'completed' && st !== 'skipped';
-      if (state.filters.status === 'completed') return st === 'completed';
+      if (state.filters.status === 'uncompleted') {
+        if (st === 'completed' || st === 'skipped') return false;
+      } else if (state.filters.status === 'completed') {
+        if (st !== 'completed') return false;
+      }
       if (state.filters.domain && t.domainMajor !== state.filters.domain && t.domainMinor !== state.filters.domain) return false;
       if (state.filters.dept && t.deptMajor !== state.filters.dept && t.deptMinor !== state.filters.dept) return false;
       if (state.filters.proj && t.projMajor !== state.filters.proj && t.projMinor !== state.filters.proj) return false;
@@ -183,8 +186,11 @@ function renderAllView() {
     const secTasksAll = getTasksForSection(s.name);
     const secTasks = secTasksAll.filter(t => {
       const st = getTaskStatusForSelectedDate(t);
-      if (state.filters.status === 'uncompleted') return st !== 'completed' && st !== 'skipped';
-      if (state.filters.status === 'completed') return st === 'completed';
+      if (state.filters.status === 'uncompleted') {
+        if (st === 'completed' || st === 'skipped') return false;
+      } else if (state.filters.status === 'completed') {
+        if (st !== 'completed') return false;
+      }
       if (state.filters.domain && t.domainMajor !== state.filters.domain && t.domainMinor !== state.filters.domain) return false;
       if (state.filters.dept && t.deptMajor !== state.filters.dept && t.deptMinor !== state.filters.dept) return false;
       if (state.filters.proj && t.projMajor !== state.filters.proj && t.projMinor !== state.filters.proj) return false;
@@ -214,6 +220,7 @@ function renderAllView() {
       let secHabitRemainMin = 0;
       let secHabitRemainCount = 0;
       secHabits.forEach(h => {
+        if (typeof isHabitTimeExcluded === 'function' && isHabitTimeExcluded(h)) return;
         const st = getHabitStatusForSelectedDate(h);
         if (st !== 'completed' && st !== 'skipped') {
           secHabitRemainMin += getItemRemainingMinutes(h, 'habit');
@@ -289,6 +296,7 @@ function renderAllView() {
       let secHabitActMins = 0;
       let secDoneHabitCount = 0;
       secHabits.forEach(h => {
+        if (typeof isHabitTimeExcluded === 'function' && isHabitTimeExcluded(h)) return;
         if (getHabitStatusForSelectedDate(h) === 'completed') {
           secDoneHabitCount++;
           secHabitActMins += (h.history && typeof h.history[k] === 'object' && h.history[k]?.durationMin) ? h.history[k].durationMin : (h.targetMin || 5);
@@ -297,7 +305,8 @@ function renderAllView() {
 
       const secActualMins = secTaskActMins + secHabitActMins;
       const secDoneCount = secDoneTaskCount + secDoneHabitCount;
-      const totalCount = secTasksAll.length + secHabits.length;
+      const countablePastSecHabits = secHabits.filter(h => !(typeof isHabitTimeExcluded === 'function' && isHabitTimeExcluded(h)));
+      const totalCount = secTasksAll.length + countablePastSecHabits.length;
       const actFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secActualMins) : (secActualMins + '\u5206');
       const taskActFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secTaskActMins) : (secTaskActMins + '\u5206');
       const habitActFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secHabitActMins) : (secHabitActMins + '\u5206');
@@ -330,8 +339,14 @@ function renderAllView() {
       let secTaskPlanMins = 0;
       secTasksAll.forEach(t => { secTaskPlanMins += getEstimatedDuration(t, 'task').targetMin; });
       let secHabitPlanMins = 0;
-      secHabits.forEach(h => { secHabitPlanMins += getEstimatedDuration(h, 'habit').targetMin; });
+      let secHabitPlanCount = 0;
+      secHabits.forEach(h => {
+        if (typeof isHabitTimeExcluded === 'function' && isHabitTimeExcluded(h)) return;
+        secHabitPlanMins += getEstimatedDuration(h, 'habit').targetMin;
+        secHabitPlanCount++;
+      });
       const secPlanMins = secTaskPlanMins + secHabitPlanMins;
+      const countableFutureSecHabits = secHabits.filter(h => !(typeof isHabitTimeExcluded === 'function' && isHabitTimeExcluded(h)));
       const planFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secPlanMins) : (secPlanMins + '\u5206');
       const taskPlanFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secTaskPlanMins) : (secTaskPlanMins + '\u5206');
       const habitPlanFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secHabitPlanMins) : (secHabitPlanMins + '\u5206');
@@ -340,7 +355,7 @@ function renderAllView() {
         '<div class="tc-eta-main-row">' +
           '<div class="tc-eta-item">' +
             '<span class="tc-eta-label">\u4E88\u5B9A\u4EF6\u6570:</span>' +
-            '<b class="tc-eta-val">' + (secTasksAll.length + secHabits.length) + '\u4EF6</b>' +
+            '<b class="tc-eta-val">' + (secTasksAll.length + countableFutureSecHabits.length) + '\u4EF6</b>' +
           '</div>' +
           '<span class="tc-eta-arrow">&#x279C;</span>' +
           '<div class="tc-eta-item">' +
@@ -356,7 +371,7 @@ function renderAllView() {
           '<span class="tc-eta-divider">|</span>' +
           '<span class="tc-eta-breakdown-item">' +
             '<span class="tc-eta-sub-label">\u30CF\u30D3\u30C3\u30C8:</span>' +
-            '<b class="tc-eta-sub-val">' + habitPlanFormatted + ' (' + secHabits.length + ')</b>' +
+            '<b class="tc-eta-sub-val">' + habitPlanFormatted + ' (' + countableFutureSecHabits.length + ')</b>' +
           '</span>' +
         '</div>' +
       '</div>';

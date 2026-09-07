@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.5.3';
-const APP_VERSION_NAME = 'Mobile Task & Habit Pause/Resume Lifecycle Engine & Multi-Paused Support';
+const APP_VERSION = 'v1.5.8';
+const APP_VERSION_NAME = 'Food Tag Habit ETA & Count Exclusion Engine';
 
 const SECTIONS_CONFIG = [
   { id: 'sec_1', name: '第1セッション', start: 3, end: 6, label: '🌅 第1セッション (03:00 - 06:00)', desc: '起床・静寂の自己投資・思考整理', startStr: '03:00', endStr: '06:00' },
@@ -444,5 +444,15 @@ function normalizeTags(raw) {
   return [];
 }
 
+// =========================================================================
+// 8. Time-Excluded Habit Tags (\u98df\u6750\u30bf\u30b0\u7b49\u306e\u4e88\u5b9a\u6642\u9593\u30fb\u4ef6\u6570\u9664\u5916\u30a8\u30f3\u30b8\u30f3)
+// =========================================================================
+const TIME_EXCLUDED_HABIT_TAGS = ['\u98df\u6750'];
 
-
+function isHabitTimeExcluded(habit) {
+  if (!habit) return false;
+  const tags = (typeof normalizeTags === 'function')
+    ? normalizeTags(habit.tags)
+    : (Array.isArray(habit.tags) ? habit.tags : []);
+  return tags.some(t => TIME_EXCLUDED_HABIT_TAGS.includes(t));
+}

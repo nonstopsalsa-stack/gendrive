@@ -496,6 +496,11 @@ function migrateHabit(h, index = 0) {
     h.recurrence = { type: 'everyday' };
   }
 
+  // TargetTimes & Recurrence Self-Healing (daily_times等の目標回数を自己修復)
+  if (typeof getHabitTargetTimes === 'function') {
+    h.targetTimes = getHabitTargetTimes(h);
+  }
+
   // 2. Data Self-Healing Engine (配列化や破損した history の自動復元)
   const healedHistory = {};
   if (Array.isArray(h.history)) {
@@ -520,7 +525,20 @@ function migrateHabit(h, index = 0) {
       if (entry === true) {
         healedHistory[keyToUse] = { done: true, count: h.targetTimes || 1 };
       } else if (entry && typeof entry === 'object') {
-        healedHistory[keyToUse] = entry;
+        healedHistory[keyToUse] = { ...entry };
+      }
+    });
+  }
+
+  // 複数回ハビットの目標未達での誤完了フラグを自動自己修復
+  const actualTargetTimes = (typeof getHabitTargetTimes === 'function') ? getHabitTargetTimes(h) : (h.targetTimes || 1);
+  if (actualTargetTimes > 1) {
+    Object.keys(healedHistory).forEach(dk => {
+      const entry = healedHistory[dk];
+      if (entry && typeof entry === 'object') {
+        if (typeof entry.count === 'number' && entry.count < actualTargetTimes) {
+          entry.done = false;
+        }
       }
     });
   }
@@ -580,7 +598,7 @@ function migrateHabit(h, index = 0) {
   const targetTimes = getHabitTargetTimes(h);
   if (curTodayCount >= targetTimes && targetTimes > 0) {
     h.status = 'completed';
-  } else if (h.status !== 'in_progress') {
+  } else if (h.status !== 'in_progress' && h.status !== 'paused') {
     h.status = 'uncompleted';
   }
 

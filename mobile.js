@@ -55,6 +55,27 @@ let undoTimeout = null;
 
 function getItemTargetTimes(item) {
   if (!item) return 1;
+  if (item.recurrence) {
+    if (item.recurrence.type === 'daily_times') {
+      const tpd = parseInt(item.recurrence.timesPerDay, 10);
+      if (!isNaN(tpd) && tpd > 0) return tpd;
+      const rtt = parseInt(item.recurrence.targetTimes, 10);
+      if (!isNaN(rtt) && rtt > 0) return rtt;
+      return 2;
+    }
+    if (typeof item.recurrence.targetTimes === 'number' && item.recurrence.targetTimes > 0) {
+      return item.recurrence.targetTimes;
+    }
+    if (typeof item.recurrence.timesPerDay === 'number' && item.recurrence.timesPerDay > 0) {
+      return item.recurrence.timesPerDay;
+    }
+  }
+  if (item.recObj && item.recObj.type === 'daily_times') {
+    return Math.max(1, parseInt(item.recObj.timesPerDay, 10) || 2);
+  }
+  if (item.daily_times) return parseInt(item.daily_times, 10) || 1;
+  if (typeof item.dailyTimes === 'number' && item.dailyTimes > 0) return item.dailyTimes;
+
   const t = Number(item.targetTimes);
   if (!isNaN(t) && t > 0) return Math.min(100, Math.floor(t));
   const f = Number(item.frequency);
@@ -230,11 +251,8 @@ function migrateMobileHabit(h, idx = 0) {
     migrated.sortOrder = idx + 1;
   }
 
-  if (migrated.targetTimes === undefined || migrated.targetTimes === null) {
-    const f = Number(migrated.frequency);
-    if (!isNaN(f) && f > 0) migrated.targetTimes = Math.min(100, Math.floor(f));
-    else migrated.targetTimes = 1;
-  }
+  // TargetTimes Self-Healing (Recurrence-Aware)
+  migrated.targetTimes = getItemTargetTimes(migrated);
 
   // Self-Healing history array -> object conversion
   if (Array.isArray(migrated.history)) {
@@ -261,6 +279,30 @@ function migrateMobileHabit(h, idx = 0) {
     migrated.history = newHistObj;
   } else if (!migrated.history || typeof migrated.history !== 'object') {
     migrated.history = {};
+  }
+
+  // Self-Healing: Multi-count habit premature completion recovery
+  if (migrated.history && typeof migrated.history === 'object') {
+    const targetT = getItemTargetTimes(migrated);
+    const todayKey = normalizeToLocalDateKey(new Date());
+
+    Object.keys(migrated.history).forEach(dk => {
+      const entry = migrated.history[dk];
+      if (entry && typeof entry === 'object') {
+        const c = typeof entry.count === 'number' ? entry.count : (parseInt(entry.count, 10) || 0);
+        if (targetT > 1 && c < targetT && entry.done) {
+          entry.done = false;
+        }
+      }
+    });
+
+    const todayEntry = migrated.history[todayKey];
+    const todayCount = todayEntry ? (typeof todayEntry.count === 'number' ? todayEntry.count : (parseInt(todayEntry.count, 10) || 0)) : 0;
+    if (targetT > 1 && todayCount < targetT) {
+      if (migrated.status === 'completed') {
+        migrated.status = 'uncompleted';
+      }
+    }
   }
 
   // Normalize executionLogs

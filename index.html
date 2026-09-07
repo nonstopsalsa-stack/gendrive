@@ -104,7 +104,7 @@
           <span class="logo-badge">ACTION ENGINE</span>
         </div>
 
-        <div class="version-badge" id="app-version-badge" onclick="openReleaseNotesModal()" title="&#x30D0;&#x30FC;&#x30B8;&#x30E7;&#x30F3; v1.5.3 (&#x30AF;&#x30EA;&#x30C3;&#x30AF;&#x3067;&#x66F4;&#x65B0;&#x5C65;&#x6B74;&#x8868;&#x793A;)">v1.5.3</div>
+        <div class="version-badge" id="app-version-badge" onclick="openReleaseNotesModal()" title="バージョン v1.5.7 (クリックで更新履歴表示)">v1.5.7</div>
 
         <!-- Date Navigation Bar -->
         <div class="date-nav-bar">
@@ -2304,34 +2304,82 @@
   <!-- Modal: Edit Task (Task Profile & TaskChute Timer) -->
     <!-- Task Resume Memo Modal (蜀埼幕繝｡繝｢繝ｻ荳ｭ譁ｭ繝｡繝｢) -->
   <div class="modal-overlay hidden" id="modal-resume-note">
-    <div class="modal-content resume-note-modal-dialog">
-      <div class="modal-header">
+    <div class="modal-content resume-note-modal-dialog" id="resume-note-dialog">
+      <!-- 単独表示用ヘッダー -->
+      <div class="modal-header" id="resume-note-single-header">
         <div class="modal-title-group">
-          <h3 id="resume-note-modal-title">&#x1F4DD; &#x518D;&#x958B;&#x30E1;&#x30E2;&#x306E;&#x8A18;&#x9332; (&#x4E2D;&#x65AD;)</h3>
-          <span class="resume-note-task-badge" id="resume-note-task-name">&#x30BF;&#x30B9;&#x30AF;</span>
+          <h3 id="resume-note-modal-title">📝 再開メモの記録 (中断)</h3>
+          <span class="resume-note-task-badge" id="resume-note-task-name">タスク</span>
         </div>
-        <button type="button" class="btn-modal-close" onclick="handleSaveResumeNote()" title="&#x4FDD;&#x5B58;&#x3057;&#x3066;&#x9589;&#x3058;&#x308B; (ESC / Enter)">&#x2715;</button>
+        <button type="button" class="btn-modal-close" onclick="handleSaveResumeNote()" title="保存して閉じる (ESC / Enter)">✕</button>
       </div>
+
+      <!-- デュアル表示用ヘッダー -->
+      <div class="modal-header hidden" id="resume-note-dual-header">
+        <div class="modal-title-group">
+          <h3 id="resume-note-dual-title">🔄 タスク切り替え & 再開メモ連携</h3>
+          <span class="resume-note-dual-subtitle">中断タスクの手がかりを記録し、再開タスクのメモを確認</span>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="handleSaveResumeNote()" title="保存して作業開始 (ESC / Enter)">✕</button>
+      </div>
+
       <div class="modal-body">
-        <!-- Input Panel (荳ｭ譁ｭ譎ゅ・逋ｽ邏吶Γ繝｢蜈･蜉・ -->
-        <div id="resume-note-input-panel">
-          <textarea id="resume-note-textarea" class="resume-note-textarea" rows="3" placeholder="&#x6B21;&#x306B;&#x518D;&#x958B;&#x3059;&#x308B;&#x3068;&#x304D;&#x306E;&#x624B;&#x304C;&#x304B;&#x308A;&#x30FB;&#x72B6;&#x6CC1;&#x3092;&#x30E1;&#x30E2;... (Enter&#x3067;&#x5373;&#x4FDD;&#x5B58;)"></textarea>
-          <div class="resume-note-tips">
-            <span>&#x1F4A1; <b>Enter</b> &#x307E;&#x305F;&#x306F; <b>ESC</b> &#x3067;&#x7D20;&#x65E9;&#x304F;&#x4FDD;&#x5B58;&#x3057;&#x3066;&#x9589;&#x3058;&#x3089;&#x308C;&#x307E;&#x3059;</span>
+        <!-- 単独モード用パネル -->
+        <div id="resume-note-single-body">
+          <!-- Input Panel (中断時の白紙メモ入力) -->
+          <div id="resume-note-input-panel">
+            <textarea id="resume-note-textarea" class="resume-note-textarea" rows="3" placeholder="次に再開するときの手がかり・状況をメモ... (Enterで即保存)"></textarea>
+            <div class="resume-note-tips">
+              <span>💡 <b>Enter</b> または <b>ESC</b> で素早く保存して閉じられます</span>
+            </div>
+          </div>
+          <!-- View Panel (再開時の前回のメモ確認) -->
+          <div id="resume-note-view-panel" class="hidden">
+            <div class="resume-note-view-box">
+              <div class="resume-note-view-label">前回の作業メモ:</div>
+              <div class="resume-note-view-content" id="resume-note-view-content"></div>
+            </div>
           </div>
         </div>
-        <!-- View Panel (蜀埼幕譎ゅ・蜑榊屓縺ｮ繝｡繝｢遒ｺ隱・ -->
-        <div id="resume-note-view-panel" class="hidden">
-          <div class="resume-note-view-box">
-            <div class="resume-note-view-label">&#x524D;&#x56DE;&#x306E;&#x4F5C;&#x696D;&#x30E1;&#x30E2;:</div>
-            <div class="resume-note-view-content" id="resume-note-view-content"></div>
+
+        <!-- デュアルモード用パネル (左右並列表示) -->
+        <div id="resume-note-dual-body" class="resume-note-dual-grid hidden">
+          <!-- 左側：中断タスク（白紙メモ入力待ち） -->
+          <div class="resume-note-dual-col resume-note-col-pause">
+            <div class="resume-note-col-header">
+              <span class="resume-note-col-badge pause-badge">⏸️ これから中断するタスク</span>
+              <div class="resume-note-col-task-name" id="resume-note-dual-pause-task-name">タスクA</div>
+            </div>
+            <div class="resume-note-col-content">
+              <div class="resume-note-col-label">📝 次への手がかり (白紙メモ):</div>
+              <textarea id="resume-note-dual-textarea" class="resume-note-textarea resume-note-dual-textarea" rows="4" placeholder="次に再開するときの手がかり・状況をメモ... (Enterで即保存)"></textarea>
+              <div class="resume-note-tips">
+                <span>💡 <b>Enter</b> または <b>ESC</b> で保存して即開始</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右側：再開タスク（記入済みメモ確認） -->
+          <div class="resume-note-dual-col resume-note-col-resume">
+            <div class="resume-note-col-header">
+              <span class="resume-note-col-badge resume-badge">▶️ 今から再開するタスク</span>
+              <div class="resume-note-col-task-name" id="resume-note-dual-resume-task-name">タスクB</div>
+            </div>
+            <div class="resume-note-col-content">
+              <div class="resume-note-col-label">📋 前回中断時のメモ (確認):</div>
+              <div class="resume-note-view-box resume-note-dual-view-box">
+                <div class="resume-note-view-content" id="resume-note-dual-view-content"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
       <div class="modal-footer resume-note-footer">
-        <button type="button" class="btn-subtle" onclick="handleSaveResumeNote()">&#x9589;&#x3058;&#x308B;</button>
-        <button type="button" class="btn-primary" id="btn-resume-note-save" onclick="handleSaveResumeNote()">&#x1F4BE; &#x4FDD;&#x5B58;&#x3057;&#x3066;&#x9589;&#x3058;&#x308B; (Enter)</button>
-        <button type="button" class="btn-primary" id="btn-resume-note-confirm" onclick="closeResumeNoteModal()">&#x1F680; &#x4F5C;&#x696D;&#x3092;&#x958B;&#x59CB;&#x3059;&#x308B; (Enter)</button>
+        <button type="button" class="btn-subtle" onclick="closeResumeNoteModal()">閉じる</button>
+        <button type="button" class="btn-primary" id="btn-resume-note-save" onclick="handleSaveResumeNote()">💾 保存して閉じる (Enter)</button>
+        <button type="button" class="btn-primary" id="btn-resume-note-confirm" onclick="closeResumeNoteModal()">🚀 作業を開始する (Enter)</button>
+        <button type="button" class="btn-primary hidden" id="btn-resume-note-dual-action" onclick="handleSaveResumeNote()">🚀 中断メモを保存して作業開始 (Enter)</button>
       </div>
     </div>
   </div>

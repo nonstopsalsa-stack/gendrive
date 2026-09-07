@@ -72,7 +72,9 @@ function startTask(taskId) {
   saveTasks();
   renderApp();
 
-  if (isResumingWithNote && typeof openResumeNoteViewModal === 'function') {
+  if (autoPausedTaskId && isResumingWithNote && typeof openDualResumeNoteModal === 'function') {
+    openDualResumeNoteModal(autoPausedTaskId, taskId);
+  } else if (isResumingWithNote && typeof openResumeNoteViewModal === 'function') {
     openResumeNoteViewModal(taskId);
   } else if (autoPausedTaskId && typeof openResumeNoteInputModal === 'function') {
     openResumeNoteInputModal(autoPausedTaskId);
