@@ -714,7 +714,8 @@ function isTaskForSelectedDate(task, dateObj = null) {
   // Inbox, This Week, Next Week, Genius, Someday, Vault などの専用バケットのタスクはデイリー画面から除外
   if (task.bucket && task.bucket !== 'today') return false;
 
-  const d = dateObj ? new Date(dateObj) : (() => {
+  const isValidDateInput = (dateObj instanceof Date) || (typeof dateObj === 'string' && dateObj.length >= 8);
+  const d = isValidDateInput ? new Date(dateObj) : (() => {
     const dt = new Date();
     dt.setDate(dt.getDate() - state.selectedDateOffset);
     return dt;
@@ -1595,7 +1596,7 @@ function calculateTaskChuteEstimates() {
   const targetDate = new Date();
   targetDate.setDate(targetDate.getDate() - state.selectedDateOffset);
 
-  const selectedDateTasks = state.tasks.filter(isTaskForSelectedDate);
+  const selectedDateTasks = state.tasks.filter(t => isTaskForSelectedDate(t));
   const selectedDateHabits = state.habits.filter(h => isHabitScheduledForDate(h, targetDate));
 
   const isToday = state.selectedDateOffset === 0;
@@ -1640,6 +1641,7 @@ function calculateTaskChuteEstimates() {
     let dayHabitRemainMin = 0;
     let dayHabitRemainCount = 0;
     selectedDateHabits.forEach(h => {
+      if (typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)) return;
       const status = getHabitStatusForSelectedDate(h);
       if (status !== "completed" && status !== "skipped") {
         dayHabitRemainMin += getItemRemainingMinutes(h, "habit");
@@ -1698,6 +1700,7 @@ function calculateTaskChuteEstimates() {
     let secHabitRemainMin = 0;
     let secHabitRemainCount = 0;
     secHabits.forEach(h => {
+      if (typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)) return;
       const status = getHabitStatusForSelectedDate(h);
       if (status !== "completed" && status !== "skipped") {
         secHabitRemainMin += getItemRemainingMinutes(h, "habit");
@@ -1744,12 +1747,16 @@ function calculateTaskChuteEstimates() {
       dayEtaTimeStr,
       totalDayRemainCount,
       dayTaskRemainMin,
+      dayTaskRemainCount,
       dayHabitRemainMin,
+      dayHabitRemainCount,
       secRemainMin,
       secEtaTimeStr,
       secRemainCount,
       secTaskRemainMin,
-      secHabitRemainMin
+      secTaskRemainCount,
+      secHabitRemainMin,
+      secHabitRemainCount
     };
   }
 
@@ -1774,6 +1781,7 @@ function calculateTaskChuteEstimates() {
     let completedHabitCount = 0;
     const k = getSelectedDateKey();
     selectedDateHabits.forEach(h => {
+      if (typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)) return;
       const status = getHabitStatusForSelectedDate(h);
       if (status === "completed") {
         completedHabitCount++;
@@ -1784,7 +1792,8 @@ function calculateTaskChuteEstimates() {
 
     const pastActualMins = pastTaskMins + pastHabitMins;
     const completedCount = completedTaskCount + completedHabitCount;
-    const totalCount = selectedDateTasks.length + selectedDateHabits.length;
+    const countablePastHabits = selectedDateHabits.filter(h => !(typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)));
+    const totalCount = selectedDateTasks.length + countablePastHabits.length;
 
     if (dayRemainEl) dayRemainEl.textContent = completedCount + "/" + totalCount + "\u4EF6";
     if (dayEtaTimeEl) dayEtaTimeEl.textContent = formatMinsUnified(pastActualMins);
@@ -1812,6 +1821,7 @@ function calculateTaskChuteEstimates() {
     let secHabitActMins = 0;
     let secDoneHabitCount = 0;
     secHabits.forEach(h => {
+      if (typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)) return;
       if (getHabitStatusForSelectedDate(h) === "completed") {
         secDoneHabitCount++;
         const logMin = (h.history && typeof h.history[k] === "object" && h.history[k]?.durationMin) ? h.history[k].durationMin : (h.targetMin || 5);
@@ -1821,8 +1831,9 @@ function calculateTaskChuteEstimates() {
 
     const secActualMins = secTaskActMins + secHabitActMins;
     const secDoneCount = secDoneTaskCount + secDoneHabitCount;
+    const countablePastSecHabits = secHabits.filter(h => !(typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)));
 
-    if (secRemainMinEl) secRemainMinEl.textContent = secDoneCount + "/" + (secTasks.length + secHabits.length) + "\u4EF6";
+    if (secRemainMinEl) secRemainMinEl.textContent = secDoneCount + "/" + (secTasks.length + countablePastSecHabits.length) + "\u4EF6";
     if (secEtaTimeEl) secEtaTimeEl.textContent = formatMinsUnified(secActualMins);
     if (secTaskValEl) secTaskValEl.textContent = formatMinsUnified(secTaskActMins) + " (" + secDoneTaskCount + ")";
     if (secHabitValEl) secHabitValEl.textContent = formatMinsUnified(secHabitActMins) + " (" + secDoneHabitCount + ")";
@@ -1858,6 +1869,7 @@ function calculateTaskChuteEstimates() {
     let futureHabitMins = 0;
     let futureHabitCount = 0;
     selectedDateHabits.forEach(h => {
+      if (typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)) return;
       const estInfo = getEstimatedDuration(h, "habit");
       futureHabitMins += estInfo.targetMin;
       futureHabitCount++;
@@ -1883,14 +1895,20 @@ function calculateTaskChuteEstimates() {
     let secTaskPlanMins = 0;
     secTasks.forEach(t => { secTaskPlanMins += getEstimatedDuration(t, "task").targetMin; });
     let secHabitPlanMins = 0;
-    secHabits.forEach(h => { secHabitPlanMins += getEstimatedDuration(h, "habit").targetMin; });
+    let secHabitPlanCount = 0;
+    secHabits.forEach(h => {
+      if (typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)) return;
+      secHabitPlanMins += getEstimatedDuration(h, "habit").targetMin;
+      secHabitPlanCount++;
+    });
 
     const secPlanMins = secTaskPlanMins + secHabitPlanMins;
+    const countableFutureSecHabits = secHabits.filter(h => !(typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)));
 
-    if (secRemainMinEl) secRemainMinEl.textContent = (secTasks.length + secHabits.length) + "\u4EF6";
+    if (secRemainMinEl) secRemainMinEl.textContent = (secTasks.length + countableFutureSecHabits.length) + "\u4EF6";
     if (secEtaTimeEl) secEtaTimeEl.textContent = formatMinsUnified(secPlanMins);
     if (secTaskValEl) secTaskValEl.textContent = formatMinsUnified(secTaskPlanMins) + " (" + secTasks.length + ")";
-    if (secHabitValEl) secHabitValEl.textContent = formatMinsUnified(secHabitPlanMins) + " (" + secHabits.length + ")";
+    if (secHabitValEl) secHabitValEl.textContent = formatMinsUnified(secHabitPlanMins) + " (" + countableFutureSecHabits.length + ")";
     if (secEtaBadge) {
       secEtaBadge.classList.remove("eta-alert-overdue");
       secEtaBadge.title = "\u672A\u6765\u30BB\u30AF\u30B7\u30E7\u30F3\u306E\u4E88\u5B9A\u7DCF\u6642\u9593";

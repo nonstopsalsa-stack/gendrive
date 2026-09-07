@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Food Tag Habit Exclusion</title>
+</head>
+<body>
+  <!-- Minimal Mock DOM Elements for calculateTaskChuteEstimates -->
+  <div id="header-daily-eta-badge"></div>
+  <div id="daily-remain-minutes"></div>
+  <div id="daily-eta-label"></div>
+  <div id="daily-eta-time-val"></div>
+  <div id="daily-task-remain-val"></div>
+  <div id="daily-habit-remain-val"></div>
+  <div id="daily-eta-remain-info"></div>
+
+  <div id="section-eta-badge"></div>
+  <div id="section-remain-minutes"></div>
+  <div id="section-eta-label"></div>
+  <div id="section-eta-time"></div>
+  <div id="section-task-remain-val"></div>
+  <div id="section-habit-remain-val"></div>
+
+  <!-- Full Gendrive Script Stack in order -->
+  <script src="../js/config.js"></script>
+  <script src="../js/sampleData.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+  <script src="../js/engine/statsEngine.js"></script>
+  <script src="../js/engine/matrixEngine.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+  <script src="../js/engine/keyboardShortcuts.js"></script>
+  <script src="../js/services/undoService.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/services/resumeNoteService.js"></script>
+  <script src="../js/services/taskTimerService.js"></script>
+  <script src="../js/components/cardRenderers.js"></script>
+  <script src="../js/components/modalService.js"></script>
+  <script src="../js/components/taskPresetsService.js"></script>
+  <script src="../js/components/dragAndDropService.js"></script>
+  <script src="../js/views/calendarView.js"></script>
+  <script src="../js/views/sectionView.js"></script>
+  <script src="../js/views/focusView.js"></script>
+  <script src="../js/views/allView.js"></script>
+  <script src="../js/views/tableView.js"></script>
+  <script src="../js/views/bucketView.js"></script>
+  <script src="../js/views/goalsView.js"></script>
+  <script src="../js/views/timerView.js"></script>
+  <script src="../app.js"></script>
+
+  <script>
+    window.__TEST_RESULTS__ = [];
+
+    function assert(pass, message) {
+      window.__TEST_RESULTS__.push({ pass: Boolean(pass), message });
+      if (!pass) {
+        console.error("FAIL:", message);
+      } else {
+        console.log("PASS:", message);
+      }
+    }
+
+    try {
+      // -------------------------------------------------------------
+      // Test 1: Helper function isHabitTimeExcluded
+      // -------------------------------------------------------------
+      assert(typeof isHabitTimeExcluded === 'function', 'Test 1.1: isHabitTimeExcluded should be a function');
+      assert(isHabitTimeExcluded({ tags: ['\u98df\u6750'] }) === true, 'Test 1.2: tags: [鬟滓攝] should return true');
+      assert(isHabitTimeExcluded({ tags: ['#\u98df\u6750'] }) === true, 'Test 1.3: tags: [#鬟滓攝] should return true');
+      assert(isHabitTimeExcluded({ tags: ['\u65e5\u5e38', '\u98df\u6750', '\u5065\u5eb7'] }) === true, 'Test 1.4: multiple tags containing 鬟滓攝 should return true');
+      assert(isHabitTimeExcluded({ tags: '\u98df\u6750' }) === true, 'Test 1.5: string tag 鬟滓攝 should return true');
+      assert(isHabitTimeExcluded({ tags: ['\u904b\u52d5'] }) === false, 'Test 1.6: tags: [驕句虚] should return false');
+      assert(isHabitTimeExcluded({ tags: [] }) === false, 'Test 1.7: empty tags should return false');
+      assert(isHabitTimeExcluded({}) === false, 'Test 1.8: empty object should return false');
+      assert(isHabitTimeExcluded(null) === false, 'Test 1.9: null should return false');
+
+      // -------------------------------------------------------------
+      // Test 2: calculateTaskChuteEstimates with Food Tag Habit
+      // -------------------------------------------------------------
+      state.selectedDateOffset = 0;
+      state.currentSection = '\u7b2c2\u30bb\u30af\u30b7\u30e7\u30f3';
+
+      const mockTask = {
+        id: 'T_TEST_1',
+        title: 'Task 1',
+        section: '\u7b2c2\u30bb\u30af\u30b7\u30e7\u30f3',
+        estMin: 20,
+        status: 'uncompleted',
+        scheduledDate: getTodayKey()
+      };
+
+      const mockHabitStandard = {
+        id: 'H_TEST_NORM',
+        name: 'Standard Habit',
+        section: '\u7b2c2\u30bb\u30af\u30b7\u30e7\u30f3',
+        displayType: 'section',
+        targetMin: 15,
+        tags: ['\u904b\u52d5'],
+        status: 'uncompleted',
+        recurrence: { type: 'everyday' }
+      };
+
+      const mockHabitFood = {
+        id: 'H_TEST_FOOD',
+        name: 'Food Habit',
+        section: '\u7b2c2\u30bb\u30af\u30b7\u30e7\u30f3',
+        displayType: 'section',
+        targetMin: 5,
+        tags: ['\u98df\u6750'],
+        status: 'uncompleted',
+        recurrence: { type: 'everyday' }
+      };
+
+      state.tasks = [mockTask];
+      state.habits = [mockHabitStandard, mockHabitFood];
+
+      const res1 = calculateTaskChuteEstimates();
+
+      assert(res1.dayTaskRemainMin === 20, 'Test 2.1: dayTaskRemainMin should be 20');
+      assert(res1.dayTaskRemainCount === 1, 'Test 2.2: dayTaskRemainCount should be 1');
+      assert(res1.dayHabitRemainMin === 15, 'Test 2.3: dayHabitRemainMin should be 15 (Food habit 5min excluded)');
+      assert(res1.dayHabitRemainCount === 1, 'Test 2.4: dayHabitRemainCount should be 1 (Food habit excluded from count)');
+      assert(res1.totalDayRemainMin === 35, 'Test 2.5: totalDayRemainMin should be 35 (20 + 15)');
+      assert(res1.totalDayRemainCount === 2, 'Test 2.6: totalDayRemainCount should be 2 (1 task + 1 standard habit)');
+
+      // Section check
+      assert(res1.secHabitRemainMin === 15, 'Test 2.7: secHabitRemainMin should be 15');
+      assert(res1.secHabitRemainCount === 1, 'Test 2.8: secHabitRemainCount should be 1');
+      assert(res1.secRemainMin === 35, 'Test 2.9: secRemainMin should be 35');
+
+      // -------------------------------------------------------------
+      // Test 3: Dynamic tag removal (removing '鬟滓攝' tag)
+      // -------------------------------------------------------------
+      mockHabitFood.tags = ['\u671d\u98df'];
+      const res2 = calculateTaskChuteEstimates();
+
+      assert(res2.dayHabitRemainMin === 20, 'Test 3.1: After removing 鬟滓攝 tag, dayHabitRemainMin should be 20');
+      assert(res2.dayHabitRemainCount === 2, 'Test 3.2: After removing 鬟滓攝 tag, dayHabitRemainCount should be 2');
+      assert(res2.totalDayRemainMin === 40, 'Test 3.3: totalDayRemainMin should be 40 (20 + 20)');
+
+      // -------------------------------------------------------------
+      // Test 4: Dynamic tag addition (re-adding '#鬟滓攝' tag)
+      // -------------------------------------------------------------
+      mockHabitFood.tags = ['\u671d\u98df', '#\u98df\u6750'];
+      const res3 = calculateTaskChuteEstimates();
+
+      assert(res3.dayHabitRemainMin === 15, 'Test 4.1: After re-adding #鬟滓攝 tag, dayHabitRemainMin should be 15');
+      assert(res3.dayHabitRemainCount === 1, 'Test 4.2: After re-adding #鬟滓攝 tag, dayHabitRemainCount should be 1');
+      assert(res3.totalDayRemainMin === 35, 'Test 4.3: totalDayRemainMin should return to 35');
+
+      // -------------------------------------------------------------
+      // Test 5: Future Date Calculation
+      // -------------------------------------------------------------
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const ty = tomorrow.getFullYear();
+      const tm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const td = String(tomorrow.getDate()).padStart(2, '0');
+      const tomorrowKey = String(ty) + '-' + tm + '-' + td;
+
+      const mockTaskTomorrow = {
+        id: 'T_TEST_TOMORROW',
+        title: 'Tomorrow Task',
+        section: '\u7b2c2\u30bb\u30af\u30b7\u30e7\u30f3',
+        estMin: 20,
+        status: 'uncompleted',
+        scheduledDate: tomorrowKey
+      };
+
+      state.tasks = [mockTask, mockTaskTomorrow];
+      state.selectedDateOffset = -1; // Tomorrow
+      const res4 = calculateTaskChuteEstimates();
+
+      assert(res4.totalScheduledMins === 35, 'Test 5.1: Future date totalScheduledMins should be 35, got: ' + (res4 ? res4.totalScheduledMins : 'null'));
+      assert(res4.totalCount === 2, 'Test 5.2: Future date totalCount should be 2, got: ' + (res4 ? res4.totalCount : 'null'));
+
+      // Reset
+      state.selectedDateOffset = 0;
+
+    } catch (err) {
+      assert(false, 'Unexpected test exception: ' + err.message + '\n' + err.stack);
+    }
+
+    const total = window.__TEST_RESULTS__.length;
+    const passed = window.__TEST_RESULTS__.filter(r => r.pass).length;
+    const failed = window.__TEST_RESULTS__.filter(r => !r.pass).length;
+
+    window.__TEST_SUMMARY__ = {
+      total,
+      passed,
+      failed,
+      allPassed: failed === 0,
+      results: window.__TEST_RESULTS__
+    };
+  </script>
+</body>
+</html>
