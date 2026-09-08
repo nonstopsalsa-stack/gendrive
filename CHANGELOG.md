@@ -2,9 +2,26 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.5.9] - 2026-09-08
+### Fixed & Improved
+- **Mobile Bottom Navigation Dynamic Badges Engine**: スマホ版（Gendrive Lite）のボトムナビ4ボタン（セクション・デイリー・タスク・ハビット）の残り件数が常に「0」固定となっていた未実装バグを完全解消。選択コンテキストに完全連動するリアルタイム件数計算・DOM更新パイプライン（`updateBottomNavBadges()`）を確立。
+- **Bottom Navigation State & Button Active Synchronization**: アプリ起動時およびタブ切り替え時に、内部状態（`activeScope` / `activeType`）とボタンの選択ハイライト（`active` クラス）が食い違い、「タスクボタンが青いのにハビットが表示される」表示ズレを根本解決。起動時の強制同期（`syncBottomNavButtonsUI()`）および不要なスキップガード撤廃を実施。
+- **Section Order & Carryover Alignment**: `getSectionOrder()` が英数字ID（`sec_1`〜`sec_6`）および日本語セクション名（朝オペ／夜オペを含む）の両方に完全対応。引数の型不整合によるデフォルト値（4）フォールバックを排除し、過去セクションからの繰越判定が正常化。スマホ版で全セクションの未完タスク（8件）がセクションに合算表示されてデイリーと同じになる不具合を解決。
+- **Habit Time-Window Precision & Custom-Time Section Isolation**: `SECTIONS` に時間帯情報（`start`, `end`）を追加し、時間指定ハビット（`custom_time`）がセクション未設定時に `anytime` 扱いとなって全セクションに貫通表示されていたロジックを修正。42件もの習慣が全時間帯に重複表示される現象を完全根絶。
+- **Non-blocking Fast Launch & Network Timeout Abort Guard**: Google Apps Script (GAS) 通信に 8秒のタイムアウト（`AbortController`）を新設。起動時の `pullFromCloud` を直列ブロッキングからバックグラウンド非同期実行へ移行し、アプリ起動後0秒でローカルデータ描画＆操作可能（1〜2分の待たされ感を完全撤廃）を実現。
+- **Automated Verification Suite (37/37 PASS)**: セクション順序判定、SECTIONS時間定義整合性、時間指定ハビットの窓判定、セクションタスク繰越分離、ボタンアクティブ同期、バッジ更新DOM反映、タイムアウト関数の全37テストを新設し 100% PASS を達成（既存テストと合わせ全119件完全パス）。
+- **Release Notes**: `docs/release_notes/2026-09-08_v1.5.9_mobile_realtime_sync_and_navigation_engine_fix.md` を発行。
+
+---
+
 ## [v1.5.8] - 2026-09-07
 ### Added & Improved
-- **Food Tag Habit ETA & Count Exclusion Engine**: 縲碁｣滓攝縲阪ち繧ｰ・・#鬟滓攝・峨′莉倥＞縺溘ワ繝薙ャ繝医ｒ縲∫ｴ皮ｲ九↑繝√ぉ繝・け繝ｻ險倬鹸蟆ら畑繝上ン繝・ヨ・亥ｮ溯ｳｪ逧・ワ繝薙ャ繝医ヨ繝ｩ繝・き繝ｼ・峨→縺励※菴咲ｽｮ縺･縺代・譌･蜈ｨ菴薙・繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ繝ｻ繝・う繝ｪ繝ｼ逕ｻ髱｢縺ｮ蜍慕噪ETA・井ｺ亥ｮ壽凾髢薙・谿九ｊ譎る俣繝ｻ邨ゆｺ・ｦ玖ｾｼ縺ｿ譎ょ綾・峨♀繧医・繝舌ャ繧ｸ縺ｮ譛ｪ螳御ｺ・ｻｶ謨ｰ繧ｫ繧ｦ繝ｳ繝医°繧牙ｮ悟・縺ｫ髯､螟厄ｼ・譯井ｻ墓ｧ假ｼ峨・- **Seamless Reactive Tag Sync**: 繝上ン繝・ヨ縺ｸ縺ｮ縲碁｣滓攝縲阪ち繧ｰ縺ｮ莉倥￠螟悶＠縲∵眠隕上ワ繝薙ャ繝井ｽ懈・縲√・繧ｹ繧ｿ繝ｼ逕ｻ髱｢縺ｧ縺ｮ荳諡ｬ繧ｿ繧ｰ螟画峩縺檎匱逕溘＠縺溽椪髢薙↓縲∝・險育ｮ励′蜊ｳ蠎ｧ縺ｫ襍ｰ繧雁・逕ｻ髱｢縺ｮETA繝舌ャ繧ｸ繝ｻ谿九ｊ譎る俣縺ｫ閾ｪ蜍募渚譏縺輔ｌ繧九Μ繧｢繧ｯ繝・ぅ繝夜｣蜍輔ｒ遒ｺ遶九・- **Defensive Date Input Guard in isTaskForSelectedDate**: 	asks.filter(isTaskForSelectedDate) 蜻ｼ縺ｳ蜃ｺ縺玲凾縺ｫ隨ｬ2蠑墓焚縺ｨ縺励※貂｡縺輔ｌ繧矩・蛻励う繝ｳ繝・ャ繧ｯ繧ｹ・域焚蛟､・峨′隱､縺｣縺ｦ譌･莉倥が繝悶ず繧ｧ繧ｯ繝茨ｼ・new Date(index) 筐・1970蟷ｴ・峨→縺励※隗｣驥医＆繧後・莉ｶ逶ｮ莉･髯阪・繧ｿ繧ｹ繧ｯ縺碁勁螟悶＆繧後※縺励∪縺・ｽ懷惠逧・↑讒矩谺髯･繧呈ｹ譛ｬ謾ｹ菫ｮ縲・- **Automated Verification Suite (26/26 PASS)**: 鬟滓攝繧ｿ繧ｰ蛻､螳壹∝・菴薙・繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ蜍慕噪ETA髯､螟悶√ち繧ｰ蜍慕噪隗｣髯､繝ｻ蜀堺ｻ倅ｸ弱∵悴譚･譌･莠句燕險育判繝｢繝ｼ繝峨・蜈ｨ26蜊倅ｽ薙ユ繧ｹ繝医こ繝ｼ繧ｹ繧呈眠險ｭ縺・100% PASS 繧帝＃謌撰ｼ域里蟄倥ユ繧ｹ繝・6莉ｶ繧ょ・莉ｶ繝代せ・峨・- **Release Notes**: docs/release_notes/2026-09-07_v1.5.8_food_tag_habit_eta_and_count_exclusion.md 繧堤匱陦後・
+- **Food Tag Habit ETA & Count Exclusion Engine**: 「食材」タグ（#食材）が付いたハビットを、純粋なチェック・記録専用ハビット（実質的ハビットトラッカー）として位置づけ、1日全体のセクション・デイリー画面の動的ETA（予定時間の残り時間・終了見込み時刻）およびバッジの未完了件数カウントから完全に除外（B案仕様）。
+- **Seamless Reactive Tag Sync**: ハビットへの「食材」タグの付け外し、新規ハビット作成、マスター画面での一括タグ変更が発生した瞬間に、再計算が即座に走り全画面のETAバッジ・残り時間に自動反映されるリアクティブ連動を確立。
+- **Defensive Date Input Guard in isTaskForSelectedDate**: `tasks.filter(isTaskForSelectedDate)` 呼び出し時に第2引数として渡される配列インデックス（数値）が誤って日付オブジェクト（new Date(index) ≒ 1970年）として解釈され、2件目以降のタスクが除外されてしまう潜在的な構造欠陥を根本改修。
+- **Automated Verification Suite (26/26 PASS)**: 食材タグ判定、全体のセクション動的ETA除外、タグ動的解除・再付与、未来日事前計画モードの全26単体テストケースを新設し 100% PASS を達成（既存テスト56件も全件パス）。
+- **Release Notes**: `docs/release_notes/2026-09-07_v1.5.8_food_tag_habit_eta_and_count_exclusion.md` を発行。
+
 ---
 ## [v1.5.7] - 2026-09-07
 ### Fixed & Improved

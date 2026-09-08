@@ -22,13 +22,13 @@ const STORAGE_KEYS = {
 };
 
 const SECTIONS = [
-  { id: 'all', name: '\u4ECA\u65E5\u5168\u4F53' },
-  { id: 'sec_1', name: '\uD83C\uDF05 \u7B2C1', match: ['\u7B2C1\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C1', '\u65E9\u671D', '\u671D'] },
-  { id: 'sec_2', name: '\uD83C\uDF73 \u671D\u30AA\u30D5', match: ['\u671D\u30AA\u30D5', '\u5BB6\u4E8B', '\u80B2\u5150'] },
-  { id: 'sec_3', name: '\u26A1 \u7B2C2', match: ['\u7B2C2\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C2', '\u5348\u524D'] },
-  { id: 'sec_4', name: '\uD83D\uDEE0\uFE0F \u7B2C3', match: ['\u7B2C3\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C3', '\u5348\u5F8C'] },
-  { id: 'sec_5', name: '\uD83C\uDF72 \u591C\u30AA\u30D5', match: ['\u591C\u30AA\u30D5', '\u5915\u98DF', '\u56E3\u3089\u3093'] },
-  { id: 'sec_6', name: '\uD83C\uDF19 \u7B2C4', match: ['\u7B2C4\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C4', '\u591C'] }
+  { id: 'all', name: '\u4ECA\u65E5\u5168\u4F53', start: 0, end: 24 },
+  { id: 'sec_1', name: '\uD83C\uDF05 \u7B2C1', match: ['\u7B2C1\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C1', '\u65E9\u671D', '\u671D'], start: 3, end: 6 },
+  { id: 'sec_2', name: '\uD83C\uDF73 \u671D\u30AA\u30DA', match: ['\u671D\u30AA\u30DA', '\u671D\u30AA\u30D5', '\u5BB6\u4E8B', '\u80B2\u5150'], start: 6, end: 8.5 },
+  { id: 'sec_3', name: '\u26A1 \u7B2C2', match: ['\u7B2C2\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C2', '\u5348\u524D'], start: 8.5, end: 12 },
+  { id: 'sec_4', name: '\uD83D\uDEE0\uFE0F \u7B2C3', match: ['\u7B2C3\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C3', '\u5348\u5F8C'], start: 12, end: 17 },
+  { id: 'sec_5', name: '\uD83C\uDF72 \u591C\u30AA\u30DA', match: ['\u591C\u30AA\u30DA', '\u591C\u30AA\u30D5', '\u5915\u98DF', '\u56E3\u3089\u3093'], start: 17, end: 21 },
+  { id: 'sec_6', name: '\uD83C\uDF19 \u7B2C4', match: ['\u7B2C4\u30BB\u30AF\u30B7\u30E7\u30F3', '\u7B2C4', '\u591C'], start: 21, end: 23 }
 ];
 
 const mState = {
@@ -116,35 +116,38 @@ function getItemDayCount(item, dateKey = null) {
   return 0;
 }
 
-function setScope(scope) {
-  if (mState.activeScope === scope) return;
-  mState.activeScope = scope;
-  localStorage.setItem(STORAGE_KEYS.SCOPE, scope);
-  haptic(10);
+function syncBottomNavButtonsUI() {
+  const scope = mState.activeScope || 'section';
+  const type = mState.activeType || 'task';
 
   document.querySelectorAll('.scope-group .mode-switch-btn').forEach(btn => btn.classList.remove('active'));
-  const activeBtn = document.getElementById('btn-scope-' + scope);
-  if (activeBtn) activeBtn.classList.add('active');
-
-  renderMobileApp();
-}
-
-function setType(type) {
-  if (mState.activeType === type) return;
-  mState.activeType = type;
-  localStorage.setItem(STORAGE_KEYS.TYPE, type);
-  haptic(10);
+  const activeScopeBtn = document.getElementById('btn-scope-' + scope);
+  if (activeScopeBtn) activeScopeBtn.classList.add('active');
 
   document.querySelectorAll('.type-group .mode-switch-btn').forEach(btn => btn.classList.remove('active'));
-  const activeBtn = document.getElementById('btn-type-' + type);
-  if (activeBtn) activeBtn.classList.add('active');
+  const activeTypeBtn = document.getElementById('btn-type-' + type);
+  if (activeTypeBtn) activeTypeBtn.classList.add('active');
 
   const fab = document.getElementById('m-fab-add');
   if (fab) {
     fab.innerHTML = type === 'habit' ? '<span>\uD83C\uDF3F\uFF0B</span>' : '<span>\u26A1\uFF0B</span>';
     fab.title = type === 'habit' ? '\u7FD2\u6163\u3092\u8FFD\u52A0' : '\u30BF\u30B9\u30AF\u3092\u8FFD\u52A0';
   }
+}
 
+function setScope(scope) {
+  mState.activeScope = scope;
+  localStorage.setItem(STORAGE_KEYS.SCOPE, scope);
+  haptic(10);
+  syncBottomNavButtonsUI();
+  renderMobileApp();
+}
+
+function setType(type) {
+  mState.activeType = type;
+  localStorage.setItem(STORAGE_KEYS.TYPE, type);
+  haptic(10);
+  syncBottomNavButtonsUI();
   renderMobileApp();
 }
 
@@ -412,12 +415,13 @@ function saveLocalHabits(instant = true) {
 
 function getSectionOrder(secStr) {
   if (!secStr) return 4;
-  if (secStr.includes('\u7B2C1') || (secStr.includes('\u65E9\u671D') || secStr.includes('\u671D')) && !secStr.includes('\u671D\u30AA\u30D5')) return 1;
-  if (secStr.includes('\u671D\u30AA\u30D5') || secStr.includes('\u5BB6\u4E8B') || secStr.includes('\u80B2\u5150')) return 2;
-  if (secStr.includes('\u7B2C2') || secStr.includes('\u5348\u524D')) return 3;
-  if (secStr.includes('\u7B2C3') || secStr.includes('\u5348\u5F8C')) return 4;
-  if (secStr.includes('\u591C\u30AA\u30D5') || secStr.includes('\u5915\u98DF') || secStr.includes('\u56E3\u3089\u3093')) return 5;
-  if (secStr.includes('\u7B2C4') || secStr.includes('\u591C')) return 6;
+  const s = String(secStr);
+  if (s === 'sec_1' || s.includes('第1') || ((s.includes('早朝') || s.includes('朝')) && !s.includes('朝オペ') && !s.includes('朝オフ') && !s.includes('\u671D\u30AA\u30DA') && !s.includes('\u671D\u30AA\u30D5'))) return 1;
+  if (s === 'sec_2' || s.includes('朝オペ') || s.includes('朝オフ') || s.includes('\u671D\u30AA\u30DA') || s.includes('\u671D\u30AA\u30D5') || s.includes('家事') || s.includes('育児')) return 2;
+  if (s === 'sec_3' || s.includes('第2') || s.includes('午前')) return 3;
+  if (s === 'sec_4' || s.includes('第3') || s.includes('午後')) return 4;
+  if (s === 'sec_5' || s.includes('夜オペ') || s.includes('夜オフ') || s.includes('\u591C\u30AA\u30DA') || s.includes('\u591C\u30AA\u30D5') || s.includes('夕食') || s.includes('団らん')) return 5;
+  if (s === 'sec_6' || s.includes('第4') || s.includes('夜')) return 6;
   return 4;
 }
 
@@ -503,8 +507,23 @@ function isHabitScheduledForDate(habit, dateObj) {
 function isHabitInCurrentTimeWindow(habit, currentSecObj) {
   const type = habit.timingType || habit.timeType || 'section';
 
-  if (type === 'anytime' || !habit.section || habit.section === 'anytime' || habit.section === '\u3044\u3064\u3067\u3082') {
+  if (type === 'anytime' || habit.section === 'anytime' || habit.section === '\u3044\u3064\u3067\u3082') {
     return true;
+  }
+
+  if (type === 'custom_time') {
+    const startTime = habit.preferredTime || habit.customTime || '09:00';
+    const [h, m] = startTime.split(':').map(Number);
+    const startHourDec = h + (m / 60);
+
+    const secStart = (currentSecObj && typeof currentSecObj.start === 'number') ? currentSecObj.start : 0;
+    const secEnd = (currentSecObj && typeof currentSecObj.end === 'number') ? currentSecObj.end : 24;
+
+    if (secStart < secEnd) {
+      return startHourDec >= secStart && startHourDec < secEnd;
+    } else {
+      return startHourDec >= secStart || startHourDec < secEnd;
+    }
   }
 
   if (type === 'section') {
@@ -514,21 +533,6 @@ function isHabitInCurrentTimeWindow(habit, currentSecObj) {
       return currentSecObj.match.some(m => secName.includes(m));
     }
     return secName === currentSecObj.name;
-  }
-
-  if (type === 'custom_time') {
-    const startTime = habit.preferredTime || habit.customTime || '09:00';
-    const [h, m] = startTime.split(':').map(Number);
-    const startHourDec = h + (m / 60);
-
-    const secStart = currentSecObj.start || 0;
-    const secEnd = currentSecObj.end || 24;
-
-    if (secStart < secEnd) {
-      return startHourDec >= secStart && startHourDec < secEnd;
-    } else {
-      return startHourDec >= secStart || startHourDec < secEnd;
-    }
   }
 
   return true;
@@ -643,6 +647,23 @@ function triggerCloudPush() {
   }, 1000);
 }
 
+async function fetchWithTimeout(resource, options = {}) {
+  const { timeout = 8000 } = options;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
 async function pushToCloud() {
   const gasUrl = getGasUrl();
   if (!gasUrl || mState.isSyncing) {
@@ -662,10 +683,11 @@ async function pushToCloud() {
   };
 
   try {
-    const res = await fetch(gasUrl, {
+    const res = await fetchWithTimeout(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      timeout: 8000
     });
 
     let isSuccess = false;
@@ -740,7 +762,7 @@ async function pullFromCloud(force = false, isSilent = false) {
   }
 
   try {
-    const res = await fetch(`${gasUrl}?t=${Date.now()}`);
+    const res = await fetchWithTimeout(`${gasUrl}?t=${Date.now()}`, { timeout: 8000 });
     const data = await res.json();
     if (data.status === 'success' && data.data) {
       const cloud = data.data;
@@ -1196,6 +1218,60 @@ function renderMobileApp() {
   renderHeaderDateAndETA();
   renderStickyActiveBar();
   renderList();
+  updateBottomNavBadges();
+}
+
+function updateBottomNavBadges() {
+  const targetDateKey = getTodayDateString(mState.selectedDateOffset);
+  const currentSecId = detectCurrentSectionId();
+  const currentSecObj = SECTIONS.find(s => s.id === currentSecId) || SECTIONS[3];
+
+  const isToday = mState.selectedDateOffset === 0;
+  const isPast = mState.selectedDateOffset < 0;
+
+  // 1. 本日全未完了タスク
+  const todayTasks = mState.tasks.filter(t => {
+    if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'skipped') return false;
+    const targetTimes = getItemTargetTimes(t);
+    const curCount = getItemDayCount(t, targetDateKey);
+    if (targetTimes > 1) {
+      if (curCount >= targetTimes) return false;
+    } else {
+      if (t.status === 'completed') return false;
+    }
+    if (isPast && (t.type === 'recurring' || t.taskType === 'recurring' || t.recType)) return false;
+    return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
+  });
+
+  // 2. 本日全未完了習慣
+  const targetDateObj = new Date();
+  targetDateObj.setDate(targetDateObj.getDate() - mState.selectedDateOffset);
+  const todayHabits = getMobileTodayHabits(targetDateObj, targetDateKey);
+
+  // 3. 現在セクションの未完タスク & 未完習慣
+  const secTasks = getMobileSectionTasks(todayTasks, currentSecObj);
+  const secHabits = getMobileSectionHabits(todayHabits, currentSecObj);
+
+  const secCountEl = document.getElementById('m-section-count');
+  const dailyCountEl = document.getElementById('m-daily-count');
+  const taskCountEl = document.getElementById('m-task-count');
+  const habitCountEl = document.getElementById('m-habit-count');
+
+  if (mState.activeType === 'habit') {
+    if (secCountEl) secCountEl.textContent = secHabits.length;
+    if (dailyCountEl) dailyCountEl.textContent = todayHabits.length;
+  } else {
+    if (secCountEl) secCountEl.textContent = secTasks.length;
+    if (dailyCountEl) dailyCountEl.textContent = todayTasks.length;
+  }
+
+  if (mState.activeScope === 'section') {
+    if (taskCountEl) taskCountEl.textContent = secTasks.length;
+    if (habitCountEl) habitCountEl.textContent = secHabits.length;
+  } else {
+    if (taskCountEl) taskCountEl.textContent = todayTasks.length;
+    if (habitCountEl) habitCountEl.textContent = todayHabits.length;
+  }
 }
 
 function renderHeaderDateAndETA() {
@@ -1822,50 +1898,16 @@ function saveSettings() {
 
 async function initMobileApp() {
   loadLocalData();
+  syncBottomNavButtonsUI();
   syncMobileVersionBadges();
+  checkAndRunDayRollover();
   renderMobileApp();
-
-  const scopeBtns = [
-    { id: 'btn-scope-section', fn: () => setScope('section') },
-    { id: 'btn-scope-daily', fn: () => setScope('daily') }
-  ];
-  scopeBtns.forEach(b => {
-    const el = document.getElementById(b.id);
-    if (el) {
-      el.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        b.fn();
-      });
-    }
-  });
-
-  const typeBtns = [
-    { id: 'btn-type-task', fn: () => setType('task') },
-    { id: 'btn-type-habit', fn: () => setType('habit') }
-  ];
-  typeBtns.forEach(b => {
-    const el = document.getElementById(b.id);
-    if (el) {
-      el.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        b.fn();
-      });
-    }
-  });
 
   if (getGasUrl()) {
-    try {
-      await pullFromCloud(true, false);
-    } catch (e) {
+    pullFromCloud(true, false).catch(e => {
       console.warn('Initial cloud pull failed/skipped:', e);
-    }
+    });
   }
-
-  checkAndRunDayRollover();
-  syncMobileVersionBadges();
-  renderMobileApp();
 
   // Active Timer Loop (1 sec - Tasks & Habits)
   if (activeTimerInterval) clearInterval(activeTimerInterval);

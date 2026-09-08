@@ -1,0 +1,180 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gendrive Mobile v1.5.9 Test Suite</title>
+  <style>
+    body { font-family: monospace; background: #0b1324; color: #f8fafc; padding: 20px; }
+    .pass { color: #4ade80; }
+    .fail { color: #f87171; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Gendrive Mobile v1.5.9 Automated Verification</h1>
+
+  <!-- Mock DOM for Mobile Navigation -->
+  <div id="m-bottom-nav">
+    <div class="scope-group">
+      <button class="mode-switch-btn" id="btn-scope-section"><span class="mode-count" id="m-section-count">0</span></button>
+      <button class="mode-switch-btn" id="btn-scope-daily"><span class="mode-count" id="m-daily-count">0</span></button>
+    </div>
+    <div class="type-group">
+      <button class="mode-switch-btn" id="btn-type-task"><span class="mode-count" id="m-task-count">0</span></button>
+      <button class="mode-switch-btn" id="btn-type-habit"><span class="mode-count" id="m-habit-count">0</span></button>
+    </div>
+    <button id="m-fab-add"></button>
+  </div>
+  <div id="m-header-date"></div>
+  <div id="m-eta-time-val"></div>
+  <div id="m-eta-remain-info"></div>
+  <div id="sticky-indicator-slot"></div>
+  <div id="sticky-active-bar"></div>
+  <div id="m-cards-list"></div>
+
+  <!-- Load Mobile Scripts -->
+  <script src="../js/config.js"></script>
+  <script src="../mobile.js"></script>
+
+  <script>
+    window.__TEST_SUMMARY__ = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      allPassed: false,
+      results: []
+    };
+
+    function assert(name, condition) {
+      window.__TEST_SUMMARY__.total++;
+      if (condition) {
+        window.__TEST_SUMMARY__.passed++;
+        window.__TEST_SUMMARY__.results.push({ test: name, pass: true, message: name });
+        console.log('%cPASS: ' + name, 'color: #4ade80');
+      } else {
+        window.__TEST_SUMMARY__.failed++;
+        window.__TEST_SUMMARY__.results.push({ test: name, pass: false, message: name });
+        console.error('FAIL: ' + name);
+      }
+    }
+
+    async function runTests() {
+      console.log('Starting Test Suite...');
+
+      // ----------------------------------------------------
+      // Test 1: getSectionOrder handles both sec_X IDs and Japanese names
+      // ----------------------------------------------------
+      assert('getSectionOrder: sec_1 should be 1', getSectionOrder('sec_1') === 1);
+      assert('getSectionOrder: sec_2 should be 2', getSectionOrder('sec_2') === 2);
+      assert('getSectionOrder: sec_3 should be 3', getSectionOrder('sec_3') === 3);
+      assert('getSectionOrder: sec_4 should be 4', getSectionOrder('sec_4') === 4);
+      assert('getSectionOrder: sec_5 should be 5', getSectionOrder('sec_5') === 5);
+      assert('getSectionOrder: sec_6 should be 6', getSectionOrder('sec_6') === 6);
+
+      assert('getSectionOrder: 第1セッション should be 1', getSectionOrder('第1セッション') === 1);
+      assert('getSectionOrder: 朝オペ should be 2', getSectionOrder('朝オペ') === 2);
+      assert('getSectionOrder: 朝オフ should be 2', getSectionOrder('朝オフ') === 2);
+      assert('getSectionOrder: 第2セッション should be 3', getSectionOrder('第2セッション') === 3);
+      assert('getSectionOrder: 第3セッション should be 4', getSectionOrder('第3セッション') === 4);
+      assert('getSectionOrder: 夜オペ should be 5', getSectionOrder('夜オペ') === 5);
+      assert('getSectionOrder: 夜オフ should be 5', getSectionOrder('夜オフ') === 5);
+      assert('getSectionOrder: 第4セッション should be 6', getSectionOrder('第4セッション') === 6);
+
+      // ----------------------------------------------------
+      // Test 2: SECTIONS definition integrity
+      // ----------------------------------------------------
+      SECTIONS.forEach(s => {
+        if (s.id !== 'all') {
+          assert(`SECTIONS definition has valid start/end for ${s.id}`, typeof s.start === 'number' && typeof s.end === 'number');
+        }
+      });
+      const sec2 = SECTIONS.find(s => s.id === 'sec_2');
+      assert('SECTIONS sec_2 includes 朝オペ in match', sec2 && sec2.match.includes('朝オペ'));
+      const sec5 = SECTIONS.find(s => s.id === 'sec_5');
+      assert('SECTIONS sec_5 includes 夜オペ in match', sec5 && sec5.match.includes('夜オペ'));
+
+      // ----------------------------------------------------
+      // Test 3: isHabitInCurrentTimeWindow for custom_time habits
+      // ----------------------------------------------------
+      const morningHabit = { name: 'Morning Habit', timingType: 'custom_time', preferredTime: '04:30' };
+      const sec1Obj = SECTIONS.find(s => s.id === 'sec_1');
+      const sec3Obj = SECTIONS.find(s => s.id === 'sec_3');
+      assert('Morning 04:30 habit is in sec_1 window (03:00 - 06:00)', isHabitInCurrentTimeWindow(morningHabit, sec1Obj) === true);
+      assert('Morning 04:30 habit is NOT in sec_3 window (08:30 - 12:00)', isHabitInCurrentTimeWindow(morningHabit, sec3Obj) === false);
+
+      // ----------------------------------------------------
+      // Test 4: Section Tasks carryover isolation
+      // ----------------------------------------------------
+      const testDateKey = getTodayDateString(0);
+      const testTasks = [
+        { id: 't1', title: 'Task 1 in Sec 1', section: '第1セッション', scheduledDate: testDateKey, status: 'uncompleted' },
+        { id: 't2', title: 'Task 2 in Sec 2', section: '朝オペ', scheduledDate: testDateKey, status: 'uncompleted' },
+        { id: 't3', title: 'Task 3 in Sec 3', section: '第2セッション', scheduledDate: testDateKey, status: 'uncompleted' },
+        { id: 't4', title: 'Task 4 in Sec 4', section: '第3セッション', scheduledDate: testDateKey, status: 'uncompleted' }
+      ];
+      mState.tasks = [...testTasks];
+      mState.selectedDateOffset = 0;
+
+      // When active section is sec_3 (第2セッション, order 3):
+      // - Direct: t3
+      // - Carried: t1 (order 1), t2 (order 2)
+      // - Excluded: t4 (order 4, future section) -> NOT INCLUDED!
+      const secTasks = getMobileSectionTasks(testTasks, sec3Obj);
+      assert('secTasks contains t1 (carried over)', secTasks.some(t => t.id === 't1'));
+      assert('secTasks contains t2 (carried over)', secTasks.some(t => t.id === 't2'));
+      assert('secTasks contains t3 (direct)', secTasks.some(t => t.id === 't3'));
+      assert('secTasks does NOT contain t4 (future sec 4 excluded)', !secTasks.some(t => t.id === 't4'));
+      assert('secTasks length is exactly 3 (not 4)', secTasks.length === 3);
+
+      // ----------------------------------------------------
+      // Test 5: syncBottomNavButtonsUI synchronization
+      // ----------------------------------------------------
+      mState.activeScope = 'daily';
+      mState.activeType = 'habit';
+      syncBottomNavButtonsUI();
+
+      const btnScopeDaily = document.getElementById('btn-scope-daily');
+      const btnScopeSec = document.getElementById('btn-scope-section');
+      const btnTypeHabit = document.getElementById('btn-type-habit');
+      const btnTypeTask = document.getElementById('btn-type-task');
+
+      assert('btn-scope-daily has active class', btnScopeDaily.classList.contains('active'));
+      assert('btn-scope-section does not have active class', !btnScopeSec.classList.contains('active'));
+      assert('btn-type-habit has active class', btnTypeHabit.classList.contains('active'));
+      assert('btn-type-task does not have active class', !btnTypeTask.classList.contains('active'));
+
+      // ----------------------------------------------------
+      // Test 6: updateBottomNavBadges DOM updates
+      // ----------------------------------------------------
+      mState.habits = [
+        { id: 'h1', name: 'Habit 1', section: '第2セッション', status: 'uncompleted' }
+      ];
+      mState.activeScope = 'section';
+      mState.activeType = 'task';
+      updateBottomNavBadges();
+
+      const secCountEl = document.getElementById('m-section-count');
+      const dailyCountEl = document.getElementById('m-daily-count');
+      const taskCountEl = document.getElementById('m-task-count');
+      const habitCountEl = document.getElementById('m-habit-count');
+
+      assert('m-section-count is updated to 3', secCountEl.textContent === '3');
+      assert('m-daily-count is updated to 4', dailyCountEl.textContent === '4');
+      assert('m-task-count is updated to 3', taskCountEl.textContent === '3');
+
+      // ----------------------------------------------------
+      // Test 7: fetchWithTimeout helper exists and is function
+      // ----------------------------------------------------
+      assert('fetchWithTimeout is defined', typeof fetchWithTimeout === 'function');
+
+      // ----------------------------------------------------
+      // Wrap up
+      // ----------------------------------------------------
+      window.__TEST_SUMMARY__.allPassed = (window.__TEST_SUMMARY__.failed === 0);
+      console.log('Test Summary:', window.__TEST_SUMMARY__);
+      document.body.innerHTML += `<h2>Results: ${window.__TEST_SUMMARY__.passed} / ${window.__TEST_SUMMARY__.total} passed</h2>`;
+    }
+
+    window.addEventListener('DOMContentLoaded', runTests);
+  </script>
+</body>
+</html>
