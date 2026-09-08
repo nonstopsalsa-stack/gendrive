@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.5.8';
-const APP_VERSION_NAME = 'Food Tag Habit ETA & Count Exclusion Engine';
+const APP_VERSION = 'v1.5.9';
+const APP_VERSION_NAME = 'Mobile Real-Time Sync & Navigation Engine Fix';
 
 const SECTIONS_CONFIG = [
   { id: 'sec_1', name: '第1セッション', start: 3, end: 6, label: '🌅 第1セッション (03:00 - 06:00)', desc: '起床・静寂の自己投資・思考整理', startStr: '03:00', endStr: '06:00' },
