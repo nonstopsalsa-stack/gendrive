@@ -2187,7 +2187,7 @@ body {
   border-radius: 3px;
 }
 
-.form-group input, .form-group select {
+.form-group input, .form-group select, .form-group textarea {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border-subtle);
   color: var(--text-main);
@@ -2195,9 +2195,14 @@ body {
   border-radius: var(--radius-sm);
   font-size: 13px;
   outline: none;
+  font-family: inherit;
 }
 
-.form-group input:focus, .form-group select:focus {
+.form-group textarea {
+  resize: vertical;
+}
+
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
   border-color: var(--primary);
 }
 
@@ -5305,6 +5310,40 @@ button.btn-goal-quick-edit:hover {
   grid-template-columns: 2fr 1fr 1fr;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.goal-edit-section input,
+.goal-edit-section select,
+.goal-edit-section textarea {
+  width: 100%;
+  box-sizing: border-box;
+  color: #f8fafc !important;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.goal-edit-section textarea {
+  resize: vertical;
+  line-height: 1.6;
+  min-height: 80px;
+}
+
+.goal-edit-section input:focus,
+.goal-edit-section select:focus,
+.goal-edit-section textarea:focus {
+  border-color: #38bdf8;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.goal-edit-section input::placeholder,
+.goal-edit-section textarea::placeholder {
+  color: #64748b;
 }
 
 /* ==========================================================================

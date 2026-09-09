@@ -2,6 +2,15 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.5.10] - 2026-09-09
+### Fixed & Improved
+- **Vision Board Goal Editor Dark Theme Contrast Fix**: 目標ビジョン設定モーダル（週次・月次・ハーフ・フェイズ）の各目標記入欄（textarea）が、ダークテーマCSSの適用対象外によりブラウザ標準の白背景×ダークテーマ文字色の「白バック・白文字（不可視）」となっていた不具合を解消。背景をダークネイビー（`rgba(15, 23, 42, 0.85)`）、文字色を鮮明なホワイト（`#f8fafc`）に統一。
+- **Global `.form-group textarea` Styling & Font Inheritance**: 共通フォームスタイルに `textarea` を明示追加し、UIフォント（Inter）の継承および垂直リサイズを定義。今後のフォーム拡張時における白浮き再発を予防。
+- **Automated Visual & Computed Style Verification**: ヘッドレス Edge を用いた自動検証テストスイートを構築し、全目標textareaの Computed Style（ダーク背景・白文字・フォント継承）およびモーダル実画面スクリーンショット撮影による完全視認性を機械的に検証・合格。
+- **Release Notes**: `docs/release_notes/2026-09-09_v1.5.10_vision_board_goal_editor_dark_theme_contrast_fix.md` を発行。
+
+---
+
 ## [v1.5.9] - 2026-09-08
 ### Fixed & Improved
 - **Mobile Bottom Navigation Dynamic Badges Engine**: スマホ版（Gendrive Lite）のボトムナビ4ボタン（セクション・デイリー・タスク・ハビット）の残り件数が常に「0」固定となっていた未実装バグを完全解消。選択コンテキストに完全連動するリアルタイム件数計算・DOM更新パイプライン（`updateBottomNavBadges()`）を確立。
