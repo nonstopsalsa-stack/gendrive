@@ -10976,3 +10976,95 @@ body.mode-table .main-content {
   width: 100%;
 }
 
+/* =========================================================================
+   Ultra Zen Focus Mode: Extreme Minimalism & Mindset Banner
+   ========================================================================= */
+
+/* 1. In Focus Mode: Hide distracting header right items, toolbars, and filter bars */
+body[data-mode="focus"] .header-right,
+body[data-mode="focus"] #header-daily-eta-badge,
+body[data-mode="focus"] #daily-eta-banner,
+body[data-mode="focus"] #current-section-badge,
+body[data-mode="focus"] .header-actions,
+body[data-mode="focus"] .app-toolbar,
+body[data-mode="focus"] #smart-tag-bar-container,
+body[data-mode="focus"] #past-date-banner,
+body[data-mode="focus"] #carryover-banner,
+body[data-mode="focus"] .focus-top-bar {
+  display: none !important;
+}
+
+/* 2. Streamline Header in Focus Mode (Keep only Title & Date Navigation) */
+body[data-mode="focus"] .app-header-smart,
+body[data-mode="focus"] .app-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 10px 20px;
+  background: rgba(11, 19, 36, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+/* 3. Focus Board Layout Adjustments */
+body[data-mode="focus"] .focus-board-layout {
+  padding: 30px 20px 60px;
+  gap: 20px;
+  min-height: calc(100vh - 100px);
+}
+
+/* 4. Mindset Banner (Big Centered Typography) */
+.focus-mindset-banner {
+  text-align: center;
+  margin: 10px auto 25px auto;
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 48px;
+}
+
+.mindset-text {
+  font-family: 'Inter', 'Shippori Mincho', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 1 Task: Super Focus Mode (Urgent / High Energy Neon Gold-Cyan) */
+.mindset-text.count-1 {
+  background: linear-gradient(135deg, #ffffff 0%, #38bdf8 45%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 25px rgba(56, 189, 248, 0.45);
+}
+
+/* 2 Tasks: Binary Choice (A or B / Friendly Pink-Purple Decision Trigger) */
+.mindset-text.count-2 {
+  font-size: 28px;
+  background: linear-gradient(135deg, #ffffff 0%, #f472b6 50%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 25px rgba(236, 72, 153, 0.4);
+}
+
+/* 3 Tasks: Triplet Priority (TOP 3 / Clarity Amber-Gold) */
+.mindset-text.count-3 {
+  font-size: 28px;
+  background: linear-gradient(135deg, #ffffff 0%, #facc15 50%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 25px rgba(250, 204, 21, 0.4);
+}
+
+@media (max-width: 768px) {
+  .mindset-text {
+    font-size: 20px;
+  }
+  .mindset-text.count-2,
+  .mindset-text.count-3 {
+    font-size: 22px;
+  }
+}
+
+

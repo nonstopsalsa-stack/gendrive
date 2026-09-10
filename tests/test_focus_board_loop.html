@@ -27,8 +27,16 @@
           <button class="focus-nav-btn" id="btn-focus-task-next" title="次のタスク (J)">次へ ▶</button>
         </div>
       </div>
+
+      <!-- Mindset Banner -->
+      <div class="focus-mindset-banner" id="focus-mindset-banner"></div>
+
       <div class="focus-cards-container count-1" id="focus-cards-container">
         <!-- Dynamically rendered -->
+      </div>
+
+      <div class="focus-footer-controls">
+        <div class="focus-page-indicator" id="focus-page-indicator">1 / 1</div>
       </div>
     </div>
   </div>
@@ -146,11 +154,13 @@
       renderFocusView();
       const container = document.getElementById('focus-cards-container');
       const counter = document.getElementById('focus-task-counter');
+      const mindsetBanner = document.getElementById('focus-mindset-banner');
       assert('Empty state displays "未完了タスクはありません"', container.innerHTML.includes('未完了タスクはありません'));
       assert('Empty state counter shows "0 / 0"', counter.textContent.trim() === '0 / 0');
+      assert('Empty state clears mindset banner', mindsetBanner.textContent.trim() === '');
 
       // -------------------------------------------------------------
-      // Test 3: 1-card mode (Single Focus) rendering
+      // Test 3: 1-card mode (Single Focus) rendering & Mindset
       // -------------------------------------------------------------
       state.tasks = [
         { id: 'task-1', title: 'プロジェクト計画書作成', estMin: 45, status: 'pending', section: 'Morning' },
@@ -168,9 +178,12 @@
       assert('Count 1 displays title of task-1', cardsCount1[0].textContent.includes('プロジェクト計画書作成'));
       assert('Count 1 counter displays 1 / 4', counter.textContent.trim() === '1 / 4');
       assert('Button 1 has active class', document.getElementById('btn-focus-count-1').classList.contains('active'));
+      assert('Count 1 mindset banner is "スーパーフォーカスモード、今すぐ着手、１分でいいからやれ"', 
+        mindsetBanner.textContent.includes('スーパーフォーカスモード、今すぐ着手、１分でいいからやれ')
+      );
 
       // -------------------------------------------------------------
-      // Test 4: 2-card mode (Binary Choice A / B) rendering
+      // Test 4: 2-card mode (Binary Choice A / B) rendering & Mindset
       // -------------------------------------------------------------
       setFocusCount(2);
       const cardsCount2 = container.querySelectorAll('.focus-card');
@@ -184,9 +197,12 @@
       );
       assert('Count 2 counter displays 1-2 / 4', counter.textContent.trim() === '1-2 / 4');
       assert('Button 2 has active class', document.getElementById('btn-focus-count-2').classList.contains('active'));
+      assert('Count 2 mindset banner is "どっちからやる？"', 
+        mindsetBanner.textContent.includes('どっちからやる？')
+      );
 
       // -------------------------------------------------------------
-      // Test 5: 3-card mode (TOP 1, 2, 3) rendering
+      // Test 5: 3-card mode (TOP 1, 2, 3) rendering & Mindset
       // -------------------------------------------------------------
       setFocusCount(3);
       const cardsCount3 = container.querySelectorAll('.focus-card');
@@ -197,6 +213,9 @@
       assert('Count 3 renders TOP 3 badge', container.querySelector('.focus-rank-badge.rank-3') !== null);
       assert('Count 3 counter displays 1-3 / 4', counter.textContent.trim() === '1-3 / 4');
       assert('Button 3 has active class', document.getElementById('btn-focus-count-3').classList.contains('active'));
+      assert('Count 3 mindset banner is "どれからやる？"', 
+        mindsetBanner.textContent.includes('どれからやる？')
+      );
 
       // -------------------------------------------------------------
       // Test 6: Navigation through tasks (J / K)

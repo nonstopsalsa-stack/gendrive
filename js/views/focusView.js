@@ -13,13 +13,13 @@ function renderFocusView() {
 
   const currentCount = state.focusCount || 1;
 
-  // 1. Update Top Bar Pill Buttons
+  // 1. Update Top Bar Pill Buttons (if visible)
   document.querySelectorAll('#focus-count-selector .focus-count-btn').forEach(btn => {
     const btnCount = parseInt(btn.dataset.count, 10);
     btn.classList.toggle('active', btnCount === currentCount);
   });
 
-  // 2. Update Mode Badge Title
+  // 2. Update Mode Badge Title (if visible)
   const modeBadgeEl = document.getElementById('focus-mode-badge');
   if (modeBadgeEl) {
     if (currentCount === 1) {
@@ -42,7 +42,21 @@ function renderFocusView() {
   // 4. Update Container Classes for Grid Layout
   container.className = `focus-cards-container count-${currentCount}`;
 
-  // 5. If No Tasks Left
+  // 5. Update Hyper-Focus Mindset Banner
+  const mindsetEl = document.getElementById('focus-mindset-banner');
+  if (mindsetEl) {
+    if (activeTodayTasks.length === 0) {
+      mindsetEl.innerHTML = '';
+    } else if (currentCount === 1) {
+      mindsetEl.innerHTML = `<span class="mindset-text count-1">スーパーフォーカスモード、今すぐ着手、１分でいいからやれ</span>`;
+    } else if (currentCount === 2) {
+      mindsetEl.innerHTML = `<span class="mindset-text count-2">どっちからやる？</span>`;
+    } else if (currentCount === 3) {
+      mindsetEl.innerHTML = `<span class="mindset-text count-3">どれからやる？</span>`;
+    }
+  }
+
+  // 6. If No Tasks Left
   if (activeTodayTasks.length === 0) {
     container.innerHTML = `
       <div class="focus-card focus-card-empty">
@@ -60,14 +74,14 @@ function renderFocusView() {
     return;
   }
 
-  // 6. Calculate Slice for Display
+  // 7. Calculate Slice for Display
   if (state.focusTaskIndex >= activeTodayTasks.length) {
     state.focusTaskIndex = 0;
   }
   const startIndex = state.focusTaskIndex || 0;
   const visibleTasks = activeTodayTasks.slice(startIndex, startIndex + currentCount);
 
-  // 7. Update Counter & Page Indicator
+  // 8. Update Counter & Page Indicator
   const counterText = (currentCount === 1)
     ? `${startIndex + 1} / ${activeTodayTasks.length}`
     : `${startIndex + 1}-${Math.min(startIndex + visibleTasks.length, activeTodayTasks.length)} / ${activeTodayTasks.length}`;
@@ -78,7 +92,7 @@ function renderFocusView() {
   const pageIndicator = document.getElementById('focus-page-indicator');
   if (pageIndicator) pageIndicator.textContent = counterText;
 
-  // 8. Render Task Focus Cards
+  // 9. Render Task Focus Cards
   container.innerHTML = visibleTasks.map((task, index) => {
     return renderTaskFocusCard(task, index, currentCount, startIndex);
   }).join('');

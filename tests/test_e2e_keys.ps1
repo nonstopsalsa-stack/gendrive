@@ -12,84 +12,111 @@ try {
   $uri = New-Object System.Uri($wsUrl)
   $ws.ConnectAsync($uri, $ct).Wait()
 
+  $jsCode = @"
+new Promise((resolve) => {
+  function check() {
+    if (typeof state !== 'undefined' && state && state.currentMode) {
+      runTests();
+    } else {
+      setTimeout(check, 100);
+    }
+  }
+
+  function press(key) {
+    const ev = new KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true });
+    window.dispatchEvent(ev);
+  }
+
+  function isHidden(selector) {
+    const el = document.querySelector(selector);
+    if (!el) return true;
+    const style = window.getComputedStyle(el);
+    return style.display === 'none' || el.offsetParent === null;
+  }
+
+  function isVisible(selector) {
+    return !isHidden(selector);
+  }
+
+  function runTests() {
+    const results = [];
+    function test(name, pass, detail) {
+      results.push({ name: name, pass: Boolean(pass), detail: detail || '' });
+    }
+
+    // 1. Initial Mode should be section and have toolbar visible
+    test('Init section toolbar visible', isVisible('.app-toolbar'));
+    test('Init section header-right visible', isVisible('.header-right'));
+
+    // 2. Switch to Focus mode
+    press('2');
+    test('Mode is focus', state.currentMode === 'focus');
+
+    // 3. Verify Extreme Minimalism (Hidden elements in Focus Mode)
+    test('Toolbar hidden in focus', isHidden('.app-toolbar'));
+    test('Header right items hidden in focus', isHidden('.header-right'));
+    test('Smart tag bar hidden in focus', isHidden('#smart-tag-bar-container'));
+    test('Focus top bar hidden in focus', isHidden('.focus-top-bar'));
+
+    // 4. Verify Kept elements in Header
+    test('Logo brand kept in focus', isVisible('.logo-brand'));
+    test('Date nav kept in focus', isVisible('.date-nav-bar'));
+    test('App version badge kept in focus', isVisible('#app-version-badge'));
+
+    // 5. Verify Mindset Banner Text for count 1 (\u30B9\u30FC\u30D1\u30FC\u30D5\u30A9\u30FC\u30AB\u30B9\u30E2\u30FC\u30C9...)
+    setFocusCount(1);
+    const banner = document.getElementById('focus-mindset-banner');
+    test('Mindset banner exists', banner !== null);
+    test('Count 1 text includes mindset statement', 
+      banner && banner.textContent.indexOf('\u30B9\u30FC\u30D1\u30FC\u30D5\u30A9\u30FC\u30AB\u30B9\u30E2\u30FC\u30C9') !== -1
+    );
+
+    // 6. Verify Mindset Banner Text for count 2 (\u3069\u3063\u3061\u304b\u3089\u3084\u308b\uFF1F)
+    press('2'); // cycle to 2
+    test('Count 2 text includes question 2', 
+      banner && banner.textContent.indexOf('\u3069\u3063\u3061\u304b\u3089\u3084\u308b') !== -1
+    );
+
+    // 7. Verify Mindset Banner Text for count 3 (\u3069\u308c\u304b\u3089\u3084\u308b\uFF1F)
+    press('2'); // cycle to 3
+    test('Count 3 text includes question 3', 
+      banner && banner.textContent.indexOf('\u3069\u308c\u304b\u3089\u3084\u308b') !== -1
+    );
+
+    // 8. Verify Mode switching works seamlessly from focus mode
+    press('1');
+    test('Press 1 switches to section', state.currentMode === 'section');
+    test('Section toolbar restored', isVisible('.app-toolbar'));
+    test('Section header-right restored', isVisible('.header-right'));
+
+    press('3');
+    test('Press 3 switches to daily', state.currentMode === 'all');
+    test('Daily toolbar restored', isVisible('.app-toolbar'));
+
+    press('2');
+    test('Press 2 switches back to focus', state.currentMode === 'focus');
+    test('Toolbar hidden again in focus', isHidden('.app-toolbar'));
+    test('Header right hidden again in focus', isHidden('.header-right'));
+
+    const allPassed = results.every(r => r.pass);
+
+    resolve(JSON.stringify({
+      allPassed: allPassed,
+      results: results
+    }));
+  }
+
+  check();
+})
+"@
+
   $evalCmd = @{
-    id = 300
+    id = 400
     method = "Runtime.evaluate"
     params = @{
       awaitPromise = $true
       returnByValue = $true
-      expression = @"
-        new Promise((resolve) => {
-          function check() {
-            if (typeof state !== 'undefined' && state && state.currentMode) {
-              runTests();
-            } else {
-              setTimeout(check, 100);
-            }
-          }
-          
-          function press(key) {
-            const ev = new KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true });
-            window.dispatchEvent(ev);
-          }
-
-          function runTests() {
-            const log = [];
-            log.push('Init mode: ' + state.currentMode);
-
-            // 1. Press 2 -> Switch to focus
-            press('2');
-            log.push('After key 2: mode=' + state.currentMode + ', focusCount=' + state.focusCount + ', cards=' + document.querySelectorAll('.focus-card').length);
-
-            // 2. Press 2 again -> Loop focusCount to 2
-            press('2');
-            log.push('After key 2 (2nd): mode=' + state.currentMode + ', focusCount=' + state.focusCount + ', cards=' + document.querySelectorAll('.focus-card').length);
-
-            // 3. Press 2 third time -> Loop focusCount to 3
-            press('2');
-            log.push('After key 2 (3rd): mode=' + state.currentMode + ', focusCount=' + state.focusCount + ', cards=' + document.querySelectorAll('.focus-card').length);
-
-            // 4. Press 2 fourth time -> Loop focusCount back to 1
-            press('2');
-            log.push('After key 2 (4th): mode=' + state.currentMode + ', focusCount=' + state.focusCount + ', cards=' + document.querySelectorAll('.focus-card').length);
-
-            // 5. Switch to 1 (Section)
-            press('1');
-            log.push('From focus press 1: mode=' + state.currentMode + ' activeView=' + document.querySelector('.view-container.active').id);
-
-            // 6. Switch to 2 (Focus)
-            press('2');
-            log.push('From section press 2: mode=' + state.currentMode + ' activeView=' + document.querySelector('.view-container.active').id);
-
-            // 7. Switch to 3 (Daily)
-            press('3');
-            log.push('From focus press 3: mode=' + state.currentMode + ' activeView=' + document.querySelector('.view-container.active').id);
-
-            // 8. Switch to 4 (Master table)
-            press('4');
-            log.push('From daily press 4: mode=' + state.currentMode + ' activeView=' + document.querySelector('.view-container.active').id);
-
-            // 9. Switch to 5 (Vision goals)
-            press('5');
-            log.push('From table press 5: mode=' + state.currentMode + ' activeView=' + document.querySelector('.view-container.active').id);
-
-            // 10. Switch to 6 (Timer)
-            press('6');
-            log.push('From goals press 6: mode=' + state.currentMode + ' activeView=' + document.querySelector('.view-container.active').id);
-
-            // 11. Switch back to 2 (Focus from timer)
-            press('2');
-            log.push('From timer press 2: mode=' + state.currentMode + ' activeView=' + document.querySelector('.view-container.active').id);
-
-            resolve(JSON.stringify({
-              success: true,
-              log: log
-            }));
-          }
-
-          check();
-        })
-"@
+      expression = $jsCode
     }
   } | ConvertTo-Json -Compress
 
@@ -102,8 +129,8 @@ try {
     $recvSeg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buf)
     $res = $ws.ReceiveAsync($recvSeg, $ct).Result
     $resText = [System.Text.Encoding]::UTF8.GetString($buf, 0, $res.Count)
-    if ($resText.Contains('"id":300')) {
-      Write-Host "EVAL_RESULT_300:"
+    if ($resText.Contains('"id":400')) {
+      Write-Host "EVAL_RESULT_400:"
       Write-Host $resText
       break
     }
