@@ -1273,10 +1273,9 @@ function getFilteredHabits(customMode = null) {
     list = list.filter(h => isHabitInCurrentTimeWindow(h));
   }
 
-  // 3. Focus Mode: Check if habit is active in current or future time (exclude past expired habits)
+  // 3. Focus Mode: Purified for task execution (Habits handled in Section & Daily views)
   if (mode === 'focus') {
-    list = list.filter(isHabitActiveForFocus);
-    list = list.filter(h => getHabitStatusForSelectedDate(h) !== 'completed');
+    return [];
   } else if (mode !== 'table') {
     if (state.filters.status === 'uncompleted') {
       list = list.filter(h => getHabitStatusForSelectedDate(h) !== 'completed');
@@ -3741,7 +3740,13 @@ safeInit('setupKeyboardShortcuts', setupKeyboardShortcuts);
 
 try {
   setInterval(updateHeaderAndStatus, 60000);
-  setInterval(updateLiveFocusProgress, 1000);
+  setInterval(() => {
+    if (typeof updateLiveTimers === 'function') {
+      updateLiveTimers();
+    } else if (typeof updateLiveFocusProgress === 'function') {
+      updateLiveFocusProgress();
+    }
+  }, 1000);
 } catch (e) {
   console.error('Error setting intervals:', e);
 }

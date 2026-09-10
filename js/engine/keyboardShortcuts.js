@@ -272,7 +272,12 @@ function setupKeyboardShortcuts() {
     }
 
     // 4. Global Shortcuts (Only when NO modal is open)
-    const filtered = typeof getFilteredHabits === 'function' ? getFilteredHabits() : [];
+    let filtered = [];
+    try {
+      if (typeof getFilteredHabits === 'function') filtered = getFilteredHabits();
+    } catch (err) {
+      console.warn('Error evaluating getFilteredHabits in keydown:', err);
+    }
 
     switch (e.key) {
       case '0':

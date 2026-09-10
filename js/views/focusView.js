@@ -8,7 +8,7 @@
 // =========================================================================
 
 function renderFocusView() {
-  const container = document.getElementById('focus-cards-container');
+  const container = document.getElementById('focus-cards-container') || document.getElementById('focus-task-card-container');
   if (!container) return;
 
   const currentCount = state.focusCount || 1;
@@ -19,7 +19,19 @@ function renderFocusView() {
     btn.classList.toggle('active', btnCount === currentCount);
   });
 
-  // 2. Filter Active Uncompleted Tasks for Selected Date
+  // 2. Update Mode Badge Title
+  const modeBadgeEl = document.getElementById('focus-mode-badge');
+  if (modeBadgeEl) {
+    if (currentCount === 1) {
+      modeBadgeEl.textContent = '🎯 シングル集中 (NEXT 1)';
+    } else if (currentCount === 2) {
+      modeBadgeEl.textContent = '🅰️/🅱️ 二者択一 (A or B)';
+    } else if (currentCount === 3) {
+      modeBadgeEl.textContent = '🥇/🥈/🥉 スモール優先順位 (TOP 3)';
+    }
+  }
+
+  // 3. Filter Active Uncompleted Tasks for Selected Date
   const activeTodayTasks = state.tasks.filter(t => 
     isTaskForSelectedDate(t) && 
     t.status !== 'completed' && 
@@ -27,10 +39,10 @@ function renderFocusView() {
     matchesTagFilters(t)
   );
 
-  // 3. Update Container Classes for Grid Layout
+  // 4. Update Container Classes for Grid Layout
   container.className = `focus-cards-container count-${currentCount}`;
 
-  // 4. If No Tasks Left
+  // 5. If No Tasks Left
   if (activeTodayTasks.length === 0) {
     container.innerHTML = `
       <div class="focus-card focus-card-empty">
@@ -43,28 +55,30 @@ function renderFocusView() {
     `;
     const counterEl = document.getElementById('focus-task-counter');
     if (counterEl) counterEl.textContent = '0 / 0';
+    const pageIndicator = document.getElementById('focus-page-indicator');
+    if (pageIndicator) pageIndicator.textContent = '0 / 0';
     return;
   }
 
-  // 5. Calculate Slice for Display
+  // 6. Calculate Slice for Display
   if (state.focusTaskIndex >= activeTodayTasks.length) {
     state.focusTaskIndex = 0;
   }
   const startIndex = state.focusTaskIndex || 0;
   const visibleTasks = activeTodayTasks.slice(startIndex, startIndex + currentCount);
 
-  // 6. Update Counter
-  const counterEl = document.getElementById('focus-task-counter');
-  if (counterEl) {
-    if (currentCount === 1) {
-      counterEl.textContent = `${startIndex + 1} / ${activeTodayTasks.length}`;
-    } else {
-      const endIndex = Math.min(startIndex + visibleTasks.length, activeTodayTasks.length);
-      counterEl.textContent = `${startIndex + 1}-${endIndex} / ${activeTodayTasks.length}`;
-    }
-  }
+  // 7. Update Counter & Page Indicator
+  const counterText = (currentCount === 1)
+    ? `${startIndex + 1} / ${activeTodayTasks.length}`
+    : `${startIndex + 1}-${Math.min(startIndex + visibleTasks.length, activeTodayTasks.length)} / ${activeTodayTasks.length}`;
 
-  // 7. Render Task Focus Cards
+  const counterEl = document.getElementById('focus-task-counter');
+  if (counterEl) counterEl.textContent = counterText;
+
+  const pageIndicator = document.getElementById('focus-page-indicator');
+  if (pageIndicator) pageIndicator.textContent = counterText;
+
+  // 8. Render Task Focus Cards
   container.innerHTML = visibleTasks.map((task, index) => {
     return renderTaskFocusCard(task, index, currentCount, startIndex);
   }).join('');
@@ -82,7 +96,9 @@ function renderTaskFocusCard(task, rankIndex, totalFocusCount, startIndex) {
 
   const labelBadge = typeof getEisenhowerBadge === 'function' 
     ? getEisenhowerBadge(task.eisenhower) 
-    : (EISENHOWER_MATRIX[task.eisenhower] ? { text: EISENHOWER_MATRIX[task.eisenhower].label, cls: EISENHOWER_MATRIX[task.eisenhower].cls } : null);
+    : (typeof EISENHOWER_MATRIX !== 'undefined' && EISENHOWER_MATRIX[task.eisenhower] 
+        ? { text: EISENHOWER_MATRIX[task.eisenhower].label, cls: EISENHOWER_MATRIX[task.eisenhower].cls } 
+        : null);
 
   // Rank / Mode badge depending on focusCount
   let rankBadgeHtml = '';
@@ -204,12 +220,14 @@ function renderTaskFocusCard(task, rankIndex, totalFocusCount, startIndex) {
 
 function updateLiveTimers() {
   // 1. Live update for Habit Cards (All Views)
-  if (state.habits && Array.isArray(state.habits)) {
+  if (typeof state !== 'undefined' && state.habits && Array.isArray(state.habits)) {
     state.habits.forEach(h => {
       if (h.status === 'in_progress' && h.startTimestamp) {
         const curElapsedSec = Math.max(0, Math.floor((Date.now() - h.startTimestamp) / 1000));
         const curElapsedMin = Math.floor(curElapsedSec / 60);
-        const estInfo = getEstimatedDuration(h, 'habit');
+        const estInfo = (typeof getEstimatedDuration === 'function') 
+          ? getEstimatedDuration(h, 'habit') 
+          : { targetMin: h.targetMin || 30 };
 
         const cardTimerEl = document.getElementById(`habit-timer-${h.id}`);
         if (cardTimerEl) {
@@ -261,13 +279,15 @@ function updateLiveTimers() {
     });
   }
 
-  if (state.currentMode !== 'focus') return;
+  if (typeof state === 'undefined' || !state || state.currentMode !== 'focus') return;
 
   // 3. Live update for Tasks in Focus View
   if (state.tasks && Array.isArray(state.tasks)) {
     const activeTasks = state.tasks.filter(t => t.status === 'in_progress' && t.startTimestamp);
     activeTasks.forEach(task => {
-      const estInfo = getEstimatedDuration(task, 'task');
+      const estInfo = (typeof getEstimatedDuration === 'function') 
+        ? getEstimatedDuration(task, 'task') 
+        : { targetMin: task.estMin || 30 };
       const targetMin = estInfo.targetMin;
       const pastSec = task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0);
       const curSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));
@@ -300,4 +320,17 @@ function updateLiveTimers() {
       }
     });
   }
+}
+
+// =========================================================================
+// 4. Backward Compatibility Aliases & Guards
+// =========================================================================
+
+function isHabitActiveForFocus(habit) {
+  // Focus view is purified for task execution only
+  return false;
+}
+
+function updateLiveFocusProgress() {
+  updateLiveTimers();
 }
