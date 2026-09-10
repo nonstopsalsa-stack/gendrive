@@ -1615,7 +1615,7 @@ function navigateFocusTask(delta) {
   }
 
   state.focusTaskIndex = newIdx;
-  renderFocusView();
+  renderFocusView(true);
 }
 
 

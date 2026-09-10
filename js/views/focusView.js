@@ -1,13 +1,120 @@
 /**
  * Gendrive - Focus Mode (Adaptive Focus Board: 1 -> 2 -> 3 Display Loop)
+ * with 8:2 Hybrid Task Sampling Engine (80% Hierarchy Priority x 20% Random Exploration)
  * 哲生 (AI Company OS & Personal OS Engine)
  */
 
 // =========================================================================
-// 1. Render Focus View (Mode 2: Adaptive Focus Board: 1 -> 2 -> 3 Loop)
+// 1. Task Priority Weight Scoring Engine (User Specified Hierarchy)
 // =========================================================================
 
-function renderFocusView() {
+/**
+ * 優先要素の厳格な階層重み付け:
+ * 1. アイゼンハワー -> ALL-IN (task.label === 'iron_rule') : +1000pt
+ * 2. アイゼンハワー -> カエル (task.label === 'frog0' / task.frog >= 4) : +500pt
+ * 3. 緊急度が高い (urgency === 'high' / '高') : +250pt
+ * 4. 重要度が高い (importance === 'high' / '高') : +120pt
+ * 5. 現在のセクションのタスク (task.section === currentSection) : +60pt
+ * 最低保証ベーススコア: +10pt (全未完了タスクに選出確率を付与)
+ */
+function computeTaskPriorityScore(task) {
+  if (!task) return 10;
+  let score = 10;
+
+  // 1. アイゼンハワー -> ALL-IN
+  const isAllIn = task.label === 'iron_rule' || task.eisenhower === 'iron_rule';
+  if (isAllIn) score += 1000;
+
+  // 2. アイゼンハワー -> カエル
+  const isFrog = task.label === 'frog0' || 
+                 task.eisenhower === 'frog0' || 
+                 Number(task.frog) >= 4 || 
+                 (task.matrix && (task.matrix.frogLevel === 'high' || task.matrix.frog === 'high'));
+  if (isFrog) score += 500;
+
+  // 3. 緊急度が高い
+  const isUrgent = task.urgency === 'high' || 
+                   task.urgency === '高' || 
+                   (task.matrix && task.matrix.urgency === 'high') ||
+                   task.label === 'p1' || task.label === 'p3';
+  if (isUrgent) score += 250;
+
+  // 4. 重要度が高い
+  const isImportant = task.importance === 'high' || 
+                      task.importance === '高' || 
+                      (task.matrix && task.matrix.importance === 'high') ||
+                      task.label === 'p1' || task.label === 'p2';
+  if (isImportant) score += 120;
+
+  // 5. 現在のセクションのタスク
+  const currentSec = (typeof state !== 'undefined' && state.currentSection) ? state.currentSection : '';
+  const isCurrentSec = currentSec && task.section && (
+    task.section === currentSec || 
+    (typeof normalizeSectionName === 'function' && normalizeSectionName(task.section) === normalizeSectionName(currentSec))
+  );
+  if (isCurrentSec) score += 60;
+
+  return score;
+}
+
+// =========================================================================
+// 2. 8:2 Hybrid Task Sampling Algorithm (80% Priority / 20% Random)
+// =========================================================================
+
+function sampleFocusTasks(pool, count) {
+  if (!pool || pool.length === 0) return [];
+  if (pool.length <= count) return [...pool];
+
+  const scoredPool = pool.map(task => ({
+    task: task,
+    score: computeTaskPriorityScore(task)
+  }));
+
+  const selectedTasks = [];
+  const remaining = [...scoredPool];
+
+  for (let slot = 0; slot < count; slot++) {
+    if (remaining.length === 0) break;
+
+    // 80%の確率で本命（重みサンプリング）、20%の確率で完全ランダム
+    const isPriorityPick = Math.random() < 0.8;
+    let pickedTask = null;
+
+    if (isPriorityPick) {
+      // 重み付き確率ルーレットサンプリング
+      const totalScore = remaining.reduce((sum, item) => sum + item.score, 0);
+      let randVal = Math.random() * totalScore;
+      for (let i = 0; i < remaining.length; i++) {
+        randVal -= remaining[i].score;
+        if (randVal <= 0 || i === remaining.length - 1) {
+          pickedTask = remaining[i].task;
+          remaining.splice(i, 1);
+          break;
+        }
+      }
+    } else {
+      // 20%枠: 残りプールから一様ランダム選出（思わぬ掘り出し物）
+      const randIdx = Math.floor(Math.random() * remaining.length);
+      pickedTask = remaining[randIdx].task;
+      remaining.splice(randIdx, 1);
+    }
+
+    if (pickedTask) {
+      selectedTasks.push(pickedTask);
+    }
+  }
+
+  return selectedTasks;
+}
+
+// =========================================================================
+// 3. Render Focus View
+// =========================================================================
+
+let currentSampledTasks = [];
+let lastSampledCount = 0;
+
+function renderFocusView(forceResample = false) {
   const container = document.getElementById('focus-cards-container') || document.getElementById('focus-task-card-container');
   if (!container) return;
 
@@ -19,19 +126,7 @@ function renderFocusView() {
     btn.classList.toggle('active', btnCount === currentCount);
   });
 
-  // 2. Update Mode Badge Title (if visible)
-  const modeBadgeEl = document.getElementById('focus-mode-badge');
-  if (modeBadgeEl) {
-    if (currentCount === 1) {
-      modeBadgeEl.textContent = '🎯 シングル集中 (NEXT 1)';
-    } else if (currentCount === 2) {
-      modeBadgeEl.textContent = '🅰️/🅱️ 二者択一 (A or B)';
-    } else if (currentCount === 3) {
-      modeBadgeEl.textContent = '🥇/🥈/🥉 スモール優先順位 (TOP 3)';
-    }
-  }
-
-  // 3. Filter Active Uncompleted Tasks for Selected Date
+  // 2. Filter Active Uncompleted Tasks for Selected Date
   const activeTodayTasks = state.tasks.filter(t => 
     isTaskForSelectedDate(t) && 
     t.status !== 'completed' && 
@@ -39,10 +134,10 @@ function renderFocusView() {
     matchesTagFilters(t)
   );
 
-  // 4. Update Container Classes for Grid Layout
+  // 3. Update Container Classes for Grid Layout
   container.className = `focus-cards-container count-${currentCount}`;
 
-  // 5. Update Hyper-Focus Mindset Banner
+  // 4. Update Hyper-Focus Mindset Banner
   const mindsetEl = document.getElementById('focus-mindset-banner');
   if (mindsetEl) {
     if (activeTodayTasks.length === 0) {
@@ -56,8 +151,9 @@ function renderFocusView() {
     }
   }
 
-  // 6. If No Tasks Left
+  // 5. If No Tasks Left
   if (activeTodayTasks.length === 0) {
+    currentSampledTasks = [];
     container.innerHTML = `
       <div class="focus-card focus-card-empty">
         <div class="empty-state">
@@ -74,17 +170,19 @@ function renderFocusView() {
     return;
   }
 
-  // 7. Calculate Slice for Display
-  if (state.focusTaskIndex >= activeTodayTasks.length) {
-    state.focusTaskIndex = 0;
-  }
-  const startIndex = state.focusTaskIndex || 0;
-  const visibleTasks = activeTodayTasks.slice(startIndex, startIndex + currentCount);
+  // 6. Sample Tasks with 8:2 Hybrid Engine
+  const activeIds = new Set(activeTodayTasks.map(t => String(t.id)));
+  const hasInvalidTask = currentSampledTasks.some(t => !activeIds.has(String(t.id)));
 
-  // 8. Update Counter & Page Indicator
+  if (forceResample || lastSampledCount !== currentCount || currentSampledTasks.length === 0 || hasInvalidTask) {
+    currentSampledTasks = sampleFocusTasks(activeTodayTasks, currentCount);
+    lastSampledCount = currentCount;
+  }
+
+  // 7. Update Counter & Page Indicator
   const counterText = (currentCount === 1)
-    ? `${startIndex + 1} / ${activeTodayTasks.length}`
-    : `${startIndex + 1}-${Math.min(startIndex + visibleTasks.length, activeTodayTasks.length)} / ${activeTodayTasks.length}`;
+    ? `1 / ${activeTodayTasks.length}`
+    : `${Math.min(currentCount, currentSampledTasks.length)} / ${activeTodayTasks.length}`;
 
   const counterEl = document.getElementById('focus-task-counter');
   if (counterEl) counterEl.textContent = counterText;
@@ -92,17 +190,17 @@ function renderFocusView() {
   const pageIndicator = document.getElementById('focus-page-indicator');
   if (pageIndicator) pageIndicator.textContent = counterText;
 
-  // 9. Render Task Focus Cards
-  container.innerHTML = visibleTasks.map((task, index) => {
-    return renderTaskFocusCard(task, index, currentCount, startIndex);
+  // 8. Render Task Focus Cards
+  container.innerHTML = currentSampledTasks.map((task, index) => {
+    return renderTaskFocusCard(task, index, currentCount);
   }).join('');
 }
 
 // =========================================================================
-// 2. Render Single Focus Card
+// 4. Render Single Focus Card
 // =========================================================================
 
-function renderTaskFocusCard(task, rankIndex, totalFocusCount, startIndex) {
+function renderTaskFocusCard(task, rankIndex, totalFocusCount) {
   const isInProgress = task.status === 'in_progress';
   const isPaused = task.status === 'paused';
   const estInfo = getEstimatedDuration(task, 'task');
@@ -229,7 +327,7 @@ function renderTaskFocusCard(task, rankIndex, totalFocusCount, startIndex) {
 }
 
 // =========================================================================
-// 3. Live Timers Update
+// 5. Live Timers Update
 // =========================================================================
 
 function updateLiveTimers() {
@@ -337,11 +435,10 @@ function updateLiveTimers() {
 }
 
 // =========================================================================
-// 4. Backward Compatibility Aliases & Guards
+// 6. Backward Compatibility Aliases & Guards
 // =========================================================================
 
 function isHabitActiveForFocus(habit) {
-  // Focus view is purified for task execution only
   return false;
 }
 

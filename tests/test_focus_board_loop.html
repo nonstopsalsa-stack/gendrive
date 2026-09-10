@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Adaptive Focus Board (1 -> 2 -> 3 Loop) Test Suite</title>
+  <title>Adaptive Focus Board (8:2 Hybrid Task Sampling &amp; 1-2-3 Loop) Test Suite</title>
 </head>
 <body>
-  <h1>Test Suite: Adaptive Focus Board (1 -> 2 -> 3 Display Loop) Engine</h1>
+  <h1>Test Suite: Adaptive Focus Board &amp; 8:2 Hybrid Task Sampling Engine</h1>
   <div id="results"></div>
 
   <!-- Minimal DOM fixtures for Focus Board -->
@@ -13,18 +13,18 @@
     <div class="focus-board-layout">
       <div class="focus-top-bar">
         <div class="focus-title-group">
-          <h2><span>🎯</span> 集中タスク実行ボード</h2>
+          <h2><span>識</span> Focus Board</h2>
           <span class="focus-badge">ADAPTIVE FOCUS</span>
         </div>
         <div class="focus-count-selector" id="focus-count-selector">
-          <button class="focus-count-btn active" data-count="1" id="btn-focus-count-1">1件 (シングル)</button>
-          <button class="focus-count-btn" data-count="2" id="btn-focus-count-2">2件 (二者択一)</button>
-          <button class="focus-count-btn" data-count="3" id="btn-focus-count-3">3件 (TOP 3)</button>
+          <button class="focus-count-btn active" data-count="1" id="btn-focus-count-1">1</button>
+          <button class="focus-count-btn" data-count="2" id="btn-focus-count-2">2</button>
+          <button class="focus-count-btn" data-count="3" id="btn-focus-count-3">3</button>
         </div>
         <div class="focus-nav-group">
-          <button class="focus-nav-btn" id="btn-focus-task-prev" title="前のタスク (K)">◀ 前へ</button>
+          <button class="focus-nav-btn" id="btn-focus-task-prev" title="Prev">笳</button>
           <span class="focus-indicator" id="focus-task-counter">1 / 1</span>
-          <button class="focus-nav-btn" id="btn-focus-task-next" title="次のタスク (J)">次へ ▶</button>
+          <button class="focus-nav-btn" id="btn-focus-task-next" title="Next">笆ｶ</button>
         </div>
       </div>
 
@@ -74,16 +74,17 @@
     }
     function matchesTagFilters(t) { return true; }
     function getEstimatedDuration(item, type) {
-      return { targetMin: item.estMin || 30, label: '設定値' };
+      return { targetMin: item.estMin || 30, label: '\u8a2d\u5b9a\u5024' };
     }
     function getEisenhowerBadge(val) {
-      return { text: '緊急×重要', cls: 'badge-matrix-q1' };
+      return { text: '\u7dca\u6025\u00d7\u91cd\u8981', cls: 'badge-matrix-q1' };
     }
 
     // Global mock state
     window.state = {
       currentMode: 'focus',
       selectedDateOffset: 0,
+      currentSection: 'Morning',
       focusCount: 1,
       focusTaskIndex: 0,
       tasks: [],
@@ -120,7 +121,7 @@
         const len = activeTodayTasks.length;
         state.focusTaskIndex = (state.focusTaskIndex + delta + len) % len;
       }
-      renderFocusView();
+      renderFocusView(true);
     };
 
     // Begin Tests
@@ -147,43 +148,92 @@
       assert('setFocusCount rejects invalid number', state.focusCount === 2);
 
       // -------------------------------------------------------------
-      // Test 2: Empty state rendering
+      // Test 2: 8:2 Priority Weight Scoring Hierarchy Engine
+      // -------------------------------------------------------------
+      state.currentSection = 'Morning';
+      const tAllIn = { id: 't-allin', title: 'ALL-IN task', label: 'iron_rule', section: 'Afternoon' };
+      const tFrog = { id: 't-frog', title: 'Frog task', label: 'frog0', section: 'Afternoon' };
+      const tUrgent = { id: 't-urgent', title: 'Urgent task', urgency: 'high', section: 'Afternoon' };
+      const tImportant = { id: 't-important', title: 'Important task', importance: 'high', section: 'Afternoon' };
+      const tSection = { id: 't-sec', title: 'Current section task', section: 'Morning' };
+      const tNormal = { id: 't-normal', title: 'Normal task', section: 'Afternoon' };
+
+      const sAllIn = computeTaskPriorityScore(tAllIn);
+      const sFrog = computeTaskPriorityScore(tFrog);
+      const sUrgent = computeTaskPriorityScore(tUrgent);
+      const sImportant = computeTaskPriorityScore(tImportant);
+      const sSection = computeTaskPriorityScore(tSection);
+      const sNormal = computeTaskPriorityScore(tNormal);
+
+      assert('Score Hierarchy: ALL-IN > Frog', sAllIn > sFrog);
+      assert('Score Hierarchy: Frog > Urgent', sFrog > sUrgent);
+      assert('Score Hierarchy: Urgent > Important', sUrgent > sImportant);
+      assert('Score Hierarchy: Important > Section', sImportant > sSection);
+      assert('Score Hierarchy: Section > Normal', sSection > sNormal);
+      assert('Base score guaranteed for normal task', sNormal === 10);
+      assert('ALL-IN gets +1000pt bonus', sAllIn === 1010);
+      assert('Frog gets +500pt bonus', sFrog === 510);
+      assert('Urgent gets +250pt bonus', sUrgent === 260);
+      assert('Important gets +120pt bonus', sImportant === 130);
+      assert('Current section gets +60pt bonus', sSection === 70);
+
+      // -------------------------------------------------------------
+      // Test 3: 8:2 Hybrid Sampling Algorithm
+      // -------------------------------------------------------------
+      const pool = [tAllIn, tFrog, tUrgent, tImportant, tSection, tNormal];
+      const sampled1 = sampleFocusTasks(pool, 1);
+      assert('sampleFocusTasks(pool, 1) returns exactly 1 task', sampled1.length === 1);
+
+      const sampled2 = sampleFocusTasks(pool, 2);
+      assert('sampleFocusTasks(pool, 2) returns exactly 2 tasks', sampled2.length === 2);
+      assert('sampleFocusTasks(pool, 2) has no duplicate tasks', sampled2[0].id !== sampled2[1].id);
+
+      const sampled3 = sampleFocusTasks(pool, 3);
+      assert('sampleFocusTasks(pool, 3) returns exactly 3 tasks', sampled3.length === 3);
+      const ids3 = new Set(sampled3.map(t => t.id));
+      assert('sampleFocusTasks(pool, 3) has all unique IDs', ids3.size === 3);
+
+      // Sampling distribution verification across multiple runs
+      let allInCount = 0;
+      const RUNS = 200;
+      for (let i = 0; i < RUNS; i++) {
+        const s = sampleFocusTasks(pool, 1);
+        if (s[0].id === 't-allin') allInCount++;
+      }
+      assert('ALL-IN task has high sampling dominance in 200 runs (> 30%)', allInCount > (RUNS * 0.3));
+
+      // -------------------------------------------------------------
+      // Test 4: Empty state rendering
       // -------------------------------------------------------------
       state.tasks = [];
       state.focusCount = 1;
-      renderFocusView();
+      renderFocusView(true);
       const container = document.getElementById('focus-cards-container');
       const counter = document.getElementById('focus-task-counter');
       const mindsetBanner = document.getElementById('focus-mindset-banner');
-      assert('Empty state displays "未完了タスクはありません"', container.innerHTML.includes('未完了タスクはありません'));
+      assert('Empty state displays notask message', container.innerHTML.indexOf('\u672a\u5b8c\u4e86\u30bf\u30b9\u30af\u306f\u3042\u308a\u307e\u305b\u3093') !== -1);
       assert('Empty state counter shows "0 / 0"', counter.textContent.trim() === '0 / 0');
       assert('Empty state clears mindset banner', mindsetBanner.textContent.trim() === '');
 
       // -------------------------------------------------------------
-      // Test 3: 1-card mode (Single Focus) rendering & Mindset
+      // Test 5: 1-card mode (Single Focus) rendering & Mindset
       // -------------------------------------------------------------
-      state.tasks = [
-        { id: 'task-1', title: 'プロジェクト計画書作成', estMin: 45, status: 'pending', section: 'Morning' },
-        { id: 'task-2', title: 'コードレビュー', estMin: 20, status: 'pending', section: 'Afternoon' },
-        { id: 'task-3', title: '週報提出', estMin: 15, status: 'pending', section: 'Evening' },
-        { id: 'task-4', title: 'ストレッチ運動', estMin: 10, status: 'pending', section: 'Night' }
-      ];
-      state.focusTaskIndex = 0;
+      state.tasks = [tAllIn, tFrog, tUrgent, tNormal];
       setFocusCount(1);
+      renderFocusView(true);
 
       const cardsCount1 = container.querySelectorAll('.focus-card');
       assert('Count 1 mode renders exactly 1 card', cardsCount1.length === 1);
       assert('Count 1 container has count-1 class', container.classList.contains('count-1'));
       assert('Count 1 renders Single badge', container.querySelector('.focus-rank-badge.single') !== null);
-      assert('Count 1 displays title of task-1', cardsCount1[0].textContent.includes('プロジェクト計画書作成'));
-      assert('Count 1 counter displays 1 / 4', counter.textContent.trim() === '1 / 4');
+      assert('Count 1 counter displays "1 / 4"', counter.textContent.trim() === '1 / 4');
       assert('Button 1 has active class', document.getElementById('btn-focus-count-1').classList.contains('active'));
-      assert('Count 1 mindset banner is "スーパーフォーカスモード、今すぐ着手、１分でいいからやれ"', 
-        mindsetBanner.textContent.includes('スーパーフォーカスモード、今すぐ着手、１分でいいからやれ')
+      assert('Count 1 mindset banner includes super focus text', 
+        mindsetBanner.textContent.indexOf('\u30b9\u30fc\u30d1\u30fc\u30d5\u30a9\u30fc\u30ab\u30b9\u30e2\u30fc\u30c9') !== -1
       );
 
       // -------------------------------------------------------------
-      // Test 4: 2-card mode (Binary Choice A / B) rendering & Mindset
+      // Test 6: 2-card mode (Binary Choice A / B) rendering & Mindset
       // -------------------------------------------------------------
       setFocusCount(2);
       const cardsCount2 = container.querySelectorAll('.focus-card');
@@ -191,18 +241,14 @@
       assert('Count 2 container has count-2 class', container.classList.contains('count-2'));
       assert('Count 2 renders Choice A badge', container.querySelector('.focus-rank-badge.choice-a') !== null);
       assert('Count 2 renders Choice B badge', container.querySelector('.focus-rank-badge.choice-b') !== null);
-      assert('Count 2 displays task-1 and task-2', 
-        cardsCount2[0].textContent.includes('プロジェクト計画書作成') &&
-        cardsCount2[1].textContent.includes('コードレビュー')
-      );
-      assert('Count 2 counter displays 1-2 / 4', counter.textContent.trim() === '1-2 / 4');
+      assert('Count 2 counter displays "2 / 4"', counter.textContent.trim() === '2 / 4');
       assert('Button 2 has active class', document.getElementById('btn-focus-count-2').classList.contains('active'));
-      assert('Count 2 mindset banner is "どっちからやる？"', 
-        mindsetBanner.textContent.includes('どっちからやる？')
+      assert('Count 2 mindset banner includes docchi text', 
+        mindsetBanner.textContent.indexOf('\u3069\u3063\u3061\u304b\u3089\u3084\u308b') !== -1
       );
 
       // -------------------------------------------------------------
-      // Test 5: 3-card mode (TOP 1, 2, 3) rendering & Mindset
+      // Test 7: 3-card mode (TOP 1, 2, 3) rendering & Mindset
       // -------------------------------------------------------------
       setFocusCount(3);
       const cardsCount3 = container.querySelectorAll('.focus-card');
@@ -211,47 +257,48 @@
       assert('Count 3 renders TOP 1 badge', container.querySelector('.focus-rank-badge.rank-1') !== null);
       assert('Count 3 renders TOP 2 badge', container.querySelector('.focus-rank-badge.rank-2') !== null);
       assert('Count 3 renders TOP 3 badge', container.querySelector('.focus-rank-badge.rank-3') !== null);
-      assert('Count 3 counter displays 1-3 / 4', counter.textContent.trim() === '1-3 / 4');
+      assert('Count 3 counter displays "3 / 4"', counter.textContent.trim() === '3 / 4');
       assert('Button 3 has active class', document.getElementById('btn-focus-count-3').classList.contains('active'));
-      assert('Count 3 mindset banner is "どれからやる？"', 
-        mindsetBanner.textContent.includes('どれからやる？')
+      assert('Count 3 mindset banner includes dore text', 
+        mindsetBanner.textContent.indexOf('\u3069\u308c\u304b\u3089\u3084\u308b') !== -1
       );
 
       // -------------------------------------------------------------
-      // Test 6: Navigation through tasks (J / K)
+      // Test 8: Navigation (J / K) Reroll Engine
       // -------------------------------------------------------------
-      navigateFocusTask(1); // Next task
-      assert('navigateFocusTask(1) updates focusTaskIndex to 1', state.focusTaskIndex === 1);
-      const cardsAfterNext = container.querySelectorAll('.focus-card');
-      assert('After navigate next, card 1 shows task-2', cardsAfterNext[0].textContent.includes('コードレビュー'));
-      assert('After navigate next, counter shows 2-4 / 4', counter.textContent.trim() === '2-4 / 4');
-
-      navigateFocusTask(-1); // Back to 0
-      assert('navigateFocusTask(-1) returns focusTaskIndex to 0', state.focusTaskIndex === 0);
+      navigateFocusTask(1); // Triggers renderFocusView(true)
+      const afterRerollCards = container.querySelectorAll('.focus-card');
+      assert('navigateFocusTask renders valid card count (3)', afterRerollCards.length === 3);
 
       // -------------------------------------------------------------
-      // Test 7: Auto-slide replenishment when a task is completed
+      // Test 9: Anti-flicker Stability on Live Timer Update
       // -------------------------------------------------------------
-      // Complete task-1
-      state.tasks[0].status = 'completed';
-      renderFocusView();
+      const currentCardsHtmlBefore = container.innerHTML;
+      renderFocusView(false); // Simulate timer tick without forceResample
+      const currentCardsHtmlAfter = container.innerHTML;
+      assert('Timer update without forceResample preserves cards stability', currentCardsHtmlBefore === currentCardsHtmlAfter);
+
+      // -------------------------------------------------------------
+      // Test 10: Auto-slide replenishment when a task is completed
+      // -------------------------------------------------------------
+      const displayedTask = currentSampledTasks[0];
+      displayedTask.status = 'completed';
+      renderFocusView(false); // Should detect invalid (completed) task and resample
+      const remainingTasks = state.tasks.filter(t => t.status !== 'completed');
+      assert('Remaining active tasks is 3', remainingTasks.length === 3);
       const cardsAfterComplete = container.querySelectorAll('.focus-card');
-      assert('Active uncompleted tasks count is now 3', state.tasks.filter(t => t.status !== 'completed').length === 3);
-      assert('Top card automatically slides to task-2 (コードレビュー)', cardsAfterComplete[0].textContent.includes('コードレビュー'));
-      assert('Second card is task-3 (週報提出)', cardsAfterComplete[1].textContent.includes('週報提出'));
-      assert('Third card is task-4 (ストレッチ運動)', cardsAfterComplete[2].textContent.includes('ストレッチ運動'));
-      assert('Counter is updated to 1-3 / 3', counter.textContent.trim() === '1-3 / 3');
+      assert('Completed task is no longer displayed in cards', !Array.from(cardsAfterComplete).some(c => c.textContent.includes(displayedTask.title)));
 
       // -------------------------------------------------------------
-      // Test 8: Live timer and elements in Focus Card
+      // Test 11: Live timer and elements in Focus Card
       // -------------------------------------------------------------
-      // Start task-2
-      const task2 = state.tasks[1];
-      task2.status = 'in_progress';
-      task2.startTimestamp = Date.now() - 120000; // 2 minutes ago
-      renderFocusView();
+      const runningTask = remainingTasks[0];
+      runningTask.status = 'in_progress';
+      runningTask.startTimestamp = Date.now() - 120000; // 2 minutes ago
+      currentSampledTasks = [runningTask];
+      renderFocusView(false);
 
-      const timerEl = document.getElementById(`focus-task-live-timer-${task2.id}`);
+      const timerEl = document.getElementById(`focus-task-live-timer-${runningTask.id}`);
       assert('Live timer element exists for running task', timerEl !== null);
 
       updateLiveTimers();
