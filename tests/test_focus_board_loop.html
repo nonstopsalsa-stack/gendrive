@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Adaptive Focus Board (1 -> 2 -> 3 Loop) Test Suite</title>
+</head>
+<body>
+  <h1>Test Suite: Adaptive Focus Board (1 -> 2 -> 3 Display Loop) Engine</h1>
+  <div id="results"></div>
+
+  <!-- Minimal DOM fixtures for Focus Board -->
+  <div id="view-focus" style="display: none;">
+    <div class="focus-board-layout">
+      <div class="focus-top-bar">
+        <div class="focus-title-group">
+          <h2><span>🎯</span> 集中タスク実行ボード</h2>
+          <span class="focus-badge">ADAPTIVE FOCUS</span>
+        </div>
+        <div class="focus-count-selector" id="focus-count-selector">
+          <button class="focus-count-btn active" data-count="1" id="btn-focus-count-1">1件 (シングル)</button>
+          <button class="focus-count-btn" data-count="2" id="btn-focus-count-2">2件 (二者択一)</button>
+          <button class="focus-count-btn" data-count="3" id="btn-focus-count-3">3件 (TOP 3)</button>
+        </div>
+        <div class="focus-nav-group">
+          <button class="focus-nav-btn" id="btn-focus-task-prev" title="前のタスク (K)">◀ 前へ</button>
+          <span class="focus-indicator" id="focus-task-counter">1 / 1</span>
+          <button class="focus-nav-btn" id="btn-focus-task-next" title="次のタスク (J)">次へ ▶</button>
+        </div>
+      </div>
+      <div class="focus-cards-container count-1" id="focus-cards-container">
+        <!-- Dynamically rendered -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Load dependencies in sequence -->
+  <script src="../js/config.js"></script>
+  <script src="../js/views/focusView.js"></script>
+
+  <script>
+    window.__TEST_SUMMARY__ = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      results: [],
+      allPassed: false
+    };
+
+    function assert(desc, condition) {
+      window.__TEST_SUMMARY__.total++;
+      if (condition) {
+        window.__TEST_SUMMARY__.passed++;
+        window.__TEST_SUMMARY__.results.push({ pass: true, message: desc });
+      } else {
+        window.__TEST_SUMMARY__.failed++;
+        window.__TEST_SUMMARY__.results.push({ pass: false, message: desc });
+      }
+    }
+
+    // Mock state and global dependencies for test environment
+    const mockTodayKey = '2026-09-10';
+    function getTodayKey() { return mockTodayKey; }
+    function isTaskForSelectedDate(t) {
+      if (!t || t.isDisabled) return false;
+      return true;
+    }
+    function matchesTagFilters(t) { return true; }
+    function getEstimatedDuration(item, type) {
+      return { targetMin: item.estMin || 30, label: '設定値' };
+    }
+    function getEisenhowerBadge(val) {
+      return { text: '緊急×重要', cls: 'badge-matrix-q1' };
+    }
+
+    // Global mock state
+    window.state = {
+      currentMode: 'focus',
+      selectedDateOffset: 0,
+      focusCount: 1,
+      focusTaskIndex: 0,
+      tasks: [],
+      habits: []
+    };
+
+    // Controller functions mimicking app.js
+    window.setFocusCount = function(count) {
+      const c = parseInt(count, 10);
+      if (![1, 2, 3].includes(c)) return;
+      state.focusCount = c;
+      try {
+        localStorage.setItem('gendrive_focus_count', String(c));
+      } catch (e) {}
+      renderFocusView();
+    };
+
+    window.cycleFocusCount = function() {
+      const cur = state.focusCount || 1;
+      const next = cur === 1 ? 2 : (cur === 2 ? 3 : 1);
+      setFocusCount(next);
+    };
+
+    window.navigateFocusTask = function(delta) {
+      const activeTodayTasks = state.tasks.filter(t => 
+        isTaskForSelectedDate(t) && 
+        t.status !== 'completed' && 
+        t.status !== 'skipped' && 
+        matchesTagFilters(t)
+      );
+      if (activeTodayTasks.length === 0) {
+        state.focusTaskIndex = 0;
+      } else {
+        const len = activeTodayTasks.length;
+        state.focusTaskIndex = (state.focusTaskIndex + delta + len) % len;
+      }
+      renderFocusView();
+    };
+
+    // Begin Tests
+    try {
+      // -------------------------------------------------------------
+      // Test 1: Initial focusCount and cycleFocusCount
+      // -------------------------------------------------------------
+      assert('Initial focusCount is 1', state.focusCount === 1);
+
+      cycleFocusCount();
+      assert('cycleFocusCount transitions 1 -> 2', state.focusCount === 2);
+
+      cycleFocusCount();
+      assert('cycleFocusCount transitions 2 -> 3', state.focusCount === 3);
+
+      cycleFocusCount();
+      assert('cycleFocusCount transitions 3 -> 1', state.focusCount === 1);
+
+      setFocusCount(2);
+      assert('setFocusCount(2) sets focusCount to 2', state.focusCount === 2);
+      assert('localStorage contains 2', localStorage.getItem('gendrive_focus_count') === '2');
+
+      setFocusCount(99); // invalid
+      assert('setFocusCount rejects invalid number', state.focusCount === 2);
+
+      // -------------------------------------------------------------
+      // Test 2: Empty state rendering
+      // -------------------------------------------------------------
+      state.tasks = [];
+      state.focusCount = 1;
+      renderFocusView();
+      const container = document.getElementById('focus-cards-container');
+      const counter = document.getElementById('focus-task-counter');
+      assert('Empty state displays "未完了タスクはありません"', container.innerHTML.includes('未完了タスクはありません'));
+      assert('Empty state counter shows "0 / 0"', counter.textContent.trim() === '0 / 0');
+
+      // -------------------------------------------------------------
+      // Test 3: 1-card mode (Single Focus) rendering
+      // -------------------------------------------------------------
+      state.tasks = [
+        { id: 'task-1', title: 'プロジェクト計画書作成', estMin: 45, status: 'pending', section: 'Morning' },
+        { id: 'task-2', title: 'コードレビュー', estMin: 20, status: 'pending', section: 'Afternoon' },
+        { id: 'task-3', title: '週報提出', estMin: 15, status: 'pending', section: 'Evening' },
+        { id: 'task-4', title: 'ストレッチ運動', estMin: 10, status: 'pending', section: 'Night' }
+      ];
+      state.focusTaskIndex = 0;
+      setFocusCount(1);
+
+      const cardsCount1 = container.querySelectorAll('.focus-card');
+      assert('Count 1 mode renders exactly 1 card', cardsCount1.length === 1);
+      assert('Count 1 container has count-1 class', container.classList.contains('count-1'));
+      assert('Count 1 renders Single badge', container.querySelector('.focus-rank-badge.single') !== null);
+      assert('Count 1 displays title of task-1', cardsCount1[0].textContent.includes('プロジェクト計画書作成'));
+      assert('Count 1 counter displays 1 / 4', counter.textContent.trim() === '1 / 4');
+      assert('Button 1 has active class', document.getElementById('btn-focus-count-1').classList.contains('active'));
+
+      // -------------------------------------------------------------
+      // Test 4: 2-card mode (Binary Choice A / B) rendering
+      // -------------------------------------------------------------
+      setFocusCount(2);
+      const cardsCount2 = container.querySelectorAll('.focus-card');
+      assert('Count 2 mode renders exactly 2 cards', cardsCount2.length === 2);
+      assert('Count 2 container has count-2 class', container.classList.contains('count-2'));
+      assert('Count 2 renders Choice A badge', container.querySelector('.focus-rank-badge.choice-a') !== null);
+      assert('Count 2 renders Choice B badge', container.querySelector('.focus-rank-badge.choice-b') !== null);
+      assert('Count 2 displays task-1 and task-2', 
+        cardsCount2[0].textContent.includes('プロジェクト計画書作成') &&
+        cardsCount2[1].textContent.includes('コードレビュー')
+      );
+      assert('Count 2 counter displays 1-2 / 4', counter.textContent.trim() === '1-2 / 4');
+      assert('Button 2 has active class', document.getElementById('btn-focus-count-2').classList.contains('active'));
+
+      // -------------------------------------------------------------
+      // Test 5: 3-card mode (TOP 1, 2, 3) rendering
+      // -------------------------------------------------------------
+      setFocusCount(3);
+      const cardsCount3 = container.querySelectorAll('.focus-card');
+      assert('Count 3 mode renders exactly 3 cards', cardsCount3.length === 3);
+      assert('Count 3 container has count-3 class', container.classList.contains('count-3'));
+      assert('Count 3 renders TOP 1 badge', container.querySelector('.focus-rank-badge.rank-1') !== null);
+      assert('Count 3 renders TOP 2 badge', container.querySelector('.focus-rank-badge.rank-2') !== null);
+      assert('Count 3 renders TOP 3 badge', container.querySelector('.focus-rank-badge.rank-3') !== null);
+      assert('Count 3 counter displays 1-3 / 4', counter.textContent.trim() === '1-3 / 4');
+      assert('Button 3 has active class', document.getElementById('btn-focus-count-3').classList.contains('active'));
+
+      // -------------------------------------------------------------
+      // Test 6: Navigation through tasks (J / K)
+      // -------------------------------------------------------------
+      navigateFocusTask(1); // Next task
+      assert('navigateFocusTask(1) updates focusTaskIndex to 1', state.focusTaskIndex === 1);
+      const cardsAfterNext = container.querySelectorAll('.focus-card');
+      assert('After navigate next, card 1 shows task-2', cardsAfterNext[0].textContent.includes('コードレビュー'));
+      assert('After navigate next, counter shows 2-4 / 4', counter.textContent.trim() === '2-4 / 4');
+
+      navigateFocusTask(-1); // Back to 0
+      assert('navigateFocusTask(-1) returns focusTaskIndex to 0', state.focusTaskIndex === 0);
+
+      // -------------------------------------------------------------
+      // Test 7: Auto-slide replenishment when a task is completed
+      // -------------------------------------------------------------
+      // Complete task-1
+      state.tasks[0].status = 'completed';
+      renderFocusView();
+      const cardsAfterComplete = container.querySelectorAll('.focus-card');
+      assert('Active uncompleted tasks count is now 3', state.tasks.filter(t => t.status !== 'completed').length === 3);
+      assert('Top card automatically slides to task-2 (コードレビュー)', cardsAfterComplete[0].textContent.includes('コードレビュー'));
+      assert('Second card is task-3 (週報提出)', cardsAfterComplete[1].textContent.includes('週報提出'));
+      assert('Third card is task-4 (ストレッチ運動)', cardsAfterComplete[2].textContent.includes('ストレッチ運動'));
+      assert('Counter is updated to 1-3 / 3', counter.textContent.trim() === '1-3 / 3');
+
+      // -------------------------------------------------------------
+      // Test 8: Live timer and elements in Focus Card
+      // -------------------------------------------------------------
+      // Start task-2
+      const task2 = state.tasks[1];
+      task2.status = 'in_progress';
+      task2.startTimestamp = Date.now() - 120000; // 2 minutes ago
+      renderFocusView();
+
+      const timerEl = document.getElementById(`focus-task-live-timer-${task2.id}`);
+      assert('Live timer element exists for running task', timerEl !== null);
+
+      updateLiveTimers();
+      assert('Live timer reflects elapsed time', timerEl.textContent.includes('02:'));
+
+      // -------------------------------------------------------------
+      // All passed check
+      // -------------------------------------------------------------
+      window.__TEST_SUMMARY__.allPassed = (window.__TEST_SUMMARY__.failed === 0);
+
+    } catch (err) {
+      assert(`Unhandled test exception: ${err.message}`, false);
+    }
+
+    // Output results to DOM
+    const resDiv = document.getElementById('results');
+    resDiv.innerHTML = `
+      <h2>Results: ${window.__TEST_SUMMARY__.passed} / ${window.__TEST_SUMMARY__.total} passed</h2>
+      <ul>
+        ${window.__TEST_SUMMARY__.results.map(r => `<li style="color: ${r.pass ? 'green' : 'red'}">${r.pass ? 'PASS' : 'FAIL'}: ${r.message}</li>`).join('')}
+      </ul>
+    `;
+  </script>
+</body>
+</html>

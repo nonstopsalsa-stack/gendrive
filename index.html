@@ -504,37 +504,41 @@
           </div>
         </section>
 
-        <!-- 2. Next 1 Focus View (Dual Focus: Left Task × Right Habit) -->
+        <!-- 2. Focus Board (Task Execution Focus: 1 -> 2 -> 3 Adaptive Loop) -->
         <section class="view-container" id="view-focus">
-          <div class="dual-focus-layout">
-            <!-- Left Pane: Next 1 Task -->
-            <div class="focus-pane" id="focus-pane-task">
-              <div class="focus-pane-header">
-                <span class="focus-pane-badge task">🎯 NEXT 1 タスク</span>
-                <span class="focus-pane-counter" id="focus-task-counter">1 / 1</span>
+          <div class="focus-board-layout">
+            <!-- Focus Board Top Bar -->
+            <div class="focus-top-bar">
+              <div class="focus-mode-info">
+                <span class="focus-mode-badge" id="focus-mode-badge">🎯 シングル集中 (NEXT 1)</span>
+                <span class="focus-task-counter" id="focus-task-counter">0 / 0</span>
               </div>
-              <div class="focus-card-wrapper" id="focus-task-card-container">
-                <!-- Dynamic Render of Next Task Card -->
-              </div>
-              <div class="focus-footer-controls">
-                <div class="focus-nav-btn prev" id="btn-focus-task-prev" title="前のタスク (Shift+K)">← 前へ</div>
-                <div class="focus-nav-btn next" id="btn-focus-task-next" title="次のタスク (Shift+J)">次へ →</div>
+              
+              <!-- Focus Count Toggle Switch (1 -> 2 -> 3) -->
+              <div class="focus-count-selector" id="focus-count-selector">
+                <button type="button" class="focus-count-btn active" data-count="1" onclick="setFocusCount(1)" title="1件表示：シングル集中 (キー 2)">
+                  <span class="count-num">1</span> <span class="count-label">シングル</span>
+                </button>
+                <button type="button" class="focus-count-btn" data-count="2" onclick="setFocusCount(2)" title="2件表示：二者択一 (どっちをやる？)">
+                  <span class="count-num">2</span> <span class="count-label">2択</span>
+                </button>
+                <button type="button" class="focus-count-btn" data-count="3" onclick="setFocusCount(3)" title="3件表示：スモール優先順位 (TOP 3)">
+                  <span class="count-num">3</span> <span class="count-label">TOP 3</span>
+                </button>
+                <span class="focus-key-hint">キー <kbd>2</kbd> で切替</span>
               </div>
             </div>
 
-            <!-- Right Pane: Next 1 Habit -->
-            <div class="focus-pane" id="focus-pane-habit">
-              <div class="focus-pane-header">
-                <span class="focus-pane-badge habit">🌿 NEXT 1 ハビット</span>
-                <span class="focus-pane-counter" id="focus-habit-counter">1 / 1</span>
-              </div>
-              <div class="focus-card-wrapper" id="focus-habit-card-container">
-                <!-- Dynamic Render of Next Habit Card -->
-              </div>
-              <div class="focus-footer-controls">
-                <div class="focus-nav-btn prev" id="btn-focus-habit-prev" title="前のハビット (K / ↑)">← 前へ <span class="kbd-hint">K</span></div>
-                <div class="focus-nav-btn next" id="btn-focus-habit-next" title="次のハビット (J / ↓)">次へ → <span class="kbd-hint">J</span></div>
-              </div>
+            <!-- Dynamic Cards Container (Grid updates with count-1 / count-2 / count-3) -->
+            <div class="focus-cards-container count-1" id="focus-task-card-container">
+              <!-- Dynamic Render of 1, 2, or 3 Task Cards -->
+            </div>
+
+            <!-- Focus Footer Controls -->
+            <div class="focus-footer-controls">
+              <div class="focus-nav-btn prev" id="btn-focus-task-prev" onclick="navigateFocusTask(-1)" title="前の候補 (K / ←)">← 前へ <span class="kbd-hint">K</span></div>
+              <div class="focus-page-indicator" id="focus-page-indicator">1 / 1</div>
+              <div class="focus-nav-btn next" id="btn-focus-task-next" onclick="navigateFocusTask(1)" title="次の候補 (J / →)">次へ → <span class="kbd-hint">J</span></div>
             </div>
           </div>
         </section>

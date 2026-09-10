@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive - Keyboard Shortcuts Engine (with Strict Modal Isolation & Ctrl+Enter Submit)
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -327,6 +327,8 @@ function setupKeyboardShortcuts() {
         e.preventDefault();
         if (state.currentMode === 'table' && state.masterSubtab === 'analytics') {
           if (typeof toggleAnalyticsVisualMode === 'function') toggleAnalyticsVisualMode();
+        } else if (state.currentMode === 'focus') {
+          if (typeof cycleFocusCount === 'function') cycleFocusCount();
         } else {
           if (typeof cycleViewType === 'function') cycleViewType();
         }
@@ -401,7 +403,9 @@ function setupKeyboardShortcuts() {
       case 'j':
       case 'J':
         e.preventDefault();
-        if (state.selectedIndex < filtered.length - 1) {
+        if (state.currentMode === 'focus') {
+          if (typeof navigateFocusTask === 'function') navigateFocusTask(1);
+        } else if (state.selectedIndex < filtered.length - 1) {
           state.selectedIndex++;
           if (typeof renderApp === 'function') renderApp();
         }
@@ -410,7 +414,9 @@ function setupKeyboardShortcuts() {
       case 'k':
       case 'K':
         e.preventDefault();
-        if (state.selectedIndex > 0) {
+        if (state.currentMode === 'focus') {
+          if (typeof navigateFocusTask === 'function') navigateFocusTask(-1);
+        } else if (state.selectedIndex > 0) {
           state.selectedIndex--;
           if (typeof renderApp === 'function') renderApp();
         }

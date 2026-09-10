@@ -10725,3 +10725,254 @@ body.mode-table .main-content {
   flex-direction: column;
   gap: 8px;
 }
+
+/* =========================================================================
+   Adaptive Focus Board Engine (1 -> 2 -> 3 Display Loop)
+   ========================================================================= */
+
+.focus-board-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: calc(100vh - 180px);
+  gap: 20px;
+  width: 100%;
+  padding: 10px 20px 40px;
+}
+
+.focus-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1400px;
+  padding: 10px 18px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.focus-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.focus-title-group h2 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.focus-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  letter-spacing: 0.05em;
+}
+
+/* 1 / 2 / 3 Count Pill Selector */
+.focus-count-selector {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px 4px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 3px;
+}
+
+.focus-count-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.focus-count-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.focus-count-btn.active {
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  color: #04101e;
+  font-weight: 800;
+  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.4);
+}
+
+/* Dynamic Focus Cards Container Grid */
+.focus-cards-container {
+  display: grid;
+  width: 100%;
+  gap: 24px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  align-items: stretch;
+}
+
+/* 1 Count: Single Dominant Card */
+.focus-cards-container.count-1 {
+  grid-template-columns: minmax(320px, 760px);
+  justify-content: center;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.focus-cards-container.count-1 .focus-card {
+  padding: 36px 40px;
+  min-height: 420px;
+}
+
+.focus-cards-container.count-1 .focus-main-title {
+  font-size: 28px;
+  line-height: 1.35;
+}
+
+/* 2 Count: Binary Choice Cards (A or B) */
+.focus-cards-container.count-2 {
+  grid-template-columns: repeat(2, minmax(320px, 580px));
+  justify-content: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.focus-cards-container.count-2 .focus-card {
+  padding: 26px 28px;
+  min-height: 400px;
+}
+
+.focus-cards-container.count-2 .focus-main-title {
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+/* 3 Count: Small Priority Triplet Cards (TOP 1, 2, 3) */
+.focus-cards-container.count-3 {
+  grid-template-columns: repeat(3, minmax(290px, 440px));
+  justify-content: center;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.focus-cards-container.count-3 .focus-card {
+  padding: 20px 22px;
+  min-height: 380px;
+  gap: 18px;
+}
+
+.focus-cards-container.count-3 .focus-main-title {
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.focus-cards-container.count-3 .focus-timescale-box {
+  padding: 12px 14px;
+}
+
+.focus-cards-container.count-3 .btn-focus-action {
+  padding: 10px 14px;
+  font-size: 13.5px;
+}
+
+/* Responsive collapse for small screens */
+@media (max-width: 1100px) {
+  .focus-cards-container.count-3 {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    max-width: 900px;
+  }
+}
+
+@media (max-width: 768px) {
+  .focus-cards-container.count-2,
+  .focus-cards-container.count-3 {
+    grid-template-columns: 1fr;
+    max-width: 600px;
+  }
+  .focus-top-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* Rank Badges */
+.focus-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+  font-family: 'JetBrains Mono', sans-serif;
+}
+
+.focus-rank-badge.single {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+}
+
+.focus-rank-badge.choice-a {
+  background: rgba(236, 72, 153, 0.18);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.4);
+  box-shadow: 0 0 10px rgba(236, 72, 153, 0.2);
+}
+
+.focus-rank-badge.choice-b {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+.focus-rank-badge.rank-1 {
+  background: rgba(234, 179, 8, 0.2);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  text-shadow: 0 0 8px rgba(250, 204, 21, 0.4);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.2);
+}
+
+.focus-rank-badge.rank-2 {
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 0 10px rgba(148, 163, 184, 0.15);
+}
+
+.focus-rank-badge.rank-3 {
+  background: rgba(180, 83, 9, 0.22);
+  color: #fdba74;
+  border: 1px solid rgba(180, 83, 9, 0.4);
+  box-shadow: 0 0 10px rgba(180, 83, 9, 0.15);
+}
+
+/* Empty State Card in Focus Board */
+.focus-card.focus-card-empty {
+  grid-column: 1 / -1;
+  max-width: 600px;
+  margin: 40px auto 0;
+  width: 100%;
+}
+

@@ -98,6 +98,14 @@ let state = {
   selectedIndex: 0,
   focusTaskIndex: 0,
   focusHabitIndex: 0,
+  focusCount: (function() {
+    try {
+      const saved = parseInt(localStorage.getItem('gendrive_focus_count'), 10);
+      return [1, 2, 3].includes(saved) ? saved : 1;
+    } catch (e) {
+      return 1;
+    }
+  })(),
   currentMode: 'section', // 'section' | 'focus' | 'all' | 'table' | 'bucket' | 'goals'
   currentBucketFilter: null, // { type: 'bucket' | 'label', id: string }
   viewType: 'all', // 'all' | 'task' | 'habit'
@@ -1567,6 +1575,50 @@ function cycleViewType() {
   setViewType(types[nextIdx]);
 }
 
+// Focus Board Adaptive Loop Engine (focusCount: 1 -> 2 -> 3 -> 1)
+function setFocusCount(count) {
+  const valid = [1, 2, 3].includes(Number(count)) ? Number(count) : 1;
+  state.focusCount = valid;
+  try {
+    localStorage.setItem('gendrive_focus_count', String(valid));
+  } catch (e) {}
+
+  document.querySelectorAll('#focus-count-selector .focus-count-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.count, 10) === valid);
+  });
+
+  renderFocusView();
+}
+
+function cycleFocusCount() {
+  const counts = [1, 2, 3];
+  const cur = [1, 2, 3].includes(state.focusCount) ? state.focusCount : 1;
+  const nextIdx = (counts.indexOf(cur) + 1) % counts.length;
+  setFocusCount(counts[nextIdx]);
+}
+
+function navigateFocusTask(delta) {
+  const activeTodayTasks = state.tasks.filter(t => 
+    isTaskForSelectedDate(t) && 
+    t.status !== 'completed' && 
+    t.status !== 'skipped' && 
+    matchesTagFilters(t)
+  );
+  if (activeTodayTasks.length === 0) return;
+
+  const total = activeTodayTasks.length;
+  let newIdx = (state.focusTaskIndex || 0) + delta;
+
+  if (newIdx >= total) {
+    newIdx = 0;
+  } else if (newIdx < 0) {
+    newIdx = Math.max(0, total - 1);
+  }
+
+  state.focusTaskIndex = newIdx;
+  renderFocusView();
+}
+
 
 
 // TaskChute Dynamic Estimates & ETAs Real-Time Calculation Engine (Date-Aware: Today, Past, Future)
@@ -1991,7 +2043,7 @@ function setMode(mode) {
       return;
     }
     if (mode === 'focus') {
-      cycleViewType(); // 2: Toggle タスク単独 ⇄ ハビット単独 ⇄ 両方
+      cycleFocusCount(); // 2: Toggle 1個 (シングル) ⇄ 2個 (2択) ⇄ 3個 (TOP 3)
       return;
     }
     if (mode === 'all') {
@@ -3262,17 +3314,17 @@ function setupTaskFormHandlers() {
 
   // Focus Navigation for Tasks
   const btnFocusTaskPrev = document.getElementById('btn-focus-task-prev');
-  if (btnFocusTaskPrev) {
+  if (btnFocusTaskPrev && !btnFocusTaskPrev.dataset.bound) {
+    btnFocusTaskPrev.dataset.bound = 'true';
     btnFocusTaskPrev.addEventListener('click', () => {
-      if (state.focusTaskIndex > 0) state.focusTaskIndex--;
-      renderFocusView();
+      navigateFocusTask(-1);
     });
   }
   const btnFocusTaskNext = document.getElementById('btn-focus-task-next');
-  if (btnFocusTaskNext) {
+  if (btnFocusTaskNext && !btnFocusTaskNext.dataset.bound) {
+    btnFocusTaskNext.dataset.bound = 'true';
     btnFocusTaskNext.addEventListener('click', () => {
-      state.focusTaskIndex++;
-      renderFocusView();
+      navigateFocusTask(1);
     });
   }
 }
