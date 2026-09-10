@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -33,6 +33,14 @@
 
       <div class="focus-cards-container count-1" id="focus-cards-container">
         <!-- Dynamically rendered -->
+      </div>
+
+      <!-- Soul Quote Banner -->
+      <div class="focus-soul-quote-container" id="focus-soul-quote-container">
+        <div class="soul-quote-card">
+          <div class="soul-quote-icon">🔥</div>
+          <p class="soul-quote-text" id="focus-soul-quote-text"></p>
+        </div>
       </div>
 
       <div class="focus-footer-controls">
@@ -303,6 +311,30 @@
 
       updateLiveTimers();
       assert('Live timer reflects elapsed time', timerEl.textContent.includes('02:'));
+
+      // -------------------------------------------------------------
+      // Test 12: Soul Quotes Master & Pick Engine
+      // -------------------------------------------------------------
+      assert('SOUL_QUOTES master array has 53 motivational quotes', Array.isArray(SOUL_QUOTES) && SOUL_QUOTES.length === 53);
+
+      const quote1 = pickNextSoulQuote();
+      assert('pickNextSoulQuote returns non-empty string', typeof quote1 === 'string' && quote1.length > 0);
+      assert('pickNextSoulQuote sets currentSoulQuote', currentSoulQuote === quote1);
+
+      renderFocusView(false);
+      const quoteEl = document.getElementById('focus-soul-quote-text');
+      assert('Soul quote element renders current quote', quoteEl && quoteEl.textContent === quote1);
+
+      // Verify J / K reroll does NOT change the quote
+      navigateFocusTask(1); // Force resample of tasks
+      assert('J/K task reroll preserves currentSoulQuote unchanged', currentSoulQuote === quote1);
+      assert('Soul quote element still matches quote1 after reroll', quoteEl.textContent === quote1);
+
+      // Verify pickNextSoulQuote advances to next quote
+      const quote2 = pickNextSoulQuote();
+      assert('pickNextSoulQuote rotates quote', quote2 !== quote1);
+      renderFocusView(false);
+      assert('Soul quote element updates to quote2 after rotation', quoteEl.textContent === quote2);
 
       // -------------------------------------------------------------
       // All passed check

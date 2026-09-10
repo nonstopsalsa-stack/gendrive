@@ -2081,11 +2081,16 @@ function setMode(mode) {
   }
 
   // Switching to new mode
+  const isEnteringFocus = (state.currentMode !== 'focus' && mode === 'focus');
   if (state.currentMode !== mode && state.currentMode !== 'timer') {
     state.previousMode = state.currentMode;
   }
   state.currentMode = mode;
   document.body.dataset.mode = mode;
+
+  if (isEnteringFocus && typeof pickNextSoulQuote === 'function') {
+    pickNextSoulQuote();
+  }
   state.selectedIndex = 0; // reset selection on view switch
   document.querySelectorAll('.mode-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.mode === mode);

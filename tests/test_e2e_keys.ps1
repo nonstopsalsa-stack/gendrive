@@ -58,10 +58,11 @@ new Promise((resolve) => {
     test('Smart tag bar hidden in focus', isHidden('#smart-tag-bar-container'));
     test('Focus top bar hidden in focus', isHidden('.focus-top-bar'));
 
-    // 4. Verify Kept elements in Header
-    test('Logo brand kept in focus', isVisible('.logo-brand'));
-    test('Date nav kept in focus', isVisible('.date-nav-bar'));
-    test('App version badge kept in focus', isVisible('#app-version-badge'));
+    // 4. Verify Pure Zen Space (Header completely hidden, Footer controls hidden, Soul quote visible)
+    test('App header hidden in focus', isHidden('.app-header-smart'));
+    test('Focus footer controls (JK hint) hidden in focus', isHidden('.focus-footer-controls'));
+    test('Soul quote container visible in focus', isVisible('#focus-soul-quote-container'));
+    test('Soul quote text is rendered', document.getElementById('focus-soul-quote-text') && document.getElementById('focus-soul-quote-text').textContent.length > 0);
 
     // 5. Verify Mindset Banner Text for count 1 (\u30B9\u30FC\u30D1\u30FC\u30D5\u30A9\u30FC\u30AB\u30B9\u30E2\u30FC\u30C9...)
     setFocusCount(1);
@@ -86,6 +87,7 @@ new Promise((resolve) => {
     // 8. Verify Mode switching works seamlessly from focus mode
     press('1');
     test('Press 1 switches to section', state.currentMode === 'section');
+    test('Section header restored', isVisible('.app-header-smart'));
     test('Section toolbar restored', isVisible('.app-toolbar'));
     test('Section header-right restored', isVisible('.header-right'));
 
@@ -95,6 +97,7 @@ new Promise((resolve) => {
 
     press('2');
     test('Press 2 switches back to focus', state.currentMode === 'focus');
+    test('App header hidden again in focus', isHidden('.app-header-smart'));
     test('Toolbar hidden again in focus', isHidden('.app-toolbar'));
     test('Header right hidden again in focus', isHidden('.header-right'));
 

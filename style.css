@@ -10980,7 +10980,9 @@ body.mode-table .main-content {
    Ultra Zen Focus Mode: Extreme Minimalism & Mindset Banner
    ========================================================================= */
 
-/* 1. In Focus Mode: Hide distracting header right items, toolbars, and filter bars */
+/* 1. In Focus Mode: Hide distracting header, toolbars, filter bars, and footer hints */
+body[data-mode="focus"] .app-header-smart,
+body[data-mode="focus"] .app-header,
 body[data-mode="focus"] .header-right,
 body[data-mode="focus"] #header-daily-eta-badge,
 body[data-mode="focus"] #daily-eta-banner,
@@ -10990,24 +10992,16 @@ body[data-mode="focus"] .app-toolbar,
 body[data-mode="focus"] #smart-tag-bar-container,
 body[data-mode="focus"] #past-date-banner,
 body[data-mode="focus"] #carryover-banner,
-body[data-mode="focus"] .focus-top-bar {
+body[data-mode="focus"] .focus-top-bar,
+body[data-mode="focus"] .focus-footer-controls {
   display: none !important;
 }
 
-/* 2. Streamline Header in Focus Mode (Keep only Title & Date Navigation) */
-body[data-mode="focus"] .app-header-smart,
-body[data-mode="focus"] .app-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 10px 20px;
-  background: rgba(11, 19, 36, 0.7);
-  backdrop-filter: blur(10px);
-}
-
-/* 3. Focus Board Layout Adjustments */
+/* 2. Focus Board Layout Adjustments */
 body[data-mode="focus"] .focus-board-layout {
-  padding: 30px 20px 60px;
+  padding: 50px 20px 60px;
   gap: 20px;
-  min-height: calc(100vh - 100px);
+  min-height: 100vh;
 }
 
 /* 4. Mindset Banner (Big Centered Typography) */
@@ -11064,6 +11058,63 @@ body[data-mode="focus"] .focus-board-layout {
   .mindset-text.count-2,
   .mindset-text.count-3 {
     font-size: 22px;
+  }
+}
+
+/* 5. Soul Quotes Banner (Philosophical Fire for ADHD Hyper-Focus) */
+.focus-soul-quote-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 840px;
+  margin: 35px auto 20px auto;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.soul-quote-card {
+  width: 100%;
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.75) 0%, rgba(30, 41, 59, 0.45) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-left: 4px solid #f59e0b;
+  border-radius: 12px;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(245, 158, 11, 0.08);
+  backdrop-filter: blur(12px);
+  transition: all 0.3s ease;
+}
+
+.soul-quote-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.5));
+}
+
+.soul-quote-text {
+  margin: 0;
+  font-family: 'Inter', 'Shippori Mincho', 'Noto Sans JP', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.7;
+  color: #e2e8f0;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+@media (max-width: 768px) {
+  .focus-soul-quote-container {
+    margin-top: 25px;
+  }
+  .soul-quote-card {
+    padding: 14px 18px;
+    gap: 12px;
+  }
+  .soul-quote-text {
+    font-size: 13.5px;
   }
 }
 
