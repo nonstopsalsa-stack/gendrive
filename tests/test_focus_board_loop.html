@@ -37,10 +37,7 @@
 
       <!-- Soul Quote Banner -->
       <div class="focus-soul-quote-container" id="focus-soul-quote-container">
-        <div class="soul-quote-card">
-          <div class="soul-quote-icon">🔥</div>
-          <p class="soul-quote-text" id="focus-soul-quote-text"></p>
-        </div>
+        <p class="soul-quote-text" id="focus-soul-quote-text"></p>
       </div>
 
       <div class="focus-footer-controls">
@@ -315,7 +312,7 @@
       // -------------------------------------------------------------
       // Test 12: Soul Quotes Master & Pick Engine
       // -------------------------------------------------------------
-      assert('SOUL_QUOTES master array has 53 motivational quotes', Array.isArray(SOUL_QUOTES) && SOUL_QUOTES.length === 53);
+      assert('SOUL_QUOTES master array has 64 motivational quotes', Array.isArray(SOUL_QUOTES) && SOUL_QUOTES.length === 64);
 
       const quote1 = pickNextSoulQuote();
       assert('pickNextSoulQuote returns non-empty string', typeof quote1 === 'string' && quote1.length > 0);

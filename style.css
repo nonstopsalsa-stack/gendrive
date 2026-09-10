@@ -11018,7 +11018,7 @@ body[data-mode="focus"] .focus-board-layout {
 
 .mindset-text {
   font-family: 'Inter', 'Shippori Mincho', sans-serif;
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 800;
   line-height: 1.4;
   letter-spacing: 0.05em;
@@ -11035,7 +11035,7 @@ body[data-mode="focus"] .focus-board-layout {
 
 /* 2 Tasks: Binary Choice (A or B / Friendly Pink-Purple Decision Trigger) */
 .mindset-text.count-2 {
-  font-size: 28px;
+  font-size: 32px;
   background: linear-gradient(135deg, #ffffff 0%, #f472b6 50%, #c084fc 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -11044,7 +11044,7 @@ body[data-mode="focus"] .focus-board-layout {
 
 /* 3 Tasks: Triplet Priority (TOP 3 / Clarity Amber-Gold) */
 .mindset-text.count-3 {
-  font-size: 28px;
+  font-size: 32px;
   background: linear-gradient(135deg, #ffffff 0%, #facc15 50%, #fb923c 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -11053,68 +11053,52 @@ body[data-mode="focus"] .focus-board-layout {
 
 @media (max-width: 768px) {
   .mindset-text {
-    font-size: 20px;
+    font-size: 22px;
   }
   .mindset-text.count-2,
   .mindset-text.count-3 {
-    font-size: 22px;
+    font-size: 24px;
   }
 }
 
-/* 5. Soul Quotes Banner (Philosophical Fire for ADHD Hyper-Focus) */
+/* 5. Soul Quotes Banner (Borderless Direct Typography on Dark Space) */
 .focus-soul-quote-container {
   display: flex;
   justify-content: center;
   align-items: center;
   width: 100%;
-  max-width: 840px;
-  margin: 35px auto 20px auto;
-  padding: 0 16px;
+  max-width: 880px;
+  margin: 45px auto 35px auto;
+  padding: 0 20px;
   box-sizing: border-box;
-}
-
-.soul-quote-card {
-  width: 100%;
-  background: linear-gradient(145deg, rgba(15, 23, 42, 0.75) 0%, rgba(30, 41, 59, 0.45) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  border-left: 4px solid #f59e0b;
-  border-radius: 12px;
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(245, 158, 11, 0.08);
-  backdrop-filter: blur(12px);
-  transition: all 0.3s ease;
-}
-
-.soul-quote-icon {
-  font-size: 22px;
-  flex-shrink: 0;
-  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.5));
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .soul-quote-text {
   margin: 0;
-  font-family: 'Inter', 'Shippori Mincho', 'Noto Sans JP', sans-serif;
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.7;
-  color: #e2e8f0;
-  letter-spacing: 0.03em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  font-family: 'Inter', 'Shippori Mincho', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.65;
+  letter-spacing: 0.04em;
+  text-align: center;
+  background: linear-gradient(135deg, #ffffff 0%, #facc15 45%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 35px rgba(250, 204, 21, 0.35);
+  word-break: break-word;
 }
 
 @media (max-width: 768px) {
   .focus-soul-quote-container {
-    margin-top: 25px;
-  }
-  .soul-quote-card {
-    padding: 14px 18px;
-    gap: 12px;
+    margin-top: 30px;
+    max-width: 95%;
   }
   .soul-quote-text {
-    font-size: 13.5px;
+    font-size: 20px;
+    line-height: 1.55;
   }
 }
 
