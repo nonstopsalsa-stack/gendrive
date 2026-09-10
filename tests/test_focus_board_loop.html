@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Adaptive Focus Board (8:2 Hybrid Task Sampling &amp; 1-2-3 Loop) Test Suite</title>
+  <link rel="stylesheet" href="../style.css">
 </head>
 <body>
   <h1>Test Suite: Adaptive Focus Board &amp; 8:2 Hybrid Task Sampling Engine</h1>
@@ -332,6 +333,12 @@
       assert('pickNextSoulQuote rotates quote', quote2 !== quote1);
       renderFocusView(false);
       assert('Soul quote element updates to quote2 after rotation', quoteEl.textContent === quote2);
+
+      // Verify Typography Alignment & Fit-Content Styling (Natural Left-Aligned Hybrid Layout)
+      document.getElementById('view-focus').style.display = 'block';
+      const quoteComputed = window.getComputedStyle(quoteEl);
+      assert('Soul quote typography text-align is left', quoteComputed.textAlign === 'left');
+      assert('Soul quote container centers the quote banner', window.getComputedStyle(document.getElementById('focus-soul-quote-container')).justifyContent === 'center');
 
       // -------------------------------------------------------------
       // All passed check
