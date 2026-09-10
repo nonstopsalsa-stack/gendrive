@@ -284,7 +284,6 @@ function addProfileMajor(category, majorKey, majorName) {
     items: [],
     disabledItems: []
   };
-  // 削除リストに入っていたら除外
   if (Array.isArray(DELETED_MAJORS[cat])) {
     DELETED_MAJORS[cat] = DELETED_MAJORS[cat].filter(k => k !== cleanKey);
   }
@@ -324,7 +323,7 @@ function toggleProfileMajor(category, majorKey, enable) {
 }
 
 /**
- * 2段階カスケード小分類セレクトボックスの動的更新（非表示フィルタリング＆過去値保護）
+ * 2段階カスケード小分類セレクトボックスの動的更新（非表示項目の完全除外 ＆ 0件時ハイフン無効化）
  */
 function updateMinorSelectOptions(majorSelectId, minorSelectId, dataSource, selectedVal = null) {
   const majorSelect = document.getElementById(majorSelectId);
@@ -332,50 +331,53 @@ function updateMinorSelectOptions(majorSelectId, minorSelectId, dataSource, sele
   if (!majorSelect || !minorSelect) return;
 
   const majorKey = majorSelect.value;
-  minorSelect.innerHTML = '<option value="">(未設定)</option>';
 
   const dataMap = dataSource || ((majorSelectId.includes('domain') || majorSelectId.includes('dom')) ? PROFILE_MASTERS.domains
     : (majorSelectId.includes('dept')) ? PROFILE_MASTERS.depts
     : PROFILE_MASTERS.projects);
 
-  if (majorKey && dataMap && dataMap[majorKey]) {
-    const data = dataMap[majorKey];
-    const items = Array.isArray(data.items) ? data.items : [];
-    const disabledItems = Array.isArray(data.disabledItems) ? data.disabledItems : [];
-    let selectedFound = false;
-
-    items.forEach(item => {
-      const name = (typeof item === 'object' && item !== null) ? item.name : item;
-      const isExplicitlyDisabled = (typeof item === 'object' && item !== null && item.enabled === false);
-      const isDisabled = isExplicitlyDisabled || disabledItems.includes(name);
-
-      if (!isDisabled) {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        if (selectedVal && selectedVal === name) {
-          opt.selected = true;
-          selectedFound = true;
-        }
-        minorSelect.appendChild(opt);
-      }
-    });
-
-    if (selectedVal && !selectedFound) {
-      const inItems = items.some(it => ((typeof it === 'object' && it !== null) ? it.name : it) === selectedVal);
-      if (inItems) {
-        const opt = document.createElement('option');
-        opt.value = selectedVal;
-        opt.textContent = `🚫 ${selectedVal} (非表示中)`;
-        opt.selected = true;
-        minorSelect.appendChild(opt);
-      }
-    }
+  if (!majorKey || !dataMap || !dataMap[majorKey]) {
+    minorSelect.innerHTML = '<option value="">ー</option>';
+    minorSelect.disabled = true;
+    return;
   }
+
+  const data = dataMap[majorKey];
+  const items = Array.isArray(data.items) ? data.items : [];
+  const disabledItems = Array.isArray(data.disabledItems) ? data.disabledItems : [];
+
+  // 有効な（非表示でない）項目のみを厳格に抽出（非表示項目は完全に見えなくする）
+  const enabledItems = items.filter(item => {
+    const name = (typeof item === 'object' && item !== null) ? item.name : item;
+    const isExplicitlyDisabled = (typeof item === 'object' && item !== null && item.enabled === false);
+    return !isExplicitlyDisabled && !disabledItems.includes(name);
+  });
+
+  // 全ての項目を非表示にして見せる項目がないときは、「ー」を表示してプルダウンも無効化
+  if (enabledItems.length === 0) {
+    minorSelect.innerHTML = '<option value="">ー</option>';
+    minorSelect.disabled = true;
+    return;
+  }
+
+  // 有効な項目が存在する場合
+  minorSelect.disabled = false;
+  minorSelect.innerHTML = '<option value="">(未設定)</option>';
+
+  enabledItems.forEach(item => {
+    const name = (typeof item === 'object' && item !== null) ? item.name : item;
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    if (selectedVal && selectedVal === name) {
+      opt.selected = true;
+    }
+    minorSelect.appendChild(opt);
+  });
 }
 
 /**
- * 大分類セレクトボックスの動的更新（非表示フィルタリング＆過去値保護）
+ * 大分類セレクトボックスの動的更新（非表示項目の完全除外 ＆ 0件時ハイフン無効化）
  */
 function populateMajorSelectOptions(selectId, dataSource, placeholder = '(大分類を選択)', selectedVal = null) {
   const select = document.getElementById(selectId);
@@ -385,35 +387,37 @@ function populateMajorSelectOptions(selectId, dataSource, placeholder = '(大分
     : (selectId.includes('dept')) ? PROFILE_MASTERS.depts
     : PROFILE_MASTERS.projects);
 
-  if (!dataMap) return;
+  if (!dataMap) {
+    select.innerHTML = '<option value="">ー</option>';
+    select.disabled = true;
+    return;
+  }
 
-  select.innerHTML = `<option value="">${placeholder}</option>`;
-  let selectedFound = false;
-
-  Object.keys(dataMap).forEach(key => {
+  const enabledKeys = Object.keys(dataMap).filter(key => {
     const data = dataMap[key];
-    const name = data.name || key;
-    const isEnabled = data.enabled !== false;
-
-    if (isEnabled) {
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = name;
-      if (selectedVal && selectedVal === key) {
-        opt.selected = true;
-        selectedFound = true;
-      }
-      select.appendChild(opt);
-    }
+    return data && data.enabled !== false;
   });
 
-  if (selectedVal && !selectedFound && dataMap[selectedVal]) {
-    const opt = document.createElement('option');
-    opt.value = selectedVal;
-    opt.textContent = `🚫 ${dataMap[selectedVal].name || selectedVal} (非表示中)`;
-    opt.selected = true;
-    select.appendChild(opt);
+  if (enabledKeys.length === 0) {
+    select.innerHTML = '<option value="">ー</option>';
+    select.disabled = true;
+    return;
   }
+
+  select.disabled = false;
+  select.innerHTML = `<option value="">${placeholder}</option>`;
+
+  enabledKeys.forEach(key => {
+    const data = dataMap[key];
+    const name = data.name || key;
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = name;
+    if (selectedVal && selectedVal === key) {
+      opt.selected = true;
+    }
+    select.appendChild(opt);
+  });
 }
 
 // =========================================================================

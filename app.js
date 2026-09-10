@@ -30,27 +30,7 @@ function openObsidianLink(rawUri, event) {
   window.open(targetUrl, '_blank');
 }
 
-function updateMinorSelectOptions(majorSelectId, minorSelectId, dataSource, selectedVal = null) {
-  const majorSelect = document.getElementById(majorSelectId);
-  const minorSelect = document.getElementById(minorSelectId);
-  if (!majorSelect || !minorSelect) return;
-
-  const majorKey = majorSelect.value;
-  minorSelect.innerHTML = '<option value="">(未設定)</option>';
-
-  if (majorKey && dataSource[majorKey]) {
-    const items = dataSource[majorKey].items || [];
-    items.forEach(item => {
-      const opt = document.createElement('option');
-      opt.value = item;
-      opt.textContent = item;
-      if (selectedVal && selectedVal === item) {
-        opt.selected = true;
-      }
-      minorSelect.appendChild(opt);
-    });
-  }
-}
+// [Removed duplicate updateMinorSelectOptions - delegated to profileMasterService.js]
 
 function setupCascadeSelects() {
   // Habit Add

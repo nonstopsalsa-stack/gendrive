@@ -62,21 +62,34 @@
       toggleProfileMinor('projects', 'ビジネス', 'テスト新プロジェクト_101', false);
       assert('Item is now marked disabled', PROJECTS_DATA['ビジネス'].disabledItems.includes('テスト新プロジェクト_101'));
 
-      // 5. Select Options Rendering Test (Hidden filtering & fallback preservation)
+      // 5. Select Options Rendering Test (Strict hidden exclusion & dash disabled fallback)
       const majorSel = document.getElementById('sel-test-proj-major');
       const minorSel = document.getElementById('sel-test-proj-minor');
       majorSel.innerHTML = '<option value="ビジネス">ビジネス</option>';
       majorSel.value = 'ビジネス';
 
-      // Should exclude disabled item for new selection
+      // Disabled item must NOT appear in dropdown options at all
       updateMinorSelectOptions('sel-test-proj-major', 'sel-test-proj-minor', PROJECTS_DATA, null);
-      const optValues = Array.from(minorSel.options).map(o => o.value);
-      assert('Disabled item is excluded from dropdown for new item', !optValues.includes('テスト新プロジェクト_101'));
+      let optValues = Array.from(minorSel.options).map(o => o.value);
+      assert('Disabled item is completely excluded from dropdown for new item', !optValues.includes('テスト新プロジェクト_101'));
+      assert('Dropdown is enabled when valid items exist', minorSel.disabled === false);
 
-      // Should preserve disabled item if already selected on existing task
+      // Even if existing task had this disabled value, it must not be shown in options
       updateMinorSelectOptions('sel-test-proj-major', 'sel-test-proj-minor', PROJECTS_DATA, 'テスト新プロジェクト_101');
-      const hasPreserved = Array.from(minorSel.options).some(o => o.value === 'テスト新プロジェクト_101' && o.textContent.includes('非表示中'));
-      assert('Existing selected disabled item is preserved with (非表示中) badge', hasPreserved);
+      optValues = Array.from(minorSel.options).map(o => o.value);
+      assert('Disabled item is completely excluded even when previously selected', !optValues.includes('テスト新プロジェクト_101'));
+
+      // Test all items disabled fallback: disable all items in a category
+      const testMajorData = PROJECTS_DATA['ビジネス'];
+      const originalDisabled = [...(testMajorData.disabledItems || [])];
+      testMajorData.disabledItems = [...testMajorData.items]; // disable ALL items
+
+      updateMinorSelectOptions('sel-test-proj-major', 'sel-test-proj-minor', PROJECTS_DATA, null);
+      assert('When all items are disabled, dropdown is disabled', minorSel.disabled === true);
+      assert('When all items are disabled, single option text is dash', minorSel.options.length === 1 && minorSel.options[0].textContent === 'ー');
+
+      // Restore items
+      testMajorData.disabledItems = originalDisabled;
 
       // Re-enable item
       toggleProfileMinor('projects', 'ビジネス', 'テスト新プロジェクト_101', true);
@@ -95,6 +108,11 @@
       // Toggle Major
       toggleProfileMajor('projects', '新規テスト大分類', false);
       assert('Major is disabled', PROFILE_MASTERS.projects['新規テスト大分類'].enabled === false);
+
+      // Major dropdown exclusion test
+      populateMajorSelectOptions('sel-test-proj-major', PROFILE_MASTERS.projects, '(大分類を選択)');
+      const majOptValues = Array.from(majorSel.options).map(o => o.value);
+      assert('Disabled major is completely excluded from major dropdown', !majOptValues.includes('新規テスト大分類'));
 
       // Delete Major
       const delMajRes = deleteProfileMajor('projects', '新規テスト大分類');
