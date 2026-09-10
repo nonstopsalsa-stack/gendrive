@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Testing Preset Tasks 20 Cards & Shortcuts</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="dark-theme">
+  <h1>Gendrive Preset Tasks 20 Cards & Shortcuts Test Runner</h1>
+  <div id="test-output"></div>
+
+  <!-- Minimal Mock DOM for Task Presets Modal -->
+  <div class="modal-overlay active" id="modal-task-presets">
+    <div class="modal-card modal-wide">
+      <div id="preset-list-view">
+        <div class="modal-header">
+          <button type="button" id="btn-toggle-add-preset">➕ 新規プリセット作成 <span class="kbd-sub">N</span></button>
+          <button type="button" id="btn-close-task-presets">✕</button>
+        </div>
+        <div class="preset-grid-container" id="preset-cards-grid"></div>
+      </div>
+
+      <div id="preset-edit-view" class="hidden">
+        <h3 id="preset-edit-modal-title">新規登録</h3>
+        <input type="hidden" id="input-preset-id" value="">
+        <input type="text" id="input-preset-icon" value="⚡">
+        <input type="text" id="input-preset-title" value="">
+        <input type="number" id="input-preset-est-min" value="15">
+        <div id="preset-bucket-selector">
+          <button type="button" class="segment-btn active" data-bucket="today">today</button>
+        </div>
+        <div id="preset-timing-type-selector">
+          <button type="button" class="segment-btn active" data-timing="current">current</button>
+        </div>
+        <div id="preset-label-selector">
+          <button type="button" class="segment-btn active" data-label="p3">p3</button>
+        </div>
+        <button type="button" id="btn-save-new-preset">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Mock global state and dependencies
+    const DOMAINS_DATA = {};
+    const DEPTS_DATA = {};
+    const PROJECTS_DATA = {};
+    function updateMinorSelectOptions() {}
+    function normalizeTags(t) { return Array.isArray(t) ? t : []; }
+    function getEisenhowerLabelBadge(l) { return { cls: 'p3', text: 'P3' }; }
+    function detectCurrentSection() { return '第2セッション'; }
+    function getSelectedDateKey() { return '2026-09-11'; }
+    function saveTasks() {}
+    function renderApp() {}
+    function pushUndoAction() {}
+    function startTask(id) {}
+    function closeModal() {}
+    function createAutoBackupSnapshot() {}
+    function updateSyncMetadata() {}
+    function triggerCloudSync() {}
+    function saveTaskPresets() {}
+    function loadTaskPresets() { return state.taskPresets; }
+
+    window.state = {
+      taskPresets: [],
+      tasks: [],
+      currentSection: '第2セッション'
+    };
+
+    // Alert trap
+    window.alertMessages = [];
+    window.alert = function(msg) {
+      window.alertMessages.push(msg);
+    };
+  </script>
+
+  <!-- Load target modules -->
+  <script src="../js/components/taskPresetsService.js"></script>
+  <script src="../js/engine/keyboardShortcuts.js"></script>
+
+  <script>
+    // Test execution engine
+    const results = [];
+    function assert(name, condition, details = '') {
+      results.push({
+        pass: !!condition,
+        message: name + (condition ? '' : ` [FAILED: ${details}]`)
+      });
+    }
+
+    // 1. Constants verification
+    assert('PRESET_SHORTCUT_KEYS length is 20', PRESET_SHORTCUT_KEYS.length === 20, `actual: ${PRESET_SHORTCUT_KEYS.length}`);
+    const expectedKeys = ['1','2','3','4','5','6','7','8','9','0','Q','W','E','R','T','Y','U','I','O','P'];
+    assert('PRESET_SHORTCUT_KEYS sequence matches exactly 1~5, 6~0, Q~T, Y~P',
+      JSON.stringify(PRESET_SHORTCUT_KEYS) === JSON.stringify(expectedKeys),
+      `actual: ${JSON.stringify(PRESET_SHORTCUT_KEYS)}`
+    );
+    assert('MAX_TASK_PRESETS is 20', MAX_TASK_PRESETS === 20, `actual: ${MAX_TASK_PRESETS}`);
+
+    // 2. Generate 20 test presets
+    const dummyPresets = [];
+    for (let i = 0; i < 20; i++) {
+      dummyPresets.push({
+        id: `preset_${i + 1}`,
+        icon: '⚡',
+        title: `テストタスク ${i + 1}`,
+        estMin: 15,
+        label: 'p3',
+        section: 'current'
+      });
+    }
+    state.taskPresets = [...dummyPresets];
+
+    // 3. Render cards verification
+    renderTaskPresetsCards();
+    const renderedCards = document.querySelectorAll('.preset-card-item');
+    assert('Renders exactly 20 preset cards', renderedCards.length === 20, `actual: ${renderedCards.length}`);
+
+    // 4. Check shortcut key badges on cards
+    const keyBadges = document.querySelectorAll('.preset-kbd-badge');
+    assert('Renders 20 keyboard badges', keyBadges.length === 20, `actual: ${keyBadges.length}`);
+    assert('Card 1 badge is [1]', keyBadges[0]?.textContent === '1');
+    assert('Card 5 badge is [5]', keyBadges[4]?.textContent === '5');
+    assert('Card 6 badge is [6]', keyBadges[5]?.textContent === '6');
+    assert('Card 10 badge is [0]', keyBadges[9]?.textContent === '0');
+    assert('Card 11 badge is [Q]', keyBadges[10]?.textContent === 'Q');
+    assert('Card 15 badge is [T]', keyBadges[14]?.textContent === 'T');
+    assert('Card 16 badge is [Y]', keyBadges[15]?.textContent === 'Y');
+    assert('Card 20 badge is [P]', keyBadges[19]?.textContent === 'P');
+
+    // 5. Check 20th card tooltip
+    assert('Card 20 tooltip contains [P]', renderedCards[19]?.getAttribute('title').includes('[P]'));
+
+    // 6. Max limit guard verification (New Preset)
+    window.alertMessages = [];
+    showPresetEditView(true);
+    assert('showPresetEditView blocks creating 21st preset when count is 20',
+      window.alertMessages.length > 0 && window.alertMessages[0].includes('最大20個'),
+      `alerts: ${window.alertMessages.join('; ')}`
+    );
+    assert('Edit view remains hidden after blocked new preset',
+      document.getElementById('preset-edit-view').classList.contains('hidden')
+    );
+
+    // 7. Max limit guard on savePresetFromForm (New Preset)
+    window.alertMessages = [];
+    document.getElementById('input-preset-id').value = '';
+    document.getElementById('input-preset-title').value = '21個目のタスク';
+    savePresetFromForm();
+    assert('savePresetFromForm blocks 21st preset addition',
+      state.taskPresets.length === 20 && window.alertMessages.length > 0,
+      `presets count: ${state.taskPresets.length}`
+    );
+
+    // 8. Existing preset edit is permitted even when count is 20
+    window.alertMessages = [];
+    document.getElementById('input-preset-id').value = 'preset_20';
+    document.getElementById('input-preset-title').value = '更新された20番目タスク';
+    savePresetFromForm();
+    const updatedP20 = state.taskPresets.find(p => p.id === 'preset_20');
+    assert('Editing existing preset is permitted when count is 20',
+      updatedP20?.title === '更新された20番目タスク',
+      `actual title: ${updatedP20?.title}`
+    );
+
+    // 9. Keyboard Shortcuts Engine Tests
+    setupKeyboardShortcuts();
+
+    let executedPresetId = null;
+    window.executePresetTask = function(id) {
+      executedPresetId = id;
+    };
+
+    function simulateKeyDown(key, extra = {}) {
+      executedPresetId = null;
+      const evt = new KeyboardEvent('keydown', {
+        key: key,
+        bubbles: true,
+        cancelable: true,
+        ...extra
+      });
+      window.dispatchEvent(evt);
+    }
+
+    // Key 1 -> Preset 1
+    simulateKeyDown('1');
+    assert('Key "1" triggers preset 1', executedPresetId === 'preset_1', `actual: ${executedPresetId}`);
+
+    // Key 5 -> Preset 5
+    simulateKeyDown('5');
+    assert('Key "5" triggers preset 5', executedPresetId === 'preset_5', `actual: ${executedPresetId}`);
+
+    // Key 6 -> Preset 6
+    simulateKeyDown('6');
+    assert('Key "6" triggers preset 6', executedPresetId === 'preset_6', `actual: ${executedPresetId}`);
+
+    // Key 0 -> Preset 10
+    simulateKeyDown('0');
+    assert('Key "0" triggers preset 10', executedPresetId === 'preset_10', `actual: ${executedPresetId}`);
+
+    // Key q (lowercase) -> Preset 11
+    simulateKeyDown('q');
+    assert('Key "q" (lowercase) triggers preset 11', executedPresetId === 'preset_11', `actual: ${executedPresetId}`);
+
+    // Key T (uppercase) -> Preset 15
+    simulateKeyDown('T');
+    assert('Key "T" (uppercase) triggers preset 15', executedPresetId === 'preset_15', `actual: ${executedPresetId}`);
+
+    // Key y (lowercase) -> Preset 16
+    simulateKeyDown('y');
+    assert('Key "y" (lowercase) triggers preset 16', executedPresetId === 'preset_16', `actual: ${executedPresetId}`);
+
+    // Key P (uppercase) -> Preset 20 (NOT new preset view!)
+    simulateKeyDown('P');
+    assert('Key "P" executes preset 20 directly', executedPresetId === 'preset_20', `actual: ${executedPresetId}`);
+
+    // Key p (lowercase) -> Preset 20
+    simulateKeyDown('p');
+    assert('Key "p" executes preset 20 directly', executedPresetId === 'preset_20', `actual: ${executedPresetId}`);
+
+    // Key n (lowercase) -> New Preset View Trigger (blocked by limit alert in 20 count state)
+    window.alertMessages = [];
+    simulateKeyDown('n');
+    assert('Key "n" triggers new preset action (guarded by 20 limit)',
+      window.alertMessages.length > 0 && window.alertMessages[0].includes('最大20個'),
+      `alerts: ${window.alertMessages.join('; ')}`
+    );
+
+    // Full-width (IME) simulation: １ -> Preset 1, ｐ -> Preset 20
+    simulateKeyDown('１');
+    assert('Full-width "１" triggers preset 1', executedPresetId === 'preset_1', `actual: ${executedPresetId}`);
+
+    simulateKeyDown('ｐ');
+    assert('Full-width "ｐ" triggers preset 20', executedPresetId === 'preset_20', `actual: ${executedPresetId}`);
+
+    // 10. CSS Grid verification
+    const gridContainer = document.getElementById('preset-cards-grid');
+    const compStyle = window.getComputedStyle(gridContainer);
+    const gridCols = compStyle.gridTemplateColumns.split(' ').length;
+    assert('Grid computed columns is 5', gridCols === 5, `actual count: ${gridCols}, style: ${compStyle.gridTemplateColumns}`);
+
+    // Summary calculation
+    const passedCount = results.filter(r => r.pass).length;
+    const failedCount = results.filter(r => !r.pass).length;
+    window.__TEST_SUMMARY__ = {
+      total: results.length,
+      passed: passedCount,
+      failed: failedCount,
+      allPassed: failedCount === 0,
+      results: results
+    };
+
+    // Visual render
+    const outputDiv = document.getElementById('test-output');
+    outputDiv.innerHTML = `
+      <h2>Results: ${passedCount} / ${results.length} Passed</h2>
+      <ul>${results.map(r => `<li style="color: ${r.pass ? '#10b981' : '#ef4444'}">${r.message}</li>`).join('')}</ul>
+    `;
+  </script>
+</body>
+</html>

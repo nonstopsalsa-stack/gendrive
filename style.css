@@ -6311,8 +6311,9 @@ button.btn-goal-quick-edit:hover {
 
 .preset-grid-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  min-width: 760px;
 }
 
 .preset-card-item {
@@ -6320,12 +6321,12 @@ button.btn-goal-quick-edit:hover {
   background: rgba(30, 41, 59, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .preset-card-item:hover {
@@ -6339,30 +6340,35 @@ button.btn-goal-quick-edit:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
 }
 
 .preset-card-icon-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .preset-card-icon {
-  font-size: 18px;
+  font-size: 16px;
+  flex-shrink: 0;
 }
 
 .preset-card-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #f8fafc;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .preset-card-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  font-size: 10.5px;
+  font-size: 9.5px;
 }
 
 .preset-card-time {

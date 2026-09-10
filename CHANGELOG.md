@@ -2,7 +2,27 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
-## [v1.6.1] - 2026-09-10
+## [v1.7.2] - 2026-09-11
+### Added & Improved
+- **Preset Task 20 Slots & QWERTY Matrix Auto-Assignment**: プリセットタスク登録数を最大20個まで拡張し、一覧画面を横5個×縦4列のパノラマグリッドレイアウト（`repeat(5, 1fr)`）へ刷新。ショートカットキーを上段から物理キーボード配列に完全一致させた `12345`（第1行）、`67890`（第2行）、`QWERT`（第3行）、`YUIOP`（第4行）の計20キーへ自動割り当て。単キー押下（大文字・小文字・全角IME対応）で即座にタスク起動＆先行タスク自動中断連携。
+- **Conflict Resolution for "P" Key (Recommended Scheme A)**: 20番目（インデックス19）に割り当てられた `P` キーとの競合を解消するため、プリセット新規作成のショートカットを `P` から `N`（New）へスマートに移行。単体キー `P` によるタスク即時実行の爽快感を100%維持。
+- **Strict 20-Preset Upper Guard (上限保護パイプライン)**: 新規プリセット作成画面の起動時および保存処理（`savePresetFromForm`）において `MAX_TASK_PRESETS = 20` の防御チェックを導入。既存プリセットの編集は20個状態でも安全に実行可能。
+- **Automated Verification Suite (31/31 PASS)**: 定数定義、物理配列順序、キーバッジ描画、ツールチップ整合性、新規作成上限ブロック、編集許可、20キー即時実行、全角IME入力、5列CSS Computed Styleの全31テストケースを新設し 100% PASS を達成（既存テスト96件と合わせ全127件完全パス）。
+- **Release Notes**: `docs/release_notes/2026-09-11_v1.7.2_preset_tasks_20_slots_qwerty_keyboard_matrix.md` を発行。
+
+---
+
+## [v1.7.1] - 2026-09-10
+### Fixed & Improved
+- **Soul Quotes Hybrid Left Alignment**: フォーカス画面のマインドセット／ソウルクオート（64選）のタイポグラフィにおいて、中央揃えによる改行時の視認性低下を解消し、テキスト幅（fit-content）に追従する左揃えハイブリッドレイアウトを確立。
+
+---
+
+## [v1.7.0] - 2026-09-10
+### Added & Improved
+- **Adaptive Focus Board (1-2-3 Loop Engine)**: フォーカス画面のタスク精選ループ（1件・2件・3件）およびソウルクオート枠なしダイレクト表示エンジンを確立。
+
+---
 ### Added & Improved
 - **Recurring Task Auto-Clone to Single Tasks Engine**: 定期タスク完了イベント（PC / モバイル両対応）において、親オブジェクトの `executionLogs` 追記と連動して「完了済み単発タスク」レコード（`taskType: 'single'`, `status: 'completed'`）を自動生成して `state.tasks` へ追記。全属性（タイトル、ドメイン大/小、部門大/小、PJ大/小、セクション、実績時間、開始/終了時刻、6軸マトリクス、優先度、ラベル、タグ、メモ、Obsidianノート）および識別子（`isRecurringInstance: true`, `recurringSourceId`, `recurringLogId`）を完全保持。
 - **Dual Count Prevention Engine (集計の二重カウント完全遮断)**: デイリー画面（Daily Board / Section View / All View / Focus View / Mobile）およびデイリーサマリー計算において、親定期タスクが当日の完了状態を表示するため、自動生成された単発タスク（`isRecurringInstance: true`）をタスク一覧およびサマリー集計（残り時間・実績・完了件数）から完全に除外。デイリー画面上でのタスク重複表示や実績件数・時間の2倍カウントを根本遮断。

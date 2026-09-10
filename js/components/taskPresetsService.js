@@ -3,6 +3,14 @@
  * 哲生 (AI Company OS & Personal OS Engine)
  */
 
+const MAX_TASK_PRESETS = 20;
+const PRESET_SHORTCUT_KEYS = [
+  '1', '2', '3', '4', '5',
+  '6', '7', '8', '9', '0',
+  'Q', 'W', 'E', 'R', 'T',
+  'Y', 'U', 'I', 'O', 'P'
+];
+
 let statePresetTimingType = 'current';
 let statePresetBucket = 'today';
 let statePresetLabel = 'p3';
@@ -30,6 +38,14 @@ function showPresetListView() {
 }
 
 function showPresetEditView(isNew = true, preset = null) {
+  if (isNew || !preset) {
+    const currentCount = (state.taskPresets || []).length;
+    if (currentCount >= MAX_TASK_PRESETS) {
+      alert(`プリセットタスクは最大${MAX_TASK_PRESETS}個まで登録可能です。\n既存のプリセットを編集するか、不要なプリセットを削除してください。`);
+      return;
+    }
+  }
+
   const listView = document.getElementById('preset-list-view');
   const editView = document.getElementById('preset-edit-view');
   if (listView) listView.classList.add('hidden');
@@ -184,7 +200,7 @@ function renderTaskPresetsCards() {
 
   const presets = state.taskPresets || DEFAULT_TASK_PRESETS;
   if (presets.length === 0) {
-    container.innerHTML = `<div class="empty-state" style="grid-column: 1/-1; padding: 20px;"><p>登録されているプリセットはありません。「➕ 新規プリセット作成 (P)」から作成できます。</p></div>`;
+    container.innerHTML = `<div class="empty-state" style="grid-column: 1/-1; padding: 20px;"><p>登録されているプリセットはありません。「➕ 新規プリセット作成 (N)」から作成できます。</p></div>`;
     return;
   }
 
@@ -192,16 +208,14 @@ function renderTaskPresetsCards() {
     const labelBadge = getEisenhowerLabelBadge(p.label);
     const secLabel = p.section === 'anytime' ? '🌐 終日' : (p.section && p.section !== 'current' ? `⏰ ${p.section}` : '⚡ 現セクション');
     
-    // Shortcut number key assignment (1~9 for idx 0..8, 0 for idx 9)
-    let keyBadgeHtml = '';
-    if (idx < 9) {
-      keyBadgeHtml = `<span class="preset-kbd-badge" title="ショートカットキー [${idx + 1}]">${idx + 1}</span>`;
-    } else if (idx === 9) {
-      keyBadgeHtml = `<span class="preset-kbd-badge" title="ショートカットキー [0]">0</span>`;
-    }
+    // Shortcut key assignment (Row 1: 1~5, Row 2: 6~0, Row 3: Q~T, Row 4: Y~P)
+    const shortcutKey = PRESET_SHORTCUT_KEYS[idx] || '';
+    const keyBadgeHtml = shortcutKey
+      ? `<span class="preset-kbd-badge" title="ショートカットキー [${shortcutKey}]">${shortcutKey}</span>`
+      : '';
 
     return `
-      <div class="preset-card-item" onclick="executePresetTask('${p.id}')" title="クリック (または [${idx < 9 ? idx + 1 : (idx === 9 ? '0' : '')}] キー) で今すぐタスクを追加＆即座に開始！">
+      <div class="preset-card-item" onclick="executePresetTask('${p.id}')" title="クリック (または [${shortcutKey}] キー) で今すぐタスクを追加＆即座に開始！">
         <div class="preset-card-top">
           <div class="preset-card-icon-title">
             <span class="preset-card-icon">${p.icon || '⚡'}</span>
@@ -285,6 +299,11 @@ function savePresetFromForm() {
     }
   } else {
     // Create new preset
+    if (!state.taskPresets) state.taskPresets = [];
+    if (state.taskPresets.length >= MAX_TASK_PRESETS) {
+      alert(`プリセットタスクは最大${MAX_TASK_PRESETS}個まで登録可能です。\n既存のプリセットを編集するか、不要なプリセットを削除してください。`);
+      return;
+    }
     const newPreset = {
       id: 'preset_' + Date.now(),
       icon,
@@ -303,7 +322,6 @@ function savePresetFromForm() {
       tags,
       matrix: matrixVals
     };
-    if (!state.taskPresets) state.taskPresets = [];
     state.taskPresets.push(newPreset);
   }
 
