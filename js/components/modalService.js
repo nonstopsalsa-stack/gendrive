@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive - Modal Management & Form Handler Service
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -308,6 +308,11 @@ function openAddTaskModal(sectionName = null, scheduledDate = null, bucket = nul
 
     // 2-Step Cascade Selects
     if (typeof updateMinorSelectOptions === 'function') {
+      if (typeof populateMajorSelectOptions === 'function') {
+        populateMajorSelectOptions('add-task-domain-major', DOMAINS_DATA, undefined, d.domainMajor);
+        populateMajorSelectOptions('add-task-dept-major', DEPTS_DATA, undefined, d.deptMajor);
+        populateMajorSelectOptions('add-task-proj-major', PROJECTS_DATA, undefined, d.projMajor);
+      }
       const domMaj = document.getElementById('add-task-domain-major');
       if (domMaj) {
         domMaj.value = d.domainMajor || 'PN1';
@@ -446,6 +451,11 @@ function openEditTaskModal(taskId) {
 
     // Cascade selects
     if (typeof updateMinorSelectOptions === 'function') {
+      if (typeof populateMajorSelectOptions === 'function') {
+        populateMajorSelectOptions('edit-task-domain-major', DOMAINS_DATA, undefined, task.domainMajor);
+        populateMajorSelectOptions('edit-task-dept-major', DEPTS_DATA, undefined, task.deptMajor);
+        populateMajorSelectOptions('edit-task-proj-major', PROJECTS_DATA, undefined, task.projMajor);
+      }
       const domMaj = document.getElementById('edit-task-domain-major');
       if (domMaj) {
         domMaj.value = task.domainMajor || '';
@@ -557,6 +567,11 @@ function openAddModal(sectionName = null, timingType = null) {
 
     // Cascade Selects
     if (typeof updateMinorSelectOptions === 'function') {
+      if (typeof populateMajorSelectOptions === 'function') {
+        populateMajorSelectOptions('add-domain-major', DOMAINS_DATA, undefined, d.domainMajor);
+        populateMajorSelectOptions('add-dept-major', DEPTS_DATA, undefined, d.deptMajor);
+        populateMajorSelectOptions('add-proj-major', PROJECTS_DATA, undefined, d.projMajor);
+      }
       const domMaj = document.getElementById('add-domain-major');
       if (domMaj) {
         domMaj.value = d.domainMajor || 'PN2';
@@ -786,6 +801,11 @@ function openEditModal(habitId) {
 
     // Cascade Selects
     if (typeof updateMinorSelectOptions === 'function') {
+      if (typeof populateMajorSelectOptions === 'function') {
+        populateMajorSelectOptions('edit-domain-major', DOMAINS_DATA, undefined, habit.domainMajor);
+        populateMajorSelectOptions('edit-dept-major', DEPTS_DATA, undefined, habit.deptMajor);
+        populateMajorSelectOptions('edit-proj-major', PROJECTS_DATA, undefined, habit.projMajor);
+      }
       const domMaj = document.getElementById('edit-domain-major');
       if (domMaj) {
         domMaj.value = habit.domainMajor || '';

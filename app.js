@@ -2012,6 +2012,8 @@ function setMode(mode) {
         state.masterSubtab = 'tasks';
       } else if (state.masterSubtab === 'tasks' || state.masterSubtab === 'recurring_tasks') {
         state.masterSubtab = 'single_tasks';
+      } else if (state.masterSubtab === 'single_tasks') {
+        state.masterSubtab = 'profiles';
       } else {
         state.masterSubtab = 'habits';
       }

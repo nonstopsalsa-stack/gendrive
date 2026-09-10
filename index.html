@@ -580,6 +580,8 @@
               <button class="table-subtab" data-subtab="analytics" id="subtab-analytics" onclick="switchMasterSubtab('analytics')">📈 継続スコアボード (3d/7d/30d/90d)</button>
               <button class="table-subtab" data-subtab="tasks" id="subtab-tasks" onclick="switchMasterSubtab('tasks')">🎯 定期タスク一覧 (定期配信マスター)</button>
               <button class="table-subtab" data-subtab="single_tasks" id="subtab-single-tasks" onclick="switchMasterSubtab('single_tasks')">📋 単発タスク一覧 (全履歴・予定)</button>
+              <button class="table-subtab" data-subtab="profiles" id="subtab-profiles" onclick="switchMasterSubtab('profiles')">⚙️ プロファイル設定 (ドメイン・部門・PJ)</button>
+
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
               <span class="table-hint-badge" style="font-size: 11px; color: var(--primary); background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3); padding: 4px 10px; border-radius: 20px;">
@@ -800,6 +802,31 @@
                   <span class="jump-arrow">▼</span>
                 </button>
               </div>
+            </div>
+          </div>
+
+                    <!-- 4-E. Profiles Master (Domains, Departments, Projects) -->
+          <div class="master-subview hidden" id="master-profiles-view">
+            <div class="table-control-header">
+              <div class="table-title-area">
+                <h2>🏷️ プロファイルマスター管理（ドメイン・会社部門・プロジェクト）</h2>
+                <span class="badge-count" id="table-profiles-count">3分類</span>
+              </div>
+              <div class="profile-tab-pills" id="profile-category-pills">
+                <button type="button" class="profile-pill-btn active" data-cat="projects" onclick="switchProfileCategory('projects')">💼 プロジェクト管理</button>
+                <button type="button" class="profile-pill-btn" data-cat="depts" onclick="switchProfileCategory('depts')">🏢 会社部門管理</button>
+                <button type="button" class="profile-pill-btn" data-cat="domains" onclick="switchProfileCategory('domains')">🌐 ドメイン管理 (PN1〜PN5)</button>
+              </div>
+            </div>
+
+            <!-- Profile Master Notice Banner -->
+            <div class="profile-notice-banner">
+              💡 <b>安心設計</b>: 使わなくなった項目は「削除」ではなく<b>「非表示（OFF）」</b>にすることで、過去タスクの記録を100%保護したまま新規作成時の選択肢から隠すことができます。完全削除時は使用中タスク・ハビットの件数を事前チェックして警告します。
+            </div>
+
+            <!-- Dynamic Profile Management Grid Container -->
+            <div class="profile-management-stage" id="profile-management-stage">
+              <!-- Dynamically Rendered by renderProfileMasterView() -->
             </div>
           </div>
 
@@ -3442,6 +3469,7 @@
   </div>
 
   <script src="js/config.js"></script>
+  <script src="js/services/profileMasterService.js"></script>
   <script src="js/sampleData.js"></script>
   <script src="js/utils/dateUtils.js"></script>
   <script src="js/engine/recurrenceEngine.js"></script>
