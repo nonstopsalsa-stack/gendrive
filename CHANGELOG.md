@@ -2,7 +2,17 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
-## [v1.5.10] - 2026-09-09
+## [v1.6.1] - 2026-09-10
+### Added & Improved
+- **Recurring Task Auto-Clone to Single Tasks Engine**: 定期タスク完了イベント（PC / モバイル両対応）において、親オブジェクトの `executionLogs` 追記と連動して「完了済み単発タスク」レコード（`taskType: 'single'`, `status: 'completed'`）を自動生成して `state.tasks` へ追記。全属性（タイトル、ドメイン大/小、部門大/小、PJ大/小、セクション、実績時間、開始/終了時刻、6軸マトリクス、優先度、ラベル、タグ、メモ、Obsidianノート）および識別子（`isRecurringInstance: true`, `recurringSourceId`, `recurringLogId`）を完全保持。
+- **Dual Count Prevention Engine (集計の二重カウント完全遮断)**: デイリー画面（Daily Board / Section View / All View / Focus View / Mobile）およびデイリーサマリー計算において、親定期タスクが当日の完了状態を表示するため、自動生成された単発タスク（`isRecurringInstance: true`）をタスク一覧およびサマリー集計（残り時間・実績・完了件数）から完全に除外。デイリー画面上でのタスク重複表示や実績件数・時間の2倍カウントを根本遮断。
+- **Full Undo & Uncomplete Synchronization (未完了戻しの完全連動)**: トーストからのUndo操作、デイリーでの再トグル操作、実行ログ削除モーダルでのログ削除のいずれで定期タスクが「未完了」に戻された場合でも、連動して作られた単発タスク側の完了レコードを自動で削除する堅牢なクリーンアップパイプラインを確立。
+- **Master Board & GAS Integration**: マスターボードの「単発タスク」タブに自動生成された単発タスクが表示され、`🔁 定期` バッジを付与して視覚的に識別可能に。Google Apps Script (`gas_sync_script.js`) の `SingleTasks` シート連携にも `定期由来(isRecurringInstance)` と `親定期ID(recurringSourceId)` 列を追加しスプレッドシート上でも完全連動。
+- **Future-Proof Analytics Helpers**: 今後実装される分析機能で二重カウントが絶対に起きないよう、純粋な単発タスク（`isPureSingleTask`）と定期インスタンス（`isRecurringInstanceTask`）を明瞭に切り分け、重複なく集計できる共通API（`taskCloneHelper.js`）を整備。
+- **Automated Verification Suite (32/32 PASS)**: クローン自動生成、属性完全コピー、単発タスク完了時の非増殖、Undo連動削除、トグル連動削除、ログ削除連動、デイリー二重表示防止、繰越除外、重複排除集計、モバイル側連動の全32テストケースを新設し 100% PASS を達成（既存テストと合わせて全150件完全パス）。
+- **Release Notes**: `docs/release_notes/2026-09-10_v1.6.1_recurring_task_auto_clone_and_dedup_engine.md` を発行。
+
+---
 ### Fixed & Improved
 - **Vision Board Goal Editor Dark Theme Contrast Fix**: 目標ビジョン設定モーダル（週次・月次・ハーフ・フェイズ）の各目標記入欄（textarea）が、ダークテーマCSSの適用対象外によりブラウザ標準の白背景×ダークテーマ文字色の「白バック・白文字（不可視）」となっていた不具合を解消。背景をダークネイビー（`rgba(15, 23, 42, 0.85)`）、文字色を鮮明なホワイト（`#f8fafc`）に統一。
 - **Global `.form-group textarea` Styling & Font Inheritance**: 共通フォームスタイルに `textarea` を明示追加し、UIフォント（Inter）の継承および垂直リサイズを定義。今後のフォーム拡張時における白浮き再発を予防。

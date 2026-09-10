@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.6.0';
-const APP_VERSION_NAME = 'Dynamic Profile Master Management with Usage Guard & Visibility Toggle';
+const APP_VERSION = 'v1.6.1';
+const APP_VERSION_NAME = 'Recurring Task Auto-Clone to Single Tasks & Dual Count Prevention Engine';
 
 const SECTIONS_CONFIG = [
   { id: 'sec_1', name: '第1セッション', start: 3, end: 6, label: '🌅 第1セッション (03:00 - 06:00)', desc: '起床・静寂の自己投資・思考整理', startStr: '03:00', endStr: '06:00' },

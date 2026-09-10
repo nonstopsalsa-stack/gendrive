@@ -1383,7 +1383,7 @@ function renderTableView() {
               <input type="checkbox" ${isDisabled ? 'checked' : ''} onchange="toggleItemDisabledInline('${task.id}', 'task', event)">
             </div>
             <div class="col-sub-name">
-              <input type="text" class="table-name-input" value="${task.title || ''}"
+              ${task.isRecurringInstance ? '<span class="tag-chip tag-rec-instance" title="定期タスク完了により自動追記されたレコード" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.4); margin-right: 4px; white-space: nowrap; flex-shrink: 0;">🔁 定期</span>' : ''}<input type="text" class="table-name-input" value="${task.title || ''}"
                      onblur="handleInlineFieldChange('${task.id}', 'task', 'title', this.value, event)"
                      onkeydown="if(event.key==='Enter'){this.blur();}"
                      title="クリックして名前を直接編集">

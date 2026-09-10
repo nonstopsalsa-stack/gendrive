@@ -995,13 +995,38 @@ function completeTask(taskId) {
   syncMobileVersionBadges();
   renderMobileApp();
 
+  // 定期タスク完了時: 単発タスクレコードをクローン自動生成してマスターボード・SingleTasksへ反映
+  let cloneTaskId = null;
+  const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
+  if (isRec && isGoalReached) {
+    if (typeof createRecurringSingleTaskClone === 'function') {
+      const clone = createRecurringSingleTaskClone(task, {
+        userNote: '',
+        userDurationMin: elapsedMin,
+        dateKey: dateKey,
+        now: now,
+        logId: task.executionLogs && task.executionLogs[0] ? task.executionLogs[0].id : null
+      });
+      if (clone) {
+        mState.tasks.push(clone);
+        cloneTaskId = clone.id;
+      }
+    }
+  }
+
   const toastMsg = targetTimes > 1
-    ? (isGoalReached ? `\u26A1 \u300C${task.title}\u300D\u672C\u65E5\u306E\u76EE\u6817\u9054\u6210\uFF01\uFF08${newCount}/${targetTimes}\u56DE\uFF09\uD83C\uDF89` : `\u26A1 \u300C${task.title}\u300D\uFF08${newCount}/${targetTimes}\u56DE\u76EE\uFF09\u3092\u8A18\u9332\u3057\u307E\u3057\u305F`)
-    : `\u26A1 \u300C${task.title}\u300D\u3092\u5B8C\u4E86\u3057\u307E\u3057\u305F`;
+    ? (isGoalReached ? `⚡ 「${task.title}」本日の目標達成！（${newCount}/${targetTimes}回）🎉` : `⚡ 「${task.title}」（${newCount}/${targetTimes}回目）を記録しました`)
+    : `⚡ 「${task.title}」を完了しました`;
 
   showMobileUndoToast(toastMsg, () => {
     Object.assign(task, backupTask);
     if (backupTask.status === 'in_progress' || backupTask.status === 'paused') mState.activeTaskId = task.id;
+    // 連動して生成されたクローン単発タスクを自動削除
+    if (typeof removeRecurringInstanceSingleTasks === 'function') {
+      removeRecurringInstanceSingleTasks(task.id, dateKey, task.executionLogs && task.executionLogs[0] ? task.executionLogs[0].id : null, mState.tasks);
+    } else if (cloneTaskId) {
+      mState.tasks = mState.tasks.filter(t => t.id !== cloneTaskId);
+    }
     saveLocalTasks();
     syncMobileVersionBadges();
     renderMobileApp();
@@ -1021,6 +1046,16 @@ function uncompleteTask(taskId) {
   task.actEnd = null;
   task.startTimestamp = null;
   task.accumulatedSeconds = 0;
+
+  // 定期タスクを未完了に戻した場合、連動クローン単発タスクも削除
+  const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
+  if (isRec) {
+    if (typeof removeRecurringInstanceSingleTasks === 'function') {
+      removeRecurringInstanceSingleTasks(task.id, dateKey, null, mState.tasks);
+    } else {
+      mState.tasks = mState.tasks.filter(t => !(t.isRecurringInstance && String(t.recurringSourceId) === String(task.id) && t.scheduledDate === dateKey));
+    }
+  }
 
   if (String(mState.activeTaskId) === String(taskId)) {
     mState.activeTaskId = null;
@@ -1231,6 +1266,7 @@ function updateBottomNavBadges() {
 
   // 1. 本日全未完了タスク
   const todayTasks = mState.tasks.filter(t => {
+    if (t.isRecurringInstance) return false;
     if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'skipped') return false;
     const targetTimes = getItemTargetTimes(t);
     const curCount = getItemDayCount(t, targetDateKey);
@@ -1291,6 +1327,7 @@ function renderHeaderDateAndETA() {
   const targetDateKey = getTodayDateString(mState.selectedDateOffset);
 
   const todayTasks = mState.tasks.filter(t => {
+    if (t.isRecurringInstance) return false;
     if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'completed' || t.status === 'skipped') return false;
     return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
   });
@@ -1493,6 +1530,7 @@ function renderList() {
 
   // 1. Get Today's Uncompleted Tasks
   const todayTasks = mState.tasks.filter(t => {
+    if (t.isRecurringInstance) return false;
     if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'skipped') return false;
     const targetTimes = getItemTargetTimes(t);
     const curCount = getItemDayCount(t, targetDateKey);

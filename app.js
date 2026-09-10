@@ -691,6 +691,8 @@ function getTaskStatusForSelectedDate(task) {
 }
 function isTaskForSelectedDate(task, dateObj = null) {
   if (!task || task.isDisabled) return false;
+  // 自動生成された定期タスクのクローン単発タスクはデイリー画面から除外（親の定期タスクが直接表示・管理されるため二重表示・二重集計を防止）
+  if (task.isRecurringInstance) return false;
   // Inbox, This Week, Next Week, Genius, Someday, Vault などの専用バケットのタスクはデイリー画面から除外
   if (task.bucket && task.bucket !== 'today') return false;
 
@@ -1124,7 +1126,16 @@ function deleteExecutionLog(type, itemId, logId) {
   const item = list.find(x => String(x.id) === String(itemId));
   if (!item || !Array.isArray(item.executionLogs)) return;
 
+  const targetLog = item.executionLogs.find(l => l.id === logId);
+  const logDateKey = targetLog ? targetLog.dateKey : null;
+
   item.executionLogs = item.executionLogs.filter(l => l.id !== logId);
+
+  // 定期タスクの実行ログが削除された場合、連動するクローン単発タスクも自動削除
+  if (type === 'task' && typeof removeRecurringInstanceSingleTasks === 'function') {
+    removeRecurringInstanceSingleTasks(itemId, logDateKey, logId, state.tasks);
+  }
+
   if (type === 'habit') {
     saveHabits();
   } else {
@@ -1611,6 +1622,7 @@ function calculateTaskChuteEstimates() {
     let dayTaskRemainMin = 0;
     let dayTaskRemainCount = 0;
     selectedDateTasks.forEach(t => {
+      if (t.isRecurringInstance) return;
       const status = getTaskStatusForSelectedDate(t);
       if (status !== "completed" && status !== "skipped") {
         dayTaskRemainMin += getItemRemainingMinutes(t, "task");
@@ -1750,6 +1762,7 @@ function calculateTaskChuteEstimates() {
     let pastTaskMins = 0;
     let completedTaskCount = 0;
     selectedDateTasks.forEach(t => {
+      if (t.isRecurringInstance) return;
       const status = getTaskStatusForSelectedDate(t);
       if (status === "completed") {
         completedTaskCount++;
@@ -1792,6 +1805,7 @@ function calculateTaskChuteEstimates() {
     let secTaskActMins = 0;
     let secDoneTaskCount = 0;
     secTasks.forEach(t => {
+      if (t.isRecurringInstance) return;
       if (getTaskStatusForSelectedDate(t) === "completed") {
         secDoneTaskCount++;
         secTaskActMins += t.actMin || t.estMin || 15;

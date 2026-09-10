@@ -259,7 +259,7 @@ function createAndExportSpreadsheetToFolder(folderId, fileName, data) {
   const singleTaskHeaders = [
     'ID', 'タスク名', '無効(Disabled)', '状態(Status)', '予定日', '完了日時', 'セクション', '時間種別',
     '開始時刻', '終了時刻', '見積分', '実績分', '実績開始', '実績終了',
-    'ドメイン大', 'ドメイン小', '部門大', '部門小', 'PJ大', 'PJ小', '優先度', '箱(Bucket)', 'ラベル', 'タグ', 'マトリクス(JSON)', '作成日時'
+    'ドメイン大', 'ドメイン小', '部門大', '部門小', 'PJ大', 'PJ小', '優先度', '箱(Bucket)', 'ラベル', 'タグ', 'マトリクス(JSON)', '作成日時', '定期由来(isRecurringInstance)', '親定期ID(recurringSourceId)'
   ];
   const singleTaskRows = [singleTaskHeaders];
   singleTasks.forEach(t => {
@@ -289,7 +289,9 @@ function createAndExportSpreadsheetToFolder(folderId, fileName, data) {
       t.label || 'p1',
       Array.isArray(t.tags) ? t.tags.join(', ') : (t.tags || ''),
       JSON.stringify(t.matrix || {}),
-      t.createdAt || ''
+      t.createdAt || '',
+      t.isRecurringInstance ? 'TRUE' : 'FALSE',
+      t.recurringSourceId || ''
     ]);
   });
   sheetSingleTasks.getRange(1, 1, singleTaskRows.length, singleTaskHeaders.length).setValues(singleTaskRows);
@@ -539,7 +541,9 @@ function loadDataFromExportSpreadsheet(fileId) {
           label: String(row[22] || 'p1'),
           tags: tags,
           matrix: matrix,
-          createdAt: row[25] ? new Date(row[25]).toISOString() : new Date().toISOString()
+          createdAt: row[25] ? new Date(row[25]).toISOString() : new Date().toISOString(),
+          isRecurringInstance: String(row[26] || '').toUpperCase() === 'TRUE',
+          recurringSourceId: row[27] ? String(row[27]) : null
         });
       }
     }
