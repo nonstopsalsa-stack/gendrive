@@ -2,6 +2,14 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.7.3] - 2026-09-11
+### Added & Enhanced
+- **Soul Quotes Master Expansion (64選 -> 72選への拡充・ADHD着火エンジン強化)**: フォーカスモード下部に表示される魂を揺さぶる言葉（Soul Quotes）に、哲生の闘志・集中力・覚悟を極限まで高める8つの最新フレーズ（aMCCスクワット＆最大カエル撃破、丁寧な生き方、恐怖と限界を突破する1分全振り、モードとプロトコルの復帰、アイデア歓喜とカエル丸呑み、青木真也の覚悟とコツコツ生きる誓い、持ち場での即時行動、恐怖への打ち勝ちと闘争心）を正式追加。
+- **Automated Verification Suite (64/64 PASS)**: `test_focus_board_loop.html` の Soul Quotes マスター配列テストを 72件アサーションへ同期・自動検証し、100% 完全パスを保証。
+- **Release Notes**: `docs/release_notes/2026-09-11_v1.7.3_soul_quotes_expansion_72_fire_phrases.md` を発行。
+
+---
+
 ## [v1.7.2] - 2026-09-11
 ### Added & Improved
 - **Preset Task 20 Slots & QWERTY Matrix Auto-Assignment**: プリセットタスク登録数を最大20個まで拡張し、一覧画面を横5個×縦4列のパノラマグリッドレイアウト（`repeat(5, 1fr)`）へ刷新。ショートカットキーを上段から物理キーボード配列に完全一致させた `12345`（第1行）、`67890`（第2行）、`QWERT`（第3行）、`YUIOP`（第4行）の計20キーへ自動割り当て。単キー押下（大文字・小文字・全角IME対応）で即座にタスク起動＆先行タスク自動中断連携。
