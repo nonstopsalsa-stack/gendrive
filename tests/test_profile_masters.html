@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Profile Masters Engine</title>
+</head>
+<body>
+  <h1>Profile Masters Test Suite</h1>
+  <div id="test-dom-container" style="display: none;">
+    <select id="sel-test-dom-major"></select>
+    <select id="sel-test-dom-minor"></select>
+    <select id="sel-test-proj-major"></select>
+    <select id="sel-test-proj-minor"></select>
+    <div id="profile-management-stage"></div>
+  </div>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/services/profileMasterService.js"></script>
+
+  <script>
+    const results = [];
+    function assert(message, condition) {
+      results.push({ message, pass: Boolean(condition) });
+    }
+
+    // Mock state
+    window.state = {
+      tasks: [
+        { id: 't1', title: '動画編集A', domainMajor: 'PN1', domainMinor: 'ビジネス (動画編集制作)', projMajor: 'ビジネス', projMinor: '初案件獲得', deptMajor: '制作本部', deptMinor: '制作部' },
+        { id: 't2', title: '筋トレ', domainMajor: 'PN3', domainMinor: '健康管理', projMajor: 'プライベート', projMinor: '96ppk', deptMajor: 'CEO直轄', deptMinor: '秘書室' }
+      ],
+      habits: [
+        { id: 'h1', name: '朝散歩', domainMajor: 'PN3', domain: '健康管理', domainMinor: '健康管理', projMajor: 'プライベート', proj: '96ppk', projMinor: '96ppk', deptMajor: 'CEO直轄', dept: '秘書室', deptMinor: '秘書室' }
+      ]
+    };
+
+    try {
+      // 1. Initial Load & Default Globals Sync Test
+      loadProfileMasters();
+      assert('DOMAINS_DATA is synchronized from PROFILE_MASTERS', DOMAINS_DATA && DOMAINS_DATA.PN1 && DOMAINS_DATA.PN1.items.length > 0);
+      assert('PROJECTS_DATA has ビジネス major', PROJECTS_DATA && PROJECTS_DATA['ビジネス'] && PROJECTS_DATA['ビジネス'].items.includes('初案件獲得'));
+
+      // 2. Count Usage Test
+      const projUsage1 = countProfileUsage('projects', 'ビジネス', '初案件獲得');
+      assert('countProfileUsage correctly finds 1 task using 初案件獲得', projUsage1 === 1);
+
+      const projUsage96 = countProfileUsage('projects', 'プライベート', '96ppk');
+      assert('countProfileUsage correctly finds 2 items (1 task + 1 habit) using 96ppk', projUsage96 === 2);
+
+      const unusedCount = countProfileUsage('projects', 'ビジネス', '初期量産');
+      assert('countProfileUsage correctly returns 0 for unused items', unusedCount === 0);
+
+      // 3. Add Minor Item Test
+      const addRes = addProfileMinor('projects', 'ビジネス', 'テスト新プロジェクト_101');
+      assert('addProfileMinor succeeds for new unique item', addRes.success === true);
+      assert('PROJECTS_DATA contains new item', PROJECTS_DATA['ビジネス'].items.includes('テスト新プロジェクト_101'));
+
+      const dupRes = addProfileMinor('projects', 'ビジネス', 'テスト新プロジェクト_101');
+      assert('addProfileMinor rejects duplicate name', dupRes.success === false);
+
+      // 4. Toggle Minor Enabled/Disabled Test
+      toggleProfileMinor('projects', 'ビジネス', 'テスト新プロジェクト_101', false);
+      assert('Item is now marked disabled', PROJECTS_DATA['ビジネス'].disabledItems.includes('テスト新プロジェクト_101'));
+
+      // 5. Select Options Rendering Test (Strict hidden exclusion & dash disabled fallback)
+      const majorSel = document.getElementById('sel-test-proj-major');
+      const minorSel = document.getElementById('sel-test-proj-minor');
+      majorSel.innerHTML = '<option value="ビジネス">ビジネス</option>';
+      majorSel.value = 'ビジネス';
+
+      // Disabled item must NOT appear in dropdown options at all
+      updateMinorSelectOptions('sel-test-proj-major', 'sel-test-proj-minor', PROJECTS_DATA, null);
+      let optValues = Array.from(minorSel.options).map(o => o.value);
+      assert('Disabled item is completely excluded from dropdown for new item', !optValues.includes('テスト新プロジェクト_101'));
+      assert('Dropdown is enabled when valid items exist', minorSel.disabled === false);
+
+      // Even if existing task had this disabled value, it must not be shown in options
+      updateMinorSelectOptions('sel-test-proj-major', 'sel-test-proj-minor', PROJECTS_DATA, 'テスト新プロジェクト_101');
+      optValues = Array.from(minorSel.options).map(o => o.value);
+      assert('Disabled item is completely excluded even when previously selected', !optValues.includes('テスト新プロジェクト_101'));
+
+      // Test all items disabled fallback: disable all items in a category
+      const testMajorData = PROJECTS_DATA['ビジネス'];
+      const originalDisabled = [...(testMajorData.disabledItems || [])];
+      testMajorData.disabledItems = [...testMajorData.items]; // disable ALL items
+
+      updateMinorSelectOptions('sel-test-proj-major', 'sel-test-proj-minor', PROJECTS_DATA, null);
+      assert('When all items are disabled, dropdown is disabled', minorSel.disabled === true);
+      assert('When all items are disabled, single option text is dash', minorSel.options.length === 1 && minorSel.options[0].textContent === 'ー');
+
+      // Restore items
+      testMajorData.disabledItems = originalDisabled;
+
+      // Re-enable item
+      toggleProfileMinor('projects', 'ビジネス', 'テスト新プロジェクト_101', true);
+      assert('Item is re-enabled and removed from disabledItems', !PROJECTS_DATA['ビジネス'].disabledItems.includes('テスト新プロジェクト_101'));
+
+      // 6. Delete Minor Item Test (Unused)
+      const delRes = deleteProfileMinor('projects', 'ビジネス', 'テスト新プロジェクト_101');
+      assert('deleteProfileMinor succeeds for unused item', delRes.success === true);
+      assert('Item is completely removed from items array', !PROJECTS_DATA['ビジネス'].items.includes('テスト新プロジェクト_101'));
+
+      // 7. Add Major Category Test
+      const addMajRes = addProfileMajor('projects', '新規テスト大分類', '🚀 テスト大分類');
+      assert('addProfileMajor succeeds', addMajRes.success === true);
+      assert('PROFILE_MASTERS has new major', PROFILE_MASTERS.projects['新規テスト大分類'] !== undefined);
+
+      // Toggle Major
+      toggleProfileMajor('projects', '新規テスト大分類', false);
+      assert('Major is disabled', PROFILE_MASTERS.projects['新規テスト大分類'].enabled === false);
+
+      // Major dropdown exclusion test
+      populateMajorSelectOptions('sel-test-proj-major', PROFILE_MASTERS.projects, '(大分類を選択)');
+      const majOptValues = Array.from(majorSel.options).map(o => o.value);
+      assert('Disabled major is completely excluded from major dropdown', !majOptValues.includes('新規テスト大分類'));
+
+      // Delete Major
+      const delMajRes = deleteProfileMajor('projects', '新規テスト大分類');
+      assert('deleteProfileMajor succeeds for unused major', delMajRes.success === true);
+      assert('Major is removed', PROFILE_MASTERS.projects['新規テスト大分類'] === undefined);
+
+      // 8. UI Rendering Engine Test
+      renderProfileMasterView();
+      const stage = document.getElementById('profile-management-stage');
+      assert('renderProfileMasterView outputs HTML cards', stage.children.length > 0);
+      assert('Rendered HTML contains project cards', stage.innerHTML.includes('profile-major-card'));
+
+    } catch (err) {
+      assert('Exception caught in test runner: ' + err.message, false);
+      console.error(err);
+    }
+
+    const passed = results.filter(r => r.pass).length;
+    const failed = results.filter(r => !r.pass).length;
+    window.__TEST_SUMMARY__ = {
+      total: results.length,
+      passed: passed,
+      failed: failed,
+      allPassed: failed === 0,
+      results: results
+    };
+  </script>
+</body>
+</html>

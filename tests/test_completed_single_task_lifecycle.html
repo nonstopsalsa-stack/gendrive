@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Test: Completed Single Task Lifecycle & Daily Quarantine Engine</title>
+  <style>
+    body { font-family: monospace; background: #0f172a; color: #f8fafc; padding: 20px; }
+    .pass { color: #4ade80; font-weight: bold; }
+    .fail { color: #f87171; font-weight: bold; }
+    .summary { margin-top: 20px; font-size: 1.2em; border-top: 1px solid #334155; padding-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Gendrive v1.8.2 Automated Test Suite</h1>
+  <h2>Completed Single Task Lifecycle & Daily Quarantine Engine</h2>
+  <div id="results"></div>
+
+  <script>
+    window.DEFAULT_TASKS = [];
+    window.DEFAULT_HABITS = [];
+  </script>
+  <script src="../js/config.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/services/taskTimerService.js"></script>
+  <script>
+    // Save PC completeTask before mobile.js loads
+    window.__pcCompleteTask = window.completeTask;
+  </script>
+  <script src="../mobile.js"></script>
+  <script>
+    window.__mobileCompleteTask = window.completeTask;
+    window.completeTask = window.__pcCompleteTask;
+  </script>
+
+  <script>
+    const results = [];
+    function assert(name, condition, details = '') {
+      results.push({ name, pass: !!condition, details });
+      const el = document.createElement('div');
+      el.className = condition ? 'pass' : 'fail';
+      el.textContent = `${condition ? '✓ PASS' : '✗ FAIL'}: ${name} ${details ? '— ' + details : ''}`;
+      document.getElementById('results').appendChild(el);
+    }
+
+    // Mock state
+    window.state = {
+      tasks: [],
+      habits: [],
+      selectedDateOffset: 0,
+      currentSection: '第2セッション',
+      filters: { status: 'uncompleted' },
+      undoStack: []
+    };
+    window.pushUndoAction = function(act) { state.undoStack.push(act); };
+    window.saveTasks = function() {};
+    window.renderApp = function() {};
+
+    // Load isTaskForSelectedDate definition as implemented in app.js
+    function isTaskForSelectedDate(task, dateObj = null) {
+      if (!task || task.isDisabled) return false;
+      if (task.isRecurringInstance) return false;
+      if (task.bucket && task.bucket !== 'today') return false;
+
+      const isValidDateInput = (dateObj instanceof Date) || (typeof dateObj === 'string' && dateObj.length >= 8);
+      const d = isValidDateInput ? new Date(dateObj) : (() => {
+        const dt = new Date();
+        dt.setDate(dt.getDate() - state.selectedDateOffset);
+        return dt;
+      })();
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const todayKey = getTodayKey();
+
+      const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType) || (Boolean(task.recurrence) && task.recurrence.type && task.recurrence.type !== 'none');
+
+      if (isRec) {
+        if (dateKey < todayKey) return false;
+        return typeof isHabitScheduledForDate === 'function' ? isHabitScheduledForDate(task, d) : true;
+      }
+
+      // 2. 単発タスク (Single Tasks: bucket === 'today' または 未指定)
+      if (task.scheduledDate) {
+        const normDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(task.scheduledDate) : task.scheduledDate;
+        return normDate === dateKey;
+      }
+      // scheduledDateが未指定だが完了済みの場合: 完了ログの日付を基準にして該当日のみに表示（今日へのゾンビ流出を完全遮断）
+      if (task.status === 'completed') {
+        let completedDate = null;
+        if (Array.isArray(task.executionLogs) && task.executionLogs.length > 0 && task.executionLogs[0].dateKey) {
+          completedDate = task.executionLogs[0].dateKey;
+        } else if (Array.isArray(task.history) && task.history.length > 0) {
+          const lastH = task.history[task.history.length - 1];
+          completedDate = (typeof lastH === 'object' && lastH !== null) ? lastH.date : (typeof lastH === 'string' ? lastH : null);
+        }
+        if (completedDate) {
+          const normCompDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(completedDate) : completedDate;
+          return normCompDate === dateKey;
+        }
+        return false;
+      }
+      // 日付未指定の未完了タスクは「今日（todayKey）」に表示
+      return dateKey === todayKey;
+    }
+
+    try {
+      console.log("=== Starting Test Suite ===");
+
+      // Test 1: sanitizeTasksDates auto-salvages scheduledDate for completed single tasks
+      const sampleTasks = [
+        {
+          id: 'T075',
+          title: 'Antigravity2.0インストール',
+          status: 'completed',
+          scheduledDate: '',
+          type: 'single',
+          executionLogs: [{ id: 'l1', dateKey: '2026-09-06', completedAt: '2026-09-06T09:22:05.732Z' }]
+        },
+        {
+          id: 'T076',
+          title: 'Cursorインストール',
+          status: 'completed',
+          scheduledDate: null,
+          type: 'single',
+          history: [{ date: '2026-09-06', completedAt: '2026-09-06T09:21:58.053Z' }]
+        },
+        {
+          id: 'T_Uncompleted_NoDate',
+          title: '未完了で日付なしのタスク',
+          status: 'uncompleted',
+          scheduledDate: '',
+          type: 'single'
+        },
+        {
+          id: 'T_WithDate',
+          title: '期日指定ありタスク',
+          status: 'completed',
+          scheduledDate: '2026-09-18',
+          type: 'single'
+        }
+      ];
+
+      sanitizeTasksDates(sampleTasks);
+      assert('Test 1.1: T075 scheduledDate auto-salvaged from executionLogs', sampleTasks[0].scheduledDate === '2026-09-06');
+      assert('Test 1.2: T076 scheduledDate auto-salvaged from history', sampleTasks[1].scheduledDate === '2026-09-06');
+      assert('Test 1.3: Uncompleted task without date preserves empty scheduledDate', !sampleTasks[2].scheduledDate);
+      assert('Test 1.4: Existing scheduledDate preserved and normalized', sampleTasks[3].scheduledDate === '2026-09-18');
+
+      // Test 2: isTaskForSelectedDate quarantine defense (even if scheduledDate was still empty)
+      const unsanitizedCompletedTask = {
+        id: 'T075_raw',
+        title: 'Antigravity2.0インストール (raw)',
+        status: 'completed',
+        scheduledDate: '',
+        bucket: 'today',
+        type: 'single',
+        executionLogs: [{ dateKey: '2026-09-06' }]
+      };
+
+      state.selectedDateOffset = 0; // viewing TODAY (2026-09-18)
+      assert('Test 2.1: Completed task from 9/6 is EXCLUDED from today (9/18) daily view',
+        isTaskForSelectedDate(unsanitizedCompletedTask, '2026-09-18') === false);
+
+      assert('Test 2.2: Completed task from 9/6 is INCLUDED when viewing its completion date (2026-09-06)',
+        isTaskForSelectedDate(unsanitizedCompletedTask, '2026-09-06') === true);
+
+      assert('Test 2.3: Completed task from 9/6 is EXCLUDED when viewing tomorrow (2026-09-19)',
+        isTaskForSelectedDate(unsanitizedCompletedTask, '2026-09-19') === false);
+
+      // Test 2.4: Today scheduled single task
+      const todayTask = {
+        id: 'T_Today',
+        title: '今日のタスク',
+        status: 'uncompleted',
+        scheduledDate: '2026-09-18',
+        bucket: 'today',
+        type: 'single'
+      };
+      assert('Test 2.4: Today scheduled task is INCLUDED on today (2026-09-18)',
+        isTaskForSelectedDate(todayTask, '2026-09-18') === true);
+      assert('Test 2.5: Today scheduled task is EXCLUDED on tomorrow (2026-09-19)',
+        isTaskForSelectedDate(todayTask, '2026-09-19') === false);
+
+      // Test 2.6: Uncompleted task without scheduledDate appears on today
+      const uncompletedNoDate = {
+        id: 'T_NoDate',
+        title: '日付未指定の新規タスク',
+        status: 'uncompleted',
+        scheduledDate: '',
+        bucket: 'today',
+        type: 'single'
+      };
+      assert('Test 2.6: Uncompleted task without date appears on today',
+        isTaskForSelectedDate(uncompletedNoDate, '2026-09-18') === true);
+
+      // Test 3: completeTask auto-assigns scheduledDate (PC version)
+      const taskToComplete = {
+        id: 'T_ToComplete',
+        title: '完了させるタスク',
+        status: 'uncompleted',
+        scheduledDate: '',
+        bucket: 'today',
+        type: 'single'
+      };
+      state.tasks = [taskToComplete];
+      window.getSelectedDateKey = () => '2026-09-18';
+
+      window.completeTask('T_ToComplete', 'テストメモ', 15);
+      assert('Test 3.1: PC completeTask sets status to completed', taskToComplete.status === 'completed');
+      assert('Test 3.2: PC completeTask auto-locks scheduledDate to current dateKey', taskToComplete.scheduledDate === '2026-09-18');
+      assert('Test 3.3: PC completeTask records executionLog with dateKey', taskToComplete.executionLogs && taskToComplete.executionLogs[0] && taskToComplete.executionLogs[0].dateKey === '2026-09-18');
+
+      // Test 3.4: Undo restores original scheduledDate
+      if (state.undoStack.length > 0) {
+        const undoAct = state.undoStack.pop();
+        undoAct.undo();
+        assert('Test 3.4: Undo restores status to uncompleted', taskToComplete.status === 'uncompleted');
+        assert('Test 3.5: Undo restores original empty scheduledDate', taskToComplete.scheduledDate === '');
+      }
+
+      // Test 4: loadTasks auto-repairs localStorage
+      const mockStorage = [
+        {
+          id: 'T075_mock',
+          title: 'Antigravity2.0インストール',
+          status: 'completed',
+          scheduledDate: '',
+          type: 'single',
+          executionLogs: [{ dateKey: '2026-09-06' }]
+        },
+        {
+          id: 'T076_mock',
+          title: 'Cursorインストール',
+          status: 'completed',
+          scheduledDate: '',
+          type: 'single',
+          executionLogs: [{ dateKey: '2026-09-06' }]
+        }
+      ];
+      localStorage.setItem('habit_flow_tasks_v3', JSON.stringify(mockStorage));
+      const loaded = loadTasks();
+      const loadedT075 = loaded.find(t => t.id === 'T075_mock');
+      const loadedT076 = loaded.find(t => t.id === 'T076_mock');
+      assert('Test 4.1: loadTasks auto-salvages T075 scheduledDate to 2026-09-06', loadedT075 && loadedT075.scheduledDate === '2026-09-06');
+      assert('Test 4.2: loadTasks auto-salvages T076 scheduledDate to 2026-09-06', loadedT076 && loadedT076.scheduledDate === '2026-09-06');
+
+      // Verify localStorage was updated
+      const reSaved = JSON.parse(localStorage.getItem('habit_flow_tasks_v3'));
+      const reSavedT075 = reSaved.find(t => t.id === 'T075_mock');
+      assert('Test 4.3: localStorage is automatically updated with salvaged scheduledDate', reSavedT075 && reSavedT075.scheduledDate === '2026-09-06');
+
+      // Test 5: sanitizeMobileTasks & Mobile completeTask
+      const mobileInput = [
+        {
+          id: 'M001',
+          title: 'モバイル完了タスク',
+          status: 'completed',
+          scheduledDate: '',
+          type: 'single',
+          executionLogs: [{ dateKey: '2026-09-06' }]
+        }
+      ];
+      const sanitizedMobile = sanitizeMobileTasks(mobileInput);
+      assert('Test 5.1: sanitizeMobileTasks auto-salvages scheduledDate', sanitizedMobile[0].scheduledDate === '2026-09-06');
+
+      // Mobile completeTask test
+      const mobileTaskToComplete = {
+        id: 'M_ToComplete',
+        title: 'モバイル完了させるタスク',
+        status: 'uncompleted',
+        scheduledDate: '',
+        bucket: 'today',
+        targetTimes: 1,
+        type: 'single'
+      };
+      mState.selectedDateOffset = 0;
+      mState.tasks.push(mobileTaskToComplete);
+      window.showMobileUndoToast = function() {};
+      window.haptic = function() {};
+      window.syncMobileVersionBadges = function() {};
+      window.renderMobileApp = function() {};
+      window.saveLocalTasks = function() {};
+
+      window.__mobileCompleteTask('M_ToComplete');
+      assert('Test 5.2: Mobile completeTask sets status to completed', mobileTaskToComplete.status === 'completed');
+      assert('Test 5.3: Mobile completeTask auto-locks scheduledDate to current dateKey', !!mobileTaskToComplete.scheduledDate);
+
+      // Summary
+      const passedCount = results.filter(r => r.pass).length;
+      const totalCount = results.length;
+      const summaryEl = document.createElement('div');
+      summaryEl.className = 'summary';
+      summaryEl.textContent = `Results: ${passedCount} / ${totalCount} PASSED (${passedCount === totalCount ? 'ALL PASS 🎉' : 'SOME FAILED ⚠️'})`;
+      document.body.appendChild(summaryEl);
+
+      window.__TEST_SUMMARY__ = {
+        total: totalCount,
+        passed: passedCount,
+        failed: totalCount - passedCount,
+        allPassed: passedCount === totalCount,
+        results: results.map(r => ({ name: r.name, pass: r.pass, message: r.details }))
+      };
+
+    } catch (err) {
+      console.error(err);
+      assert('FATAL_EXCEPTION', false, err.message);
+      window.__TEST_SUMMARY__ = {
+        total: results.length,
+        passed: results.filter(r => r.pass).length,
+        failed: results.filter(r => !r.pass).length,
+        allPassed: false,
+        results: results.map(r => ({ name: r.name, pass: r.pass, message: r.details }))
+      };
+    }
+  </script>
+</body>
+</html>

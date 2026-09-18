@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive - Master Data Editor & Multi-Key Sorting Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  * High-Performance Grid Editor with Bulk Operations & Drag & Drop Reordering
@@ -982,11 +982,13 @@ function renderTableView() {
   const tasksView = document.getElementById('master-tasks-view');
   const singleTasksView = document.getElementById('master-single-tasks-view');
   const analyticsView = document.getElementById('master-analytics-view');
+  const profilesView = document.getElementById('master-profiles-view');
 
   const subtabHabits = document.getElementById('subtab-habits');
   const subtabTasks = document.getElementById('subtab-tasks');
   const subtabSingleTasks = document.getElementById('subtab-single-tasks');
   const subtabAnalytics = document.getElementById('subtab-analytics');
+  const subtabProfiles = document.getElementById('subtab-profiles');
 
   // Recalculate stats safely
   try {
@@ -1004,18 +1006,27 @@ function renderTableView() {
   if (tasksView) tasksView.classList.toggle('hidden', curSubtab !== 'tasks' && curSubtab !== 'recurring_tasks');
   if (singleTasksView) singleTasksView.classList.toggle('hidden', curSubtab !== 'single_tasks');
   if (analyticsView) analyticsView.classList.toggle('hidden', curSubtab !== 'analytics');
+  if (profilesView) profilesView.classList.toggle('hidden', curSubtab !== 'profiles');
 
   // Toggle subtab buttons
   if (subtabHabits) subtabHabits.classList.toggle('active', curSubtab === 'habits');
   if (subtabTasks) subtabTasks.classList.toggle('active', curSubtab === 'tasks' || curSubtab === 'recurring_tasks');
   if (subtabSingleTasks) subtabSingleTasks.classList.toggle('active', curSubtab === 'single_tasks');
   if (subtabAnalytics) subtabAnalytics.classList.toggle('active', curSubtab === 'analytics');
+  if (subtabProfiles) subtabProfiles.classList.toggle('active', curSubtab === 'profiles');
 
   updateBulkActionBar();
 
   // -----------------------------------------------------------------------
   // 4. Analytics Scoreboard (Habits & Recurring Tasks Continuation Analytics)
   // -----------------------------------------------------------------------
+    if (curSubtab === 'profiles') {
+    if (typeof renderProfileMasterView === 'function') {
+      renderProfileMasterView();
+    }
+    return;
+  }
+
   if (curSubtab === 'analytics') {
     renderTableAnalyticsView();
     return;
@@ -1372,7 +1383,7 @@ function renderTableView() {
               <input type="checkbox" ${isDisabled ? 'checked' : ''} onchange="toggleItemDisabledInline('${task.id}', 'task', event)">
             </div>
             <div class="col-sub-name">
-              <input type="text" class="table-name-input" value="${task.title || ''}"
+              ${task.isRecurringInstance ? '<span class="tag-chip tag-rec-instance" title="定期タスク完了により自動追記されたレコード" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.4); margin-right: 4px; white-space: nowrap; flex-shrink: 0;">🔁 定期</span>' : ''}<input type="text" class="table-name-input" value="${task.title || ''}"
                      onblur="handleInlineFieldChange('${task.id}', 'task', 'title', this.value, event)"
                      onkeydown="if(event.key==='Enter'){this.blur();}"
                      title="クリックして名前を直接編集">

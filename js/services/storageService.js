@@ -4,7 +4,7 @@
  * Local-First Architecture with Google Apps Script (GAS) Sync Engine
  */
 
-const STORAGE_KEYS = {
+var STORAGE_KEYS = Object.assign(window.STORAGE_KEYS || {}, {
   TASKS: 'habit_flow_tasks_v3',
   HABITS: 'habit_flow_data_v3',
   GOALS: 'habit_flow_goals_v1',
@@ -16,7 +16,7 @@ const STORAGE_KEYS = {
   METADATA: 'gendrive_sync_metadata_v1',
   SNAPSHOTS: 'gendrive_snapshots_v1',
   DAILY_HABIT_ORDER: 'gendrive_daily_habit_order_v1'
-};
+});
 
 let cloudSyncTimeout = null;
 let isSyncing = false;
@@ -322,8 +322,152 @@ function updateSyncMetadata(fields = {}) {
 }
 
 // =========================================================================
-// 1. Task Persistence
+// 1. Task Persistence & Deep-Merge Protection
 // =========================================================================
+
+/**
+ * Task ID High-Water Mark Synchronizer
+ * 既存タスク群の最大ID番号を検出し、localStorageのハイウォーターマークを安全に底上げ同期
+ */
+function syncTaskIdHighWaterMark(tasks) {
+  if (!Array.isArray(tasks)) return;
+  let maxIdNum = 0;
+  tasks.forEach(t => {
+    if (t && t.id) {
+      const match = String(t.id).match(/^T(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxIdNum) maxIdNum = num;
+      }
+    }
+  });
+  const savedHWM = parseInt(localStorage.getItem('gendrive_task_max_id_v1') || '0', 10);
+  const currentHWM = isNaN(savedHWM) ? 0 : savedHWM;
+  if (maxIdNum > currentHWM) {
+    localStorage.setItem('gendrive_task_max_id_v1', String(maxIdNum));
+  }
+}
+
+function sanitizeTasksDates(tasks) {
+  if (!Array.isArray(tasks)) return tasks;
+  const normalizeFn = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey : (val => val);
+  tasks.forEach(t => {
+    if (!t) return;
+    if (t.scheduledDate) {
+      const norm = normalizeFn(t.scheduledDate);
+      if (norm) t.scheduledDate = norm;
+    } else if (t.status === 'completed' && t.type !== 'recurring' && t.taskType !== 'recurring' && !t.isRecurringInstance) {
+      // 完了済み単発タスクでscheduledDateが未設定の場合、実行ログまたは完了履歴から完了日を自動サルベージして自己修復
+      let compDate = null;
+      if (Array.isArray(t.executionLogs) && t.executionLogs.length > 0 && t.executionLogs[0].dateKey) {
+        compDate = t.executionLogs[0].dateKey;
+      } else if (Array.isArray(t.history) && t.history.length > 0) {
+        const lastH = t.history[t.history.length - 1];
+        compDate = (typeof lastH === 'object' && lastH !== null) ? lastH.date : (typeof lastH === 'string' ? lastH : null);
+      } else if (t.createdAt) {
+        compDate = normalizeFn(t.createdAt);
+      }
+      if (compDate) {
+        const norm = normalizeFn(compDate);
+        if (norm) t.scheduledDate = norm;
+      }
+    }
+  });
+  return tasks;
+}
+
+/**
+ * Task Deep-Merge Engine (タスク消失完全根絶ディープマージ)
+ * クラウド受信時にローカルの未同期タスクやオフライン追加タスクを100%保護
+ * 同一ID時は completed ステータスを最優先保護し、更新日時が新しい属性を採用
+ */
+function mergeTasksDeep(localTasks, cloudTasks) {
+  if (!Array.isArray(cloudTasks) || cloudTasks.length === 0) {
+    return sanitizeTasksDates(Array.isArray(localTasks) ? localTasks : []);
+  }
+  if (!Array.isArray(localTasks) || localTasks.length === 0) {
+    syncTaskIdHighWaterMark(cloudTasks);
+    return sanitizeTasksDates(cloudTasks);
+  }
+
+  const localMap = new Map();
+  localTasks.forEach(t => {
+    if (t && t.id) localMap.set(String(t.id), t);
+  });
+
+  const merged = [];
+  const handledIds = new Set();
+
+  cloudTasks.forEach(cloudTask => {
+    if (!cloudTask || !cloudTask.id) return;
+    const strId = String(cloudTask.id);
+    handledIds.add(strId);
+
+    const localTask = localMap.get(strId);
+    if (!localTask) {
+      merged.push(cloudTask);
+      return;
+    }
+
+    // 同一IDタスクのマージ
+    const finalTask = { ...cloudTask };
+
+    // 1. 完了ステータスの保護（ローカルで完了していればクラウドが未完了でも完了を最優先）
+    if (localTask.status === 'completed' && cloudTask.status !== 'completed') {
+      finalTask.status = 'completed';
+      finalTask.completedAt = localTask.completedAt || finalTask.completedAt || new Date().toISOString();
+      finalTask.actMin = Math.max(localTask.actMin || 0, finalTask.actMin || 0);
+    }
+
+    // 2. 更新日時の新しいプロパティを採用
+    const localUpdated = new Date(localTask.updatedAt || localTask.createdAt || 0).getTime();
+    const cloudUpdated = new Date(cloudTask.updatedAt || cloudTask.createdAt || 0).getTime();
+    if (localUpdated > cloudUpdated) {
+      if (localTask.title) finalTask.title = localTask.title;
+      if (localTask.bucket) finalTask.bucket = localTask.bucket;
+      if (localTask.section) finalTask.section = localTask.section;
+      if (localTask.scheduledDate) finalTask.scheduledDate = localTask.scheduledDate;
+      if (localTask.tags) finalTask.tags = localTask.tags;
+      if (localTask.domainMinor) finalTask.domainMinor = localTask.domainMinor;
+      if (localTask.timeOfDay) finalTask.timeOfDay = localTask.timeOfDay;
+      if (localTask.notes) finalTask.notes = localTask.notes;
+      if (localTask.subtasks) finalTask.subtasks = localTask.subtasks;
+      if (localTask.obsidianUri) finalTask.obsidianUri = localTask.obsidianUri;
+      if (typeof localTask.isDisabled === 'boolean') finalTask.isDisabled = localTask.isDisabled;
+    }
+
+    // 3. executionLogs の統合
+    if (Array.isArray(localTask.executionLogs) && localTask.executionLogs.length > 0) {
+      const cLogs = Array.isArray(finalTask.executionLogs) ? [...finalTask.executionLogs] : [];
+      const logIds = new Set(cLogs.map(l => l.id || `${l.timestamp || l.completedAt}_${l.count}`));
+      localTask.executionLogs.forEach(l => {
+        const logId = l.id || `${l.timestamp || l.completedAt}_${l.count}`;
+        if (!logIds.has(logId)) {
+          cLogs.push(l);
+          logIds.add(logId);
+        }
+      });
+      finalTask.executionLogs = cLogs;
+    }
+
+    merged.push(finalTask);
+  });
+
+  // 4. ローカルにしか存在しないタスク（未同期・オフライン作成）を100%保持
+  localTasks.forEach(localTask => {
+    if (!localTask || !localTask.id) return;
+    const strId = String(localTask.id);
+    if (!handledIds.has(strId)) {
+      merged.push(localTask);
+      handledIds.add(strId);
+    }
+  });
+
+  // 5. ハイウォーターマーク同期
+  syncTaskIdHighWaterMark(merged);
+
+  return sanitizeTasksDates(merged);
+}
 
 function loadTasks() {
   let list = DEFAULT_TASKS;
@@ -349,6 +493,19 @@ function loadTasks() {
     t.isDisabled = !!t.isDisabled;
     if (typeof t.obsidianUri !== 'string') t.obsidianUri = t.obsidianUri || '';
   });
+
+  // 日付の正規化および完了済み単発タスクのscheduledDate自己修復
+  const rawBefore = JSON.stringify(list);
+  sanitizeTasksDates(list);
+  if (saved && rawBefore !== JSON.stringify(list)) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(list));
+    } catch (e) {
+      console.warn('Auto-persisting sanitized tasks to localStorage failed:', e);
+    }
+  }
+
+  syncTaskIdHighWaterMark(list);
 
   return list;
 }
@@ -789,15 +946,33 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
       const cloudTime = new Date(cloudMeta.lastUpdatedAt || 0).getTime();
       const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
 
-      // If cloud is newer or forceApply requested, update local state
-      if (forceApply || cloudTime > localTime) {
-        if (Array.isArray(cloudData.tasks) && cloudData.tasks.length > 0) {
-          state.tasks = cloudData.tasks;
+      // If cloud is newer or forceApply requested, or local tasks are missing/fewer, update local state
+      const hasMissingLocalTasks = Array.isArray(cloudData.tasks) && (!state.tasks || state.tasks.length < cloudData.tasks.length);
+      if (forceApply || cloudTime > localTime || !localMeta.lastUpdatedAt || (state.tasks && state.tasks.length === 0) || hasMissingLocalTasks) {
+        if (Array.isArray(cloudData.tasks)) {
+          state.tasks = mergeTasksDeep(state.tasks, cloudData.tasks);
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
         }
-        if (Array.isArray(cloudData.habits) && cloudData.habits.length > 0) {
+        if (Array.isArray(cloudData.habits)) {
+          const localHabitMap = new Map((state.habits || []).map(h => [String(h.id), h]));
           state.habits = cloudData.habits
-            .map((h, idx) => migrateHabit(h, idx))
+            .map((cloudHabit, idx) => {
+              const localHabit = localHabitMap.get(String(cloudHabit.id));
+              if (localHabit && localHabit.history && cloudHabit.history) {
+                const mergedHistory = { ...cloudHabit.history };
+                Object.keys(localHabit.history).forEach(dk => {
+                  const locEntry = localHabit.history[dk];
+                  const cldEntry = mergedHistory[dk];
+                  if (locEntry && (locEntry === true || locEntry.done || locEntry.count > 0)) {
+                    if (!cldEntry || (!cldEntry.done && (!cldEntry.count || cldEntry.count === 0))) {
+                      mergedHistory[dk] = locEntry;
+                    }
+                  }
+                });
+                cloudHabit.history = mergedHistory;
+              }
+              return migrateHabit(cloudHabit, idx);
+            })
             .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
           localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
         }

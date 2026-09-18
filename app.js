@@ -30,27 +30,7 @@ function openObsidianLink(rawUri, event) {
   window.open(targetUrl, '_blank');
 }
 
-function updateMinorSelectOptions(majorSelectId, minorSelectId, dataSource, selectedVal = null) {
-  const majorSelect = document.getElementById(majorSelectId);
-  const minorSelect = document.getElementById(minorSelectId);
-  if (!majorSelect || !minorSelect) return;
-
-  const majorKey = majorSelect.value;
-  minorSelect.innerHTML = '<option value="">(未設定)</option>';
-
-  if (majorKey && dataSource[majorKey]) {
-    const items = dataSource[majorKey].items || [];
-    items.forEach(item => {
-      const opt = document.createElement('option');
-      opt.value = item;
-      opt.textContent = item;
-      if (selectedVal && selectedVal === item) {
-        opt.selected = true;
-      }
-      minorSelect.appendChild(opt);
-    });
-  }
-}
+// [Removed duplicate updateMinorSelectOptions - delegated to profileMasterService.js]
 
 function setupCascadeSelects() {
   // Habit Add
@@ -118,6 +98,14 @@ let state = {
   selectedIndex: 0,
   focusTaskIndex: 0,
   focusHabitIndex: 0,
+  focusCount: (function() {
+    try {
+      const saved = parseInt(localStorage.getItem('gendrive_focus_count'), 10);
+      return [1, 2, 3].includes(saved) ? saved : 1;
+    } catch (e) {
+      return 1;
+    }
+  })(),
   currentMode: 'section', // 'section' | 'focus' | 'all' | 'table' | 'bucket' | 'goals'
   currentBucketFilter: null, // { type: 'bucket' | 'label', id: string }
   viewType: 'all', // 'all' | 'task' | 'habit'
@@ -711,6 +699,8 @@ function getTaskStatusForSelectedDate(task) {
 }
 function isTaskForSelectedDate(task, dateObj = null) {
   if (!task || task.isDisabled) return false;
+  // 自動生成された定期タスクのクローン単発タスクはデイリー画面から除外（親の定期タスクが直接表示・管理されるため二重表示・二重集計を防止）
+  if (task.isRecurringInstance) return false;
   // Inbox, This Week, Next Week, Genius, Someday, Vault などの専用バケットのタスクはデイリー画面から除外
   if (task.bucket && task.bucket !== 'today') return false;
 
@@ -736,9 +726,26 @@ function isTaskForSelectedDate(task, dateObj = null) {
 
   // 2. 単発タスク (Single Tasks: bucket === 'today' または 未指定)
   if (task.scheduledDate) {
-    return task.scheduledDate === dateKey;
+    const normDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(task.scheduledDate) : task.scheduledDate;
+    return normDate === dateKey;
   }
-  // 日付未指定の場合は「今日（todayKey）」に表示
+  // scheduledDateが未指定だが完了済みの場合: 完了ログの日付を基準にして該当日のみに表示（今日へのゾンビ流出を完全遮断）
+  if (task.status === 'completed') {
+    let completedDate = null;
+    if (Array.isArray(task.executionLogs) && task.executionLogs.length > 0 && task.executionLogs[0].dateKey) {
+      completedDate = task.executionLogs[0].dateKey;
+    } else if (Array.isArray(task.history) && task.history.length > 0) {
+      const lastH = task.history[task.history.length - 1];
+      completedDate = (typeof lastH === 'object' && lastH !== null) ? lastH.date : (typeof lastH === 'string' ? lastH : null);
+    }
+    if (completedDate) {
+      const normCompDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(completedDate) : completedDate;
+      return normCompDate === dateKey;
+    }
+    // 完了日も不明な完了済みタスクはデイリー画面には表示しない（マスターボード側で管理）
+    return false;
+  }
+  // 日付未指定の未完了タスクは「今日（todayKey）」に表示
   return dateKey === todayKey;
 }
 
@@ -1144,7 +1151,16 @@ function deleteExecutionLog(type, itemId, logId) {
   const item = list.find(x => String(x.id) === String(itemId));
   if (!item || !Array.isArray(item.executionLogs)) return;
 
+  const targetLog = item.executionLogs.find(l => l.id === logId);
+  const logDateKey = targetLog ? targetLog.dateKey : null;
+
   item.executionLogs = item.executionLogs.filter(l => l.id !== logId);
+
+  // 定期タスクの実行ログが削除された場合、連動するクローン単発タスクも自動削除
+  if (type === 'task' && typeof removeRecurringInstanceSingleTasks === 'function') {
+    removeRecurringInstanceSingleTasks(itemId, logDateKey, logId, state.tasks);
+  }
+
   if (type === 'habit') {
     saveHabits();
   } else {
@@ -1274,10 +1290,9 @@ function getFilteredHabits(customMode = null) {
     list = list.filter(h => isHabitInCurrentTimeWindow(h));
   }
 
-  // 3. Focus Mode: Check if habit is active in current or future time (exclude past expired habits)
+  // 3. Focus Mode: Purified for task execution (Habits handled in Section & Daily views)
   if (mode === 'focus') {
-    list = list.filter(isHabitActiveForFocus);
-    list = list.filter(h => getHabitStatusForSelectedDate(h) !== 'completed');
+    return [];
   } else if (mode !== 'table') {
     if (state.filters.status === 'uncompleted') {
       list = list.filter(h => getHabitStatusForSelectedDate(h) !== 'completed');
@@ -1576,6 +1591,50 @@ function cycleViewType() {
   setViewType(types[nextIdx]);
 }
 
+// Focus Board Adaptive Loop Engine (focusCount: 1 -> 2 -> 3 -> 1)
+function setFocusCount(count) {
+  const valid = [1, 2, 3].includes(Number(count)) ? Number(count) : 1;
+  state.focusCount = valid;
+  try {
+    localStorage.setItem('gendrive_focus_count', String(valid));
+  } catch (e) {}
+
+  document.querySelectorAll('#focus-count-selector .focus-count-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.count, 10) === valid);
+  });
+
+  renderFocusView();
+}
+
+function cycleFocusCount() {
+  const counts = [1, 2, 3];
+  const cur = [1, 2, 3].includes(state.focusCount) ? state.focusCount : 1;
+  const nextIdx = (counts.indexOf(cur) + 1) % counts.length;
+  setFocusCount(counts[nextIdx]);
+}
+
+function navigateFocusTask(delta) {
+  const activeTodayTasks = state.tasks.filter(t => 
+    isTaskForSelectedDate(t) && 
+    t.status !== 'completed' && 
+    t.status !== 'skipped' && 
+    matchesTagFilters(t)
+  );
+  if (activeTodayTasks.length === 0) return;
+
+  const total = activeTodayTasks.length;
+  let newIdx = (state.focusTaskIndex || 0) + delta;
+
+  if (newIdx >= total) {
+    newIdx = 0;
+  } else if (newIdx < 0) {
+    newIdx = Math.max(0, total - 1);
+  }
+
+  state.focusTaskIndex = newIdx;
+  renderFocusView(true);
+}
+
 
 
 // TaskChute Dynamic Estimates & ETAs Real-Time Calculation Engine (Date-Aware: Today, Past, Future)
@@ -1631,6 +1690,7 @@ function calculateTaskChuteEstimates() {
     let dayTaskRemainMin = 0;
     let dayTaskRemainCount = 0;
     selectedDateTasks.forEach(t => {
+      if (t.isRecurringInstance) return;
       const status = getTaskStatusForSelectedDate(t);
       if (status !== "completed" && status !== "skipped") {
         dayTaskRemainMin += getItemRemainingMinutes(t, "task");
@@ -1770,6 +1830,7 @@ function calculateTaskChuteEstimates() {
     let pastTaskMins = 0;
     let completedTaskCount = 0;
     selectedDateTasks.forEach(t => {
+      if (t.isRecurringInstance) return;
       const status = getTaskStatusForSelectedDate(t);
       if (status === "completed") {
         completedTaskCount++;
@@ -1812,6 +1873,7 @@ function calculateTaskChuteEstimates() {
     let secTaskActMins = 0;
     let secDoneTaskCount = 0;
     secTasks.forEach(t => {
+      if (t.isRecurringInstance) return;
       if (getTaskStatusForSelectedDate(t) === "completed") {
         secDoneTaskCount++;
         secTaskActMins += t.actMin || t.estMin || 15;
@@ -1997,7 +2059,7 @@ function setMode(mode) {
       return;
     }
     if (mode === 'focus') {
-      cycleViewType(); // 2: Toggle タスク単独 ⇄ ハビット単独 ⇄ 両方
+      cycleFocusCount(); // 2: Toggle 1個 (シングル) ⇄ 2個 (2択) ⇄ 3個 (TOP 3)
       return;
     }
     if (mode === 'all') {
@@ -2012,6 +2074,8 @@ function setMode(mode) {
         state.masterSubtab = 'tasks';
       } else if (state.masterSubtab === 'tasks' || state.masterSubtab === 'recurring_tasks') {
         state.masterSubtab = 'single_tasks';
+      } else if (state.masterSubtab === 'single_tasks') {
+        state.masterSubtab = 'profiles';
       } else {
         state.masterSubtab = 'habits';
       }
@@ -2034,11 +2098,16 @@ function setMode(mode) {
   }
 
   // Switching to new mode
+  const isEnteringFocus = (state.currentMode !== 'focus' && mode === 'focus');
   if (state.currentMode !== mode && state.currentMode !== 'timer') {
     state.previousMode = state.currentMode;
   }
   state.currentMode = mode;
   document.body.dataset.mode = mode;
+
+  if (isEnteringFocus && typeof pickNextSoulQuote === 'function') {
+    pickNextSoulQuote();
+  }
   state.selectedIndex = 0; // reset selection on view switch
   document.querySelectorAll('.mode-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.mode === mode);
@@ -2331,6 +2400,47 @@ function deferTask(taskId, targetDateKey, targetBucket = 'today', actionLabel = 
   }
 }
 
+function removeSingleTaskFromBucket(taskId) {
+  const task = (state.tasks || []).find(t => String(t.id) === String(taskId));
+  if (!task) return;
+
+  const prevBucket = task.bucket;
+  const prevScheduledDate = task.scheduledDate;
+
+  task.bucket = 'today';
+  if (!task.scheduledDate) {
+    const logDate = (task.executionLogs && task.executionLogs[0] && task.executionLogs[0].dateKey)
+      || (task.history && task.history[0] && task.history[0].date)
+      || getSelectedDateKey();
+    task.scheduledDate = logDate;
+  }
+
+  saveTasks();
+
+  if (typeof pushUndoAction === 'function') {
+    pushUndoAction({
+      description: `タスク「${task.title}」を箱から外しました`,
+      undo: () => {
+        task.bucket = prevBucket;
+        task.scheduledDate = prevScheduledDate;
+        saveTasks();
+        renderApp();
+      }
+    });
+  }
+
+  if (typeof showCarryoverToast === 'function') {
+    showCarryoverToast(`タスク「${task.title}」を箱から外しました（マスターボードに保持）`);
+  } else if (typeof showToast === 'function') {
+    showToast(`タスク「${task.title}」を箱から外しました（マスターボードに保持）`);
+  }
+
+  renderApp();
+  if (typeof updateSidebarCounters === 'function') {
+    updateSidebarCounters();
+  }
+}
+
 function showContextMenu(e, habitId) {
   e.preventDefault();
   hideAllContextMenus();
@@ -2413,6 +2523,13 @@ function showTaskContextMenu(e, taskId) {
   if (nextWeekdayLabel) {
     const [, m, d] = nextWeekdayKey.split('-');
     nextWeekdayLabel.textContent = `次の平日 (${parseInt(m, 10)}/${parseInt(d, 10)}) へ移動`;
+  }
+
+  // Toggle "Remove from Bucket" item visibility based on whether task has a bucket
+  const btnRemoveBucket = document.getElementById('ctx-task-remove-bucket');
+  if (btnRemoveBucket) {
+    const hasBucket = task.bucket && task.bucket !== 'today';
+    btnRemoveBucket.style.display = hasBucket ? 'flex' : 'none';
   }
 
   // Positioning with viewport boundary clamp
@@ -2616,6 +2733,17 @@ function setupContextMenuHandlers() {
       hideAllContextMenus();
       if (!tid) return;
       deferTask(tid, null, 'inbox', 'Inbox (日付なし)');
+    });
+  }
+
+  // 5.5. Remove from Bucket (Restore to Standard Task / today)
+  const btnTaskRemoveBucket = document.getElementById('ctx-task-remove-bucket');
+  if (btnTaskRemoveBucket) {
+    btnTaskRemoveBucket.addEventListener('click', () => {
+      const tid = state.contextMenuTaskId;
+      hideAllContextMenus();
+      if (!tid) return;
+      removeSingleTaskFromBucket(tid);
     });
   }
 
@@ -3000,16 +3128,35 @@ function setupTaskFormHandlers() {
     });
   });
 
+  // Zero-Collision Unique Task ID Generator with High-Water Mark Protection
+  function generateNextTaskId() {
+    const existingIds = new Set((state.tasks || []).map(t => String(t.id)));
+    let maxIdNum = 0;
+    existingIds.forEach(id => {
+      const match = id.match(/^T(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxIdNum) maxIdNum = num;
+      }
+    });
+
+    const savedHWM = parseInt(localStorage.getItem('gendrive_task_max_id_v1') || '0', 10);
+    let nextNum = Math.max(maxIdNum, isNaN(savedHWM) ? 0 : savedHWM) + 1;
+
+    while (existingIds.has('T' + String(nextNum).padStart(3, '0'))) {
+      nextNum++;
+    }
+
+    localStorage.setItem('gendrive_task_max_id_v1', String(nextNum));
+    return 'T' + String(nextNum).padStart(3, '0');
+  }
+
   // Submit Add Task
   const formAdd = document.getElementById('form-add-task');
   if (formAdd) {
     formAdd.addEventListener('submit', (e) => {
       e.preventDefault();
-      const maxIdNum = state.tasks.reduce((max, t) => {
-        const num = parseInt(t.id.replace('T', ''), 10);
-        return isNaN(num) ? max : Math.max(max, num);
-      }, 0);
-      const newId = 'T' + String(maxIdNum + 1).padStart(3, '0');
+      const newId = generateNextTaskId();
       const title = document.getElementById('add-task-title').value.trim();
       const estMin = parseInt(document.getElementById('add-task-est-min').value, 10) || 15;
       const section = document.getElementById('add-task-section')?.value || state.currentSection || '第2セッション';
@@ -3266,17 +3413,17 @@ function setupTaskFormHandlers() {
 
   // Focus Navigation for Tasks
   const btnFocusTaskPrev = document.getElementById('btn-focus-task-prev');
-  if (btnFocusTaskPrev) {
+  if (btnFocusTaskPrev && !btnFocusTaskPrev.dataset.bound) {
+    btnFocusTaskPrev.dataset.bound = 'true';
     btnFocusTaskPrev.addEventListener('click', () => {
-      if (state.focusTaskIndex > 0) state.focusTaskIndex--;
-      renderFocusView();
+      navigateFocusTask(-1);
     });
   }
   const btnFocusTaskNext = document.getElementById('btn-focus-task-next');
-  if (btnFocusTaskNext) {
+  if (btnFocusTaskNext && !btnFocusTaskNext.dataset.bound) {
+    btnFocusTaskNext.dataset.bound = 'true';
     btnFocusTaskNext.addEventListener('click', () => {
-      state.focusTaskIndex++;
-      renderFocusView();
+      navigateFocusTask(1);
     });
   }
 }
@@ -3693,7 +3840,13 @@ safeInit('setupKeyboardShortcuts', setupKeyboardShortcuts);
 
 try {
   setInterval(updateHeaderAndStatus, 60000);
-  setInterval(updateLiveFocusProgress, 1000);
+  setInterval(() => {
+    if (typeof updateLiveTimers === 'function') {
+      updateLiveTimers();
+    } else if (typeof updateLiveFocusProgress === 'function') {
+      updateLiveFocusProgress();
+    }
+  }, 1000);
 } catch (e) {
   console.error('Error setting intervals:', e);
 }

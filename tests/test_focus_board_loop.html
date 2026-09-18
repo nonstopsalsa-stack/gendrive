@@ -1,0 +1,362 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Adaptive Focus Board (8:2 Hybrid Task Sampling &amp; 1-2-3 Loop) Test Suite</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <h1>Test Suite: Adaptive Focus Board &amp; 8:2 Hybrid Task Sampling Engine</h1>
+  <div id="results"></div>
+
+  <!-- Minimal DOM fixtures for Focus Board -->
+  <div id="view-focus" style="display: none;">
+    <div class="focus-board-layout">
+      <div class="focus-top-bar">
+        <div class="focus-title-group">
+          <h2><span>識</span> Focus Board</h2>
+          <span class="focus-badge">ADAPTIVE FOCUS</span>
+        </div>
+        <div class="focus-count-selector" id="focus-count-selector">
+          <button class="focus-count-btn active" data-count="1" id="btn-focus-count-1">1</button>
+          <button class="focus-count-btn" data-count="2" id="btn-focus-count-2">2</button>
+          <button class="focus-count-btn" data-count="3" id="btn-focus-count-3">3</button>
+        </div>
+        <div class="focus-nav-group">
+          <button class="focus-nav-btn" id="btn-focus-task-prev" title="Prev">笳</button>
+          <span class="focus-indicator" id="focus-task-counter">1 / 1</span>
+          <button class="focus-nav-btn" id="btn-focus-task-next" title="Next">笆ｶ</button>
+        </div>
+      </div>
+
+      <!-- Mindset Banner -->
+      <div class="focus-mindset-banner" id="focus-mindset-banner"></div>
+
+      <div class="focus-cards-container count-1" id="focus-cards-container">
+        <!-- Dynamically rendered -->
+      </div>
+
+      <!-- Soul Quote Banner -->
+      <div class="focus-soul-quote-container" id="focus-soul-quote-container">
+        <p class="soul-quote-text" id="focus-soul-quote-text"></p>
+      </div>
+
+      <div class="focus-footer-controls">
+        <div class="focus-page-indicator" id="focus-page-indicator">1 / 1</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load dependencies in sequence -->
+  <script src="../js/config.js"></script>
+  <script src="../js/views/focusView.js"></script>
+
+  <script>
+    window.__TEST_SUMMARY__ = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      results: [],
+      allPassed: false
+    };
+
+    function assert(desc, condition) {
+      window.__TEST_SUMMARY__.total++;
+      if (condition) {
+        window.__TEST_SUMMARY__.passed++;
+        window.__TEST_SUMMARY__.results.push({ pass: true, message: desc });
+      } else {
+        window.__TEST_SUMMARY__.failed++;
+        window.__TEST_SUMMARY__.results.push({ pass: false, message: desc });
+      }
+    }
+
+    // Mock state and global dependencies for test environment
+    const mockTodayKey = '2026-09-10';
+    function getTodayKey() { return mockTodayKey; }
+    function isTaskForSelectedDate(t) {
+      if (!t || t.isDisabled) return false;
+      return true;
+    }
+    function matchesTagFilters(t) { return true; }
+    function getEstimatedDuration(item, type) {
+      return { targetMin: item.estMin || 30, label: '\u8a2d\u5b9a\u5024' };
+    }
+    function getEisenhowerBadge(val) {
+      return { text: '\u7dca\u6025\u00d7\u91cd\u8981', cls: 'badge-matrix-q1' };
+    }
+
+    // Global mock state
+    window.state = {
+      currentMode: 'focus',
+      selectedDateOffset: 0,
+      currentSection: 'Morning',
+      focusCount: 1,
+      focusTaskIndex: 0,
+      tasks: [],
+      habits: []
+    };
+
+    // Controller functions mimicking app.js
+    window.setFocusCount = function(count) {
+      const c = parseInt(count, 10);
+      if (![1, 2, 3].includes(c)) return;
+      state.focusCount = c;
+      try {
+        localStorage.setItem('gendrive_focus_count', String(c));
+      } catch (e) {}
+      renderFocusView();
+    };
+
+    window.cycleFocusCount = function() {
+      const cur = state.focusCount || 1;
+      const next = cur === 1 ? 2 : (cur === 2 ? 3 : 1);
+      setFocusCount(next);
+    };
+
+    window.navigateFocusTask = function(delta) {
+      const activeTodayTasks = state.tasks.filter(t => 
+        isTaskForSelectedDate(t) && 
+        t.status !== 'completed' && 
+        t.status !== 'skipped' && 
+        matchesTagFilters(t)
+      );
+      if (activeTodayTasks.length === 0) {
+        state.focusTaskIndex = 0;
+      } else {
+        const len = activeTodayTasks.length;
+        state.focusTaskIndex = (state.focusTaskIndex + delta + len) % len;
+      }
+      renderFocusView(true);
+    };
+
+    // Begin Tests
+    try {
+      // -------------------------------------------------------------
+      // Test 1: Initial focusCount and cycleFocusCount
+      // -------------------------------------------------------------
+      assert('Initial focusCount is 1', state.focusCount === 1);
+
+      cycleFocusCount();
+      assert('cycleFocusCount transitions 1 -> 2', state.focusCount === 2);
+
+      cycleFocusCount();
+      assert('cycleFocusCount transitions 2 -> 3', state.focusCount === 3);
+
+      cycleFocusCount();
+      assert('cycleFocusCount transitions 3 -> 1', state.focusCount === 1);
+
+      setFocusCount(2);
+      assert('setFocusCount(2) sets focusCount to 2', state.focusCount === 2);
+      assert('localStorage contains 2', localStorage.getItem('gendrive_focus_count') === '2');
+
+      setFocusCount(99); // invalid
+      assert('setFocusCount rejects invalid number', state.focusCount === 2);
+
+      // -------------------------------------------------------------
+      // Test 2: 8:2 Priority Weight Scoring Hierarchy Engine
+      // -------------------------------------------------------------
+      state.currentSection = 'Morning';
+      const tAllIn = { id: 't-allin', title: 'ALL-IN task', label: 'iron_rule', section: 'Afternoon' };
+      const tFrog = { id: 't-frog', title: 'Frog task', label: 'frog0', section: 'Afternoon' };
+      const tUrgent = { id: 't-urgent', title: 'Urgent task', urgency: 'high', section: 'Afternoon' };
+      const tImportant = { id: 't-important', title: 'Important task', importance: 'high', section: 'Afternoon' };
+      const tSection = { id: 't-sec', title: 'Current section task', section: 'Morning' };
+      const tNormal = { id: 't-normal', title: 'Normal task', section: 'Afternoon' };
+
+      const sAllIn = computeTaskPriorityScore(tAllIn);
+      const sFrog = computeTaskPriorityScore(tFrog);
+      const sUrgent = computeTaskPriorityScore(tUrgent);
+      const sImportant = computeTaskPriorityScore(tImportant);
+      const sSection = computeTaskPriorityScore(tSection);
+      const sNormal = computeTaskPriorityScore(tNormal);
+
+      assert('Score Hierarchy: ALL-IN > Frog', sAllIn > sFrog);
+      assert('Score Hierarchy: Frog > Urgent', sFrog > sUrgent);
+      assert('Score Hierarchy: Urgent > Important', sUrgent > sImportant);
+      assert('Score Hierarchy: Important > Section', sImportant > sSection);
+      assert('Score Hierarchy: Section > Normal', sSection > sNormal);
+      assert('Base score guaranteed for normal task', sNormal === 10);
+      assert('ALL-IN gets +1000pt bonus', sAllIn === 1010);
+      assert('Frog gets +500pt bonus', sFrog === 510);
+      assert('Urgent gets +250pt bonus', sUrgent === 260);
+      assert('Important gets +120pt bonus', sImportant === 130);
+      assert('Current section gets +60pt bonus', sSection === 70);
+
+      // -------------------------------------------------------------
+      // Test 3: 8:2 Hybrid Sampling Algorithm
+      // -------------------------------------------------------------
+      const pool = [tAllIn, tFrog, tUrgent, tImportant, tSection, tNormal];
+      const sampled1 = sampleFocusTasks(pool, 1);
+      assert('sampleFocusTasks(pool, 1) returns exactly 1 task', sampled1.length === 1);
+
+      const sampled2 = sampleFocusTasks(pool, 2);
+      assert('sampleFocusTasks(pool, 2) returns exactly 2 tasks', sampled2.length === 2);
+      assert('sampleFocusTasks(pool, 2) has no duplicate tasks', sampled2[0].id !== sampled2[1].id);
+
+      const sampled3 = sampleFocusTasks(pool, 3);
+      assert('sampleFocusTasks(pool, 3) returns exactly 3 tasks', sampled3.length === 3);
+      const ids3 = new Set(sampled3.map(t => t.id));
+      assert('sampleFocusTasks(pool, 3) has all unique IDs', ids3.size === 3);
+
+      // Sampling distribution verification across multiple runs
+      let allInCount = 0;
+      const RUNS = 200;
+      for (let i = 0; i < RUNS; i++) {
+        const s = sampleFocusTasks(pool, 1);
+        if (s[0].id === 't-allin') allInCount++;
+      }
+      assert('ALL-IN task has high sampling dominance in 200 runs (> 30%)', allInCount > (RUNS * 0.3));
+
+      // -------------------------------------------------------------
+      // Test 4: Empty state rendering
+      // -------------------------------------------------------------
+      state.tasks = [];
+      state.focusCount = 1;
+      renderFocusView(true);
+      const container = document.getElementById('focus-cards-container');
+      const counter = document.getElementById('focus-task-counter');
+      const mindsetBanner = document.getElementById('focus-mindset-banner');
+      assert('Empty state displays notask message', container.innerHTML.indexOf('\u672a\u5b8c\u4e86\u30bf\u30b9\u30af\u306f\u3042\u308a\u307e\u305b\u3093') !== -1);
+      assert('Empty state counter shows "0 / 0"', counter.textContent.trim() === '0 / 0');
+      assert('Empty state clears mindset banner', mindsetBanner.textContent.trim() === '');
+
+      // -------------------------------------------------------------
+      // Test 5: 1-card mode (Single Focus) rendering & Mindset
+      // -------------------------------------------------------------
+      state.tasks = [tAllIn, tFrog, tUrgent, tNormal];
+      setFocusCount(1);
+      renderFocusView(true);
+
+      const cardsCount1 = container.querySelectorAll('.focus-card');
+      assert('Count 1 mode renders exactly 1 card', cardsCount1.length === 1);
+      assert('Count 1 container has count-1 class', container.classList.contains('count-1'));
+      assert('Count 1 renders Single badge', container.querySelector('.focus-rank-badge.single') !== null);
+      assert('Count 1 counter displays "1 / 4"', counter.textContent.trim() === '1 / 4');
+      assert('Button 1 has active class', document.getElementById('btn-focus-count-1').classList.contains('active'));
+      assert('Count 1 mindset banner includes super focus text', 
+        mindsetBanner.textContent.indexOf('\u30b9\u30fc\u30d1\u30fc\u30d5\u30a9\u30fc\u30ab\u30b9\u30e2\u30fc\u30c9') !== -1
+      );
+
+      // -------------------------------------------------------------
+      // Test 6: 2-card mode (Binary Choice A / B) rendering & Mindset
+      // -------------------------------------------------------------
+      setFocusCount(2);
+      const cardsCount2 = container.querySelectorAll('.focus-card');
+      assert('Count 2 mode renders exactly 2 cards', cardsCount2.length === 2);
+      assert('Count 2 container has count-2 class', container.classList.contains('count-2'));
+      assert('Count 2 renders Choice A badge', container.querySelector('.focus-rank-badge.choice-a') !== null);
+      assert('Count 2 renders Choice B badge', container.querySelector('.focus-rank-badge.choice-b') !== null);
+      assert('Count 2 counter displays "2 / 4"', counter.textContent.trim() === '2 / 4');
+      assert('Button 2 has active class', document.getElementById('btn-focus-count-2').classList.contains('active'));
+      assert('Count 2 mindset banner includes docchi text', 
+        mindsetBanner.textContent.indexOf('\u3069\u3063\u3061\u304b\u3089\u3084\u308b') !== -1
+      );
+
+      // -------------------------------------------------------------
+      // Test 7: 3-card mode (TOP 1, 2, 3) rendering & Mindset
+      // -------------------------------------------------------------
+      setFocusCount(3);
+      const cardsCount3 = container.querySelectorAll('.focus-card');
+      assert('Count 3 mode renders exactly 3 cards', cardsCount3.length === 3);
+      assert('Count 3 container has count-3 class', container.classList.contains('count-3'));
+      assert('Count 3 renders TOP 1 badge', container.querySelector('.focus-rank-badge.rank-1') !== null);
+      assert('Count 3 renders TOP 2 badge', container.querySelector('.focus-rank-badge.rank-2') !== null);
+      assert('Count 3 renders TOP 3 badge', container.querySelector('.focus-rank-badge.rank-3') !== null);
+      assert('Count 3 counter displays "3 / 4"', counter.textContent.trim() === '3 / 4');
+      assert('Button 3 has active class', document.getElementById('btn-focus-count-3').classList.contains('active'));
+      assert('Count 3 mindset banner includes dore text', 
+        mindsetBanner.textContent.indexOf('\u3069\u308c\u304b\u3089\u3084\u308b') !== -1
+      );
+
+      // -------------------------------------------------------------
+      // Test 8: Navigation (J / K) Reroll Engine
+      // -------------------------------------------------------------
+      navigateFocusTask(1); // Triggers renderFocusView(true)
+      const afterRerollCards = container.querySelectorAll('.focus-card');
+      assert('navigateFocusTask renders valid card count (3)', afterRerollCards.length === 3);
+
+      // -------------------------------------------------------------
+      // Test 9: Anti-flicker Stability on Live Timer Update
+      // -------------------------------------------------------------
+      const currentCardsHtmlBefore = container.innerHTML;
+      renderFocusView(false); // Simulate timer tick without forceResample
+      const currentCardsHtmlAfter = container.innerHTML;
+      assert('Timer update without forceResample preserves cards stability', currentCardsHtmlBefore === currentCardsHtmlAfter);
+
+      // -------------------------------------------------------------
+      // Test 10: Auto-slide replenishment when a task is completed
+      // -------------------------------------------------------------
+      const displayedTask = currentSampledTasks[0];
+      displayedTask.status = 'completed';
+      renderFocusView(false); // Should detect invalid (completed) task and resample
+      const remainingTasks = state.tasks.filter(t => t.status !== 'completed');
+      assert('Remaining active tasks is 3', remainingTasks.length === 3);
+      const cardsAfterComplete = container.querySelectorAll('.focus-card');
+      assert('Completed task is no longer displayed in cards', !Array.from(cardsAfterComplete).some(c => c.textContent.includes(displayedTask.title)));
+
+      // -------------------------------------------------------------
+      // Test 11: Live timer and elements in Focus Card
+      // -------------------------------------------------------------
+      const runningTask = remainingTasks[0];
+      runningTask.status = 'in_progress';
+      runningTask.startTimestamp = Date.now() - 120000; // 2 minutes ago
+      currentSampledTasks = [runningTask];
+      renderFocusView(false);
+
+      const timerEl = document.getElementById(`focus-task-live-timer-${runningTask.id}`);
+      assert('Live timer element exists for running task', timerEl !== null);
+
+      updateLiveTimers();
+      assert('Live timer reflects elapsed time', timerEl.textContent.includes('02:'));
+
+      // -------------------------------------------------------------
+      // Test 12: Soul Quotes Master & Pick Engine
+      // -------------------------------------------------------------
+      assert('SOUL_QUOTES master array has 627 motivational quotes', Array.isArray(SOUL_QUOTES) && SOUL_QUOTES.length === 627);
+
+      const quote1 = pickNextSoulQuote();
+      assert('pickNextSoulQuote returns non-empty string', typeof quote1 === 'string' && quote1.length > 0);
+      assert('pickNextSoulQuote sets currentSoulQuote', currentSoulQuote === quote1);
+
+      renderFocusView(false);
+      const quoteEl = document.getElementById('focus-soul-quote-text');
+      assert('Soul quote element renders current quote', quoteEl && quoteEl.textContent === quote1);
+
+      // Verify J / K reroll does NOT change the quote
+      navigateFocusTask(1); // Force resample of tasks
+      assert('J/K task reroll preserves currentSoulQuote unchanged', currentSoulQuote === quote1);
+      assert('Soul quote element still matches quote1 after reroll', quoteEl.textContent === quote1);
+
+      // Verify pickNextSoulQuote advances to next quote
+      const quote2 = pickNextSoulQuote();
+      assert('pickNextSoulQuote rotates quote', quote2 !== quote1);
+      renderFocusView(false);
+      assert('Soul quote element updates to quote2 after rotation', quoteEl.textContent === quote2);
+
+      // Verify Typography Alignment & Fit-Content Styling (Natural Left-Aligned Hybrid Layout)
+      document.getElementById('view-focus').style.display = 'block';
+      const quoteComputed = window.getComputedStyle(quoteEl);
+      assert('Soul quote typography text-align is left', quoteComputed.textAlign === 'left');
+      assert('Soul quote container centers the quote banner', window.getComputedStyle(document.getElementById('focus-soul-quote-container')).justifyContent === 'center');
+
+      // -------------------------------------------------------------
+      // All passed check
+      // -------------------------------------------------------------
+      window.__TEST_SUMMARY__.allPassed = (window.__TEST_SUMMARY__.failed === 0);
+
+    } catch (err) {
+      assert(`Unhandled test exception: ${err.message}`, false);
+    }
+
+    // Output results to DOM
+    const resDiv = document.getElementById('results');
+    resDiv.innerHTML = `
+      <h2>Results: ${window.__TEST_SUMMARY__.passed} / ${window.__TEST_SUMMARY__.total} passed</h2>
+      <ul>
+        ${window.__TEST_SUMMARY__.results.map(r => `<li style="color: ${r.pass ? 'green' : 'red'}">${r.pass ? 'PASS' : 'FAIL'}: ${r.message}</li>`).join('')}
+      </ul>
+    `;
+  </script>
+</body>
+</html>

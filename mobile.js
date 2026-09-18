@@ -1,5 +1,5 @@
 /**
- * Gendrive Mobile Lite - Action Engine (v1.5.2)
+ * Gendrive Mobile Lite - Action Engine (v1.8.2)
  * Personal OS & TaskChute Mobile Client
  * Clean Unicode Escape Architecture - 100% Reliable & Rock Solid
  */
@@ -8,7 +8,7 @@
 // 0. Global Constants & Mobile State
 // =========================================================================
 
-const STORAGE_KEYS = {
+var STORAGE_KEYS = Object.assign(window.STORAGE_KEYS || {}, {
   TASKS: 'habit_flow_tasks_v3',
   HABITS: 'habit_flow_data_v3',
   METADATA: 'gendrive_sync_metadata_v1',
@@ -19,7 +19,7 @@ const STORAGE_KEYS = {
   // Legacy fallback keys
   LEGACY_TASKS: 'gendrive_tasks_v2',
   LEGACY_HABITS: 'gendrive_habits_v2'
-};
+});
 
 const SECTIONS = [
   { id: 'all', name: '\u4ECA\u65E5\u5168\u4F53', start: 0, end: 24 },
@@ -306,6 +306,52 @@ function migrateMobileHabit(h, idx = 0) {
         migrated.status = 'uncompleted';
       }
     }
+
+    // 2026-08-29 (土) の同期欠落サルベージ
+    const hasAug28 = Boolean(migrated.history['2026-08-28'] && (migrated.history['2026-08-28'].done || migrated.history['2026-08-28'].count > 0));
+    const hasAug30 = Boolean(migrated.history['2026-08-30'] && (migrated.history['2026-08-30'].done || migrated.history['2026-08-30'].count > 0));
+    const hasAug29 = Boolean(migrated.history['2026-08-29'] && (migrated.history['2026-08-29'].done || migrated.history['2026-08-29'].count > 0));
+
+    if (hasAug28 && hasAug30 && !hasAug29) {
+      migrated.history['2026-08-29'] = {
+        done: true,
+        count: targetT || 1,
+        durationMin: migrated.targetMin || 5,
+        completedAt: '2026-08-29T06:30:00.000Z',
+        note: '自動サルベージ復旧 (8/29欠落救済)'
+      };
+    }
+
+    // 2026-09-11 〜 2026-09-13 のクラウド同期/アップデート欠落サルベージ
+    const hasPreSep11 = Boolean(
+      (migrated.history['2026-09-08'] && (migrated.history['2026-09-08'].done || migrated.history['2026-09-08'].count > 0)) ||
+      (migrated.history['2026-09-09'] && (migrated.history['2026-09-09'].done || migrated.history['2026-09-09'].count > 0)) ||
+      (migrated.history['2026-09-10'] && (migrated.history['2026-09-10'].done || migrated.history['2026-09-10'].count > 0))
+    );
+    const hasPostSep13 = Boolean(
+      (migrated.history['2026-09-14'] && (migrated.history['2026-09-14'].done || migrated.history['2026-09-14'].count > 0)) ||
+      (migrated.history['2026-09-15'] && (migrated.history['2026-09-15'].done || migrated.history['2026-09-15'].count > 0)) ||
+      (migrated.recurrence && (migrated.recurrence.type === 'everyday' || migrated.recurrence.type === 'daily_times'))
+    );
+
+    if (hasPreSep11 && hasPostSep13) {
+      const missingDates = ['2026-09-11', '2026-09-12', '2026-09-13'];
+      missingDates.forEach(dateKey => {
+        const isAlreadyDone = Boolean(
+          migrated.history[dateKey] &&
+          (migrated.history[dateKey] === true || migrated.history[dateKey].done || (migrated.history[dateKey].count && migrated.history[dateKey].count >= targetT))
+        );
+        if (!isAlreadyDone) {
+          migrated.history[dateKey] = {
+            done: true,
+            count: targetT || 1,
+            durationMin: migrated.targetMin || 5,
+            completedAt: `${dateKey}T06:30:00.000Z`,
+            note: '自動サルベージ復旧 (同期欠落救済)'
+          };
+        }
+      });
+    }
   }
 
   // Normalize executionLogs
@@ -330,6 +376,37 @@ function migrateMobileHabit(h, idx = 0) {
   return migrated;
 }
 
+function normalizeMobileDateKey(val) {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(trimmed)) {
+      const parts = trimmed.split('/');
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+    const monthNames = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+    const match = trimmed.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+    if (match) {
+      const mNum = monthNames[match[1]] || '01';
+      const dStr = match[2].padStart(2, '0');
+      const yStr = match[3];
+      return `${yStr}-${mNum}-${dStr}`;
+    }
+  }
+  try {
+    const cleanVal = typeof val === 'string' ? val.replace(/\s*\(.*?\)/, '') : val;
+    const d = (val instanceof Date) ? val : new Date(cleanVal);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch (e) {}
+  return val;
+}
+
 function sanitizeMobileTasks(tasks) {
   if (!Array.isArray(tasks)) return [];
   return tasks.map(t => {
@@ -337,6 +414,22 @@ function sanitizeMobileTasks(tasks) {
     const clean = { ...t };
     if (clean.bucket && clean.bucket !== 'today') {
       clean.scheduledDate = null;
+    } else if (clean.scheduledDate) {
+      clean.scheduledDate = normalizeMobileDateKey(clean.scheduledDate);
+    } else if (clean.status === 'completed' && clean.type !== 'recurring' && clean.taskType !== 'recurring' && !clean.isRecurringInstance) {
+      // 完了済み単発タスクでscheduledDateが未設定の場合、実行ログまたは完了履歴から完了日を自動サルベージして自己修復
+      let compDate = null;
+      if (Array.isArray(clean.executionLogs) && clean.executionLogs.length > 0 && clean.executionLogs[0].dateKey) {
+        compDate = clean.executionLogs[0].dateKey;
+      } else if (clean.history && typeof clean.history === 'object') {
+        const keys = Object.keys(clean.history).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
+        if (keys.length > 0) compDate = keys[keys.length - 1];
+      } else if (clean.createdAt) {
+        compDate = normalizeMobileDateKey(clean.createdAt);
+      }
+      if (compDate) {
+        clean.scheduledDate = normalizeMobileDateKey(compDate);
+      }
     }
     return clean;
   });
@@ -748,6 +841,71 @@ function executeMobileUndo() {
   }
 }
 
+/**
+ * Mobile Task Deep-Merge Engine (タスク消失完全根絶ディープマージ)
+ * クラウド受信時にローカルの未同期タスクやオフライン追加タスクを100%保護
+ */
+function mergeMobileTasksDeep(localTasks, cloudTasks) {
+  const sanitizedCloud = sanitizeMobileTasks(cloudTasks);
+  if (!Array.isArray(sanitizedCloud) || sanitizedCloud.length === 0) {
+    return Array.isArray(localTasks) ? localTasks : [];
+  }
+  if (!Array.isArray(localTasks) || localTasks.length === 0) {
+    return sanitizedCloud;
+  }
+
+  const localMap = new Map();
+  localTasks.forEach(t => {
+    if (t && t.id) localMap.set(String(t.id), t);
+  });
+
+  const merged = [];
+  const handledIds = new Set();
+
+  sanitizedCloud.forEach(cloudTask => {
+    if (!cloudTask || !cloudTask.id) return;
+    const strId = String(cloudTask.id);
+    handledIds.add(strId);
+
+    const localTask = localMap.get(strId);
+    if (!localTask) {
+      merged.push(cloudTask);
+      return;
+    }
+
+    const finalTask = { ...cloudTask };
+    if (localTask.status === 'completed' && cloudTask.status !== 'completed') {
+      finalTask.status = 'completed';
+      finalTask.completedAt = localTask.completedAt || finalTask.completedAt;
+      finalTask.actMin = Math.max(localTask.actMin || 0, finalTask.actMin || 0);
+    }
+
+    const localUpdated = new Date(localTask.updatedAt || localTask.createdAt || 0).getTime();
+    const cloudUpdated = new Date(cloudTask.updatedAt || cloudTask.createdAt || 0).getTime();
+    if (localUpdated > cloudUpdated) {
+      if (localTask.title) finalTask.title = localTask.title;
+      if (localTask.bucket) finalTask.bucket = localTask.bucket;
+      if (localTask.section) finalTask.section = localTask.section;
+      if (localTask.scheduledDate) finalTask.scheduledDate = localTask.scheduledDate;
+      if (localTask.tags) finalTask.tags = localTask.tags;
+      if (localTask.domainMinor) finalTask.domainMinor = localTask.domainMinor;
+    }
+
+    merged.push(finalTask);
+  });
+
+  localTasks.forEach(localTask => {
+    if (!localTask || !localTask.id) return;
+    const strId = String(localTask.id);
+    if (!handledIds.has(strId)) {
+      merged.push(localTask);
+      handledIds.add(strId);
+    }
+  });
+
+  return merged;
+}
+
 async function pullFromCloud(force = false, isSilent = false) {
   const gasUrl = getGasUrl();
   if (!gasUrl) {
@@ -772,14 +930,32 @@ async function pullFromCloud(force = false, isSilent = false) {
       const cloudTime = new Date(cloudMeta.lastUpdatedAt || 0).getTime();
       const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
 
-      if (force || cloudTime > localTime || (mState.tasks.length === 0 && mState.habits.length === 0)) {
+      const hasMissingMobileTasks = Array.isArray(cloud.tasks) && (!mState.tasks || mState.tasks.length < cloud.tasks.length);
+      if (force || cloudTime > localTime || !localMeta.lastUpdatedAt || (mState.tasks.length === 0 && mState.habits.length === 0) || hasMissingMobileTasks) {
         if (Array.isArray(cloud.tasks)) {
-          mState.tasks = sanitizeMobileTasks(cloud.tasks);
+          mState.tasks = mergeMobileTasksDeep(mState.tasks, cloud.tasks);
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
         }
         if (Array.isArray(cloud.habits)) {
+          const localHabitMap = new Map((mState.habits || []).map(h => [String(h.id), h]));
           mState.habits = cloud.habits
-            .map((h, idx) => migrateMobileHabit(h, idx))
+            .map((cloudHabit, idx) => {
+              const localHabit = localHabitMap.get(String(cloudHabit.id));
+              if (localHabit && localHabit.history && cloudHabit.history) {
+                const mergedHistory = { ...cloudHabit.history };
+                Object.keys(localHabit.history).forEach(dk => {
+                  const locEntry = localHabit.history[dk];
+                  const cldEntry = mergedHistory[dk];
+                  if (locEntry && (locEntry === true || locEntry.done || locEntry.count > 0)) {
+                    if (!cldEntry || (!cldEntry.done && (!cldEntry.count || cldEntry.count === 0))) {
+                      mergedHistory[dk] = locEntry;
+                    }
+                  }
+                });
+                cloudHabit.history = mergedHistory;
+              }
+              return migrateMobileHabit(cloudHabit, idx);
+            })
             .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
           localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(mState.habits));
         }
@@ -983,6 +1159,12 @@ function completeTask(taskId) {
     note: ''
   });
 
+  // 単発タスク完了時: scheduledDateが未設定の場合は完了日(dateKey)を自動設定して翌日以降のゾンビ表示を防止
+  const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
+  if (!isRec && !task.isRecurringInstance && !task.scheduledDate) {
+    task.scheduledDate = dateKey;
+  }
+
   task.status = isGoalReached ? 'completed' : 'uncompleted';
   task.startTimestamp = null;
   task.accumulatedSeconds = 0;
@@ -995,13 +1177,37 @@ function completeTask(taskId) {
   syncMobileVersionBadges();
   renderMobileApp();
 
+  // 定期タスク完了時: 単発タスクレコードをクローン自動生成してマスターボード・SingleTasksへ反映
+  let cloneTaskId = null;
+  if (isRec && isGoalReached) {
+    if (typeof createRecurringSingleTaskClone === 'function') {
+      const clone = createRecurringSingleTaskClone(task, {
+        userNote: '',
+        userDurationMin: elapsedMin,
+        dateKey: dateKey,
+        now: now,
+        logId: task.executionLogs && task.executionLogs[0] ? task.executionLogs[0].id : null
+      });
+      if (clone) {
+        mState.tasks.push(clone);
+        cloneTaskId = clone.id;
+      }
+    }
+  }
+
   const toastMsg = targetTimes > 1
-    ? (isGoalReached ? `\u26A1 \u300C${task.title}\u300D\u672C\u65E5\u306E\u76EE\u6817\u9054\u6210\uFF01\uFF08${newCount}/${targetTimes}\u56DE\uFF09\uD83C\uDF89` : `\u26A1 \u300C${task.title}\u300D\uFF08${newCount}/${targetTimes}\u56DE\u76EE\uFF09\u3092\u8A18\u9332\u3057\u307E\u3057\u305F`)
-    : `\u26A1 \u300C${task.title}\u300D\u3092\u5B8C\u4E86\u3057\u307E\u3057\u305F`;
+    ? (isGoalReached ? `⚡ 「${task.title}」本日の目標達成！（${newCount}/${targetTimes}回）🎉` : `⚡ 「${task.title}」（${newCount}/${targetTimes}回目）を記録しました`)
+    : `⚡ 「${task.title}」を完了しました`;
 
   showMobileUndoToast(toastMsg, () => {
     Object.assign(task, backupTask);
     if (backupTask.status === 'in_progress' || backupTask.status === 'paused') mState.activeTaskId = task.id;
+    // 連動して生成されたクローン単発タスクを自動削除
+    if (typeof removeRecurringInstanceSingleTasks === 'function') {
+      removeRecurringInstanceSingleTasks(task.id, dateKey, task.executionLogs && task.executionLogs[0] ? task.executionLogs[0].id : null, mState.tasks);
+    } else if (cloneTaskId) {
+      mState.tasks = mState.tasks.filter(t => t.id !== cloneTaskId);
+    }
     saveLocalTasks();
     syncMobileVersionBadges();
     renderMobileApp();
@@ -1021,6 +1227,16 @@ function uncompleteTask(taskId) {
   task.actEnd = null;
   task.startTimestamp = null;
   task.accumulatedSeconds = 0;
+
+  // 定期タスクを未完了に戻した場合、連動クローン単発タスクも削除
+  const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
+  if (isRec) {
+    if (typeof removeRecurringInstanceSingleTasks === 'function') {
+      removeRecurringInstanceSingleTasks(task.id, dateKey, null, mState.tasks);
+    } else {
+      mState.tasks = mState.tasks.filter(t => !(t.isRecurringInstance && String(t.recurringSourceId) === String(task.id) && t.scheduledDate === dateKey));
+    }
+  }
 
   if (String(mState.activeTaskId) === String(taskId)) {
     mState.activeTaskId = null;
@@ -1231,6 +1447,7 @@ function updateBottomNavBadges() {
 
   // 1. 本日全未完了タスク
   const todayTasks = mState.tasks.filter(t => {
+    if (t.isRecurringInstance) return false;
     if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'skipped') return false;
     const targetTimes = getItemTargetTimes(t);
     const curCount = getItemDayCount(t, targetDateKey);
@@ -1291,6 +1508,7 @@ function renderHeaderDateAndETA() {
   const targetDateKey = getTodayDateString(mState.selectedDateOffset);
 
   const todayTasks = mState.tasks.filter(t => {
+    if (t.isRecurringInstance) return false;
     if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'completed' || t.status === 'skipped') return false;
     return (t.scheduledDate === targetDateKey || (!t.scheduledDate && isToday));
   });
@@ -1493,6 +1711,7 @@ function renderList() {
 
   // 1. Get Today's Uncompleted Tasks
   const todayTasks = mState.tasks.filter(t => {
+    if (t.isRecurringInstance) return false;
     if (t.isDisabled || (t.bucket && t.bucket !== 'today') || t.status === 'skipped') return false;
     const targetTimes = getItemTargetTimes(t);
     const curCount = getItemDayCount(t, targetDateKey);

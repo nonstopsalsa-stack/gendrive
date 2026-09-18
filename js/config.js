@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.5.9';
-const APP_VERSION_NAME = 'Mobile Real-Time Sync & Navigation Engine Fix';
+const APP_VERSION = 'v1.8.2';
+const APP_VERSION_NAME = 'Completed Single Task Lifecycle & Daily Quarantine Engine';
 
 const SECTIONS_CONFIG = [
   { id: 'sec_1', name: '第1セッション', start: 3, end: 6, label: '🌅 第1セッション (03:00 - 06:00)', desc: '起床・静寂の自己投資・思考整理', startStr: '03:00', endStr: '06:00' },
@@ -345,28 +345,7 @@ function normalizeTags(raw) {
   return [];
 }
 
-// 2-Step Cascade Select Helper available globally
-function updateMinorSelectOptions(majorSelectId, minorSelectId, dataSource, selectedVal = null) {
-  const majorSelect = document.getElementById(majorSelectId);
-  const minorSelect = document.getElementById(minorSelectId);
-  if (!majorSelect || !minorSelect) return;
-
-  const majorKey = majorSelect.value;
-  minorSelect.innerHTML = '<option value="">(未設定)</option>';
-
-  if (majorKey && dataSource && dataSource[majorKey]) {
-    const items = dataSource[majorKey].items || [];
-    items.forEach(item => {
-      const opt = document.createElement('option');
-      opt.value = item;
-      opt.textContent = item;
-      if (selectedVal && selectedVal === item) {
-        opt.selected = true;
-      }
-      minorSelect.appendChild(opt);
-    });
-  }
-}
+// [2-Step Cascade Select Helper updateMinorSelectOptions is dynamically managed in profileMasterService.js]
 
 // Global Tag Suggestions Helpers
 function getAllRegisteredTags() {

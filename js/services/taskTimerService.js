@@ -147,12 +147,46 @@ function completeTask(taskId, userNote, userDurationMin) {
     state.activeTaskId = null;
   }
 
+  // 単発タスク完了時: scheduledDateが未設定の場合は完了日(dateKey)を自動設定して翌日以降のゾンビ表示を防止
+  const prevScheduledDate = task.scheduledDate;
+  const isRecTask = typeof isRecurringTaskItem === 'function' ? isRecurringTaskItem(task) : (task.type === 'recurring' || task.taskType === 'recurring');
+  if (!isRecTask && !task.isRecurringInstance && !task.scheduledDate) {
+    task.scheduledDate = dateKey;
+  }
+
+  // 定期タスク完了時: 単発タスクレコードをクローン自動生成してマスターボード・SingleTasksへ反映
+  let cloneTaskId = null;
+  if (isRecTask) {
+    if (typeof createRecurringSingleTaskClone === 'function') {
+      const clone = createRecurringSingleTaskClone(task, {
+        userNote: userNote,
+        userDurationMin: task.actMin,
+        dateKey: dateKey,
+        now: now,
+        logId: logId
+      });
+      if (clone) {
+        state.tasks.push(clone);
+        cloneTaskId = clone.id;
+      }
+    }
+  }
+
   pushUndoAction({
     description: '\u30BF\u30B9\u30AF\u300C' + (task.title || '') + '\u300D\u3092\u5B8C\u4E86',
     undo: () => {
       task.status = 'uncompleted';
       task.actEnd = null;
+      task.scheduledDate = prevScheduledDate;
       task.executionLogs = task.executionLogs.filter(l => l.id !== logId);
+      // 連動して生成されたクローン単発タスクを自動削除
+      if (typeof removeRecurringInstanceSingleTasks === 'function') {
+        removeRecurringInstanceSingleTasks(task.id, dateKey, logId, state.tasks);
+      } else if (cloneTaskId) {
+        state.tasks = state.tasks.filter(t => t.id !== cloneTaskId);
+      }
+      saveTasks();
+      renderApp();
     }
   });
 
@@ -166,6 +200,13 @@ function toggleTask(taskId) {
   if (task.status === 'completed') {
     task.status = 'uncompleted';
     task.actEnd = null;
+    // 定期タスクを未完了に戻した場合、連動クローン単発タスクも削除
+    const dateKey = typeof getSelectedDateKey === 'function' ? getSelectedDateKey() : null;
+    if (typeof isRecurringTaskItem === 'function' && isRecurringTaskItem(task)) {
+      if (typeof removeRecurringInstanceSingleTasks === 'function') {
+        removeRecurringInstanceSingleTasks(task.id, dateKey, null, state.tasks);
+      }
+    }
   } else if (task.status === 'in_progress') {
     completeTask(taskId);
     return;

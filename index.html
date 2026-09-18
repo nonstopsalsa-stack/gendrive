@@ -504,37 +504,49 @@
           </div>
         </section>
 
-        <!-- 2. Next 1 Focus View (Dual Focus: Left Task × Right Habit) -->
+        <!-- 2. Focus Board (Task Execution Focus: 1 -> 2 -> 3 Adaptive Loop) -->
         <section class="view-container" id="view-focus">
-          <div class="dual-focus-layout">
-            <!-- Left Pane: Next 1 Task -->
-            <div class="focus-pane" id="focus-pane-task">
-              <div class="focus-pane-header">
-                <span class="focus-pane-badge task">🎯 NEXT 1 タスク</span>
-                <span class="focus-pane-counter" id="focus-task-counter">1 / 1</span>
+          <div class="focus-board-layout">
+            <!-- Focus Board Top Bar -->
+            <div class="focus-top-bar">
+              <div class="focus-mode-info">
+                <span class="focus-mode-badge" id="focus-mode-badge">🎯 シングル集中 (NEXT 1)</span>
+                <span class="focus-task-counter" id="focus-task-counter">0 / 0</span>
               </div>
-              <div class="focus-card-wrapper" id="focus-task-card-container">
-                <!-- Dynamic Render of Next Task Card -->
-              </div>
-              <div class="focus-footer-controls">
-                <div class="focus-nav-btn prev" id="btn-focus-task-prev" title="前のタスク (Shift+K)">← 前へ</div>
-                <div class="focus-nav-btn next" id="btn-focus-task-next" title="次のタスク (Shift+J)">次へ →</div>
+              
+              <!-- Focus Count Toggle Switch (1 -> 2 -> 3) -->
+              <div class="focus-count-selector" id="focus-count-selector">
+                <button type="button" class="focus-count-btn active" data-count="1" onclick="setFocusCount(1)" title="1件表示：シングル集中 (キー 2)">
+                  <span class="count-num">1</span> <span class="count-label">シングル</span>
+                </button>
+                <button type="button" class="focus-count-btn" data-count="2" onclick="setFocusCount(2)" title="2件表示：二者択一 (どっちをやる？)">
+                  <span class="count-num">2</span> <span class="count-label">2択</span>
+                </button>
+                <button type="button" class="focus-count-btn" data-count="3" onclick="setFocusCount(3)" title="3件表示：スモール優先順位 (TOP 3)">
+                  <span class="count-num">3</span> <span class="count-label">TOP 3</span>
+                </button>
+                <span class="focus-key-hint">キー <kbd>2</kbd> で切替</span>
               </div>
             </div>
 
-            <!-- Right Pane: Next 1 Habit -->
-            <div class="focus-pane" id="focus-pane-habit">
-              <div class="focus-pane-header">
-                <span class="focus-pane-badge habit">🌿 NEXT 1 ハビット</span>
-                <span class="focus-pane-counter" id="focus-habit-counter">1 / 1</span>
-              </div>
-              <div class="focus-card-wrapper" id="focus-habit-card-container">
-                <!-- Dynamic Render of Next Habit Card -->
-              </div>
-              <div class="focus-footer-controls">
-                <div class="focus-nav-btn prev" id="btn-focus-habit-prev" title="前のハビット (K / ↑)">← 前へ <span class="kbd-hint">K</span></div>
-                <div class="focus-nav-btn next" id="btn-focus-habit-next" title="次のハビット (J / ↓)">次へ → <span class="kbd-hint">J</span></div>
-              </div>
+            <!-- Hyper-Focus Mindset Banner (Centered, Big Typography) -->
+            <div class="focus-mindset-banner" id="focus-mindset-banner"></div>
+
+            <!-- Dynamic Cards Container (Grid updates with count-1 / count-2 / count-3) -->
+            <div class="focus-cards-container count-1" id="focus-cards-container">
+              <!-- Dynamic Render of 1, 2, or 3 Task Cards -->
+            </div>
+
+            <!-- Soul Quote Banner (Direct Typography on Dark Space) -->
+            <div class="focus-soul-quote-container" id="focus-soul-quote-container">
+              <p class="soul-quote-text" id="focus-soul-quote-text"></p>
+            </div>
+
+            <!-- Focus Footer Controls -->
+            <div class="focus-footer-controls">
+              <div class="focus-nav-btn prev" id="btn-focus-task-prev" onclick="navigateFocusTask(-1)" title="前の候補 (K / ←)">← 前へ <span class="kbd-hint">K</span></div>
+              <div class="focus-page-indicator" id="focus-page-indicator">1 / 1</div>
+              <div class="focus-nav-btn next" id="btn-focus-task-next" onclick="navigateFocusTask(1)" title="次の候補 (J / →)">次へ → <span class="kbd-hint">J</span></div>
             </div>
           </div>
         </section>
@@ -580,6 +592,8 @@
               <button class="table-subtab" data-subtab="analytics" id="subtab-analytics" onclick="switchMasterSubtab('analytics')">📈 継続スコアボード (3d/7d/30d/90d)</button>
               <button class="table-subtab" data-subtab="tasks" id="subtab-tasks" onclick="switchMasterSubtab('tasks')">🎯 定期タスク一覧 (定期配信マスター)</button>
               <button class="table-subtab" data-subtab="single_tasks" id="subtab-single-tasks" onclick="switchMasterSubtab('single_tasks')">📋 単発タスク一覧 (全履歴・予定)</button>
+              <button class="table-subtab" data-subtab="profiles" id="subtab-profiles" onclick="switchMasterSubtab('profiles')">⚙️ プロファイル設定 (ドメイン・部門・PJ)</button>
+
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
               <span class="table-hint-badge" style="font-size: 11px; color: var(--primary); background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3); padding: 4px 10px; border-radius: 20px;">
@@ -803,6 +817,31 @@
             </div>
           </div>
 
+                    <!-- 4-E. Profiles Master (Domains, Departments, Projects) -->
+          <div class="master-subview hidden" id="master-profiles-view">
+            <div class="table-control-header">
+              <div class="table-title-area">
+                <h2>🏷️ プロファイルマスター管理（ドメイン・会社部門・プロジェクト）</h2>
+                <span class="badge-count" id="table-profiles-count">3分類</span>
+              </div>
+              <div class="profile-tab-pills" id="profile-category-pills">
+                <button type="button" class="profile-pill-btn active" data-cat="projects" onclick="switchProfileCategory('projects')">💼 プロジェクト管理</button>
+                <button type="button" class="profile-pill-btn" data-cat="depts" onclick="switchProfileCategory('depts')">🏢 会社部門管理</button>
+                <button type="button" class="profile-pill-btn" data-cat="domains" onclick="switchProfileCategory('domains')">🌐 ドメイン管理 (PN1〜PN5)</button>
+              </div>
+            </div>
+
+            <!-- Profile Master Notice Banner -->
+            <div class="profile-notice-banner">
+              💡 <b>安心設計</b>: 使わなくなった項目は「削除」ではなく<b>「非表示（OFF）」</b>にすることで、過去タスクの記録を100%保護したまま新規作成時の選択肢から隠すことができます。完全削除時は使用中タスク・ハビットの件数を事前チェックして警告します。
+            </div>
+
+            <!-- Dynamic Profile Management Grid Container -->
+            <div class="profile-management-stage" id="profile-management-stage">
+              <!-- Dynamically Rendered by renderProfileMasterView() -->
+            </div>
+          </div>
+
           <!-- Sticky Bottom Horizontal Scroll Scale Bar (Pure Horizontal Navigation) -->
           <div class="master-scroll-scale-panel" id="master-scroll-scale-panel">
             <button type="button" class="btn-scale-nav" onclick="scrollMasterActiveTable('left')" title="左端の列へスクロール">◀ 先頭</button>
@@ -824,9 +863,11 @@
             </div>
             <div class="bucket-actions">
               <button class="btn-add-primary" id="btn-add-task-to-bucket" onclick="openAddTaskModal()">➕ この箱にタスク追加</button>
-              <button class="btn-secondary" id="btn-back-to-today" onclick="setMode('section')">⚡ 今日の実行画面に戻る (3)</button>
+              <button class="btn-secondary" id="btn-back-to-today" onclick="setMode('section')">⚡ 今日の実行画面に戻る (1)</button>
             </div>
           </div>
+          <!-- Banner for Completed Tasks Cleanup (Dynamic) -->
+          <div class="bucket-cleanup-banner hidden" id="bucket-cleanup-banner"></div>
           <div class="cards-list bucket-cards-list" id="bucket-task-list">
             <!-- Dynamic Render of bucket tasks -->
           </div>
@@ -2912,6 +2953,10 @@
       <span class="ctx-icon">📥</span>
       <span>日付なし (Inboxへ移動)</span>
     </button>
+    <button class="context-menu-item" id="ctx-task-remove-bucket" style="display: none;">
+      <span class="ctx-icon">📦</span>
+      <span>箱から外す (通常タスクに戻す)</span>
+    </button>
     <div class="context-menu-divider"></div>
     <button class="context-menu-item" id="ctx-task-edit">
       <span class="ctx-icon">✏️</span>
@@ -2935,7 +2980,7 @@
             <h3>プリセットタスク (ワンクリック即時追加・開始)</h3>
           </div>
           <div class="modal-header-actions">
-            <button type="button" class="btn-primary" id="btn-toggle-add-preset" style="font-size: 11.5px; padding: 5px 12px; gap: 6px;">➕ 新規プリセット作成 <span class="kbd-sub">P</span></button>
+            <button type="button" class="btn-primary" id="btn-toggle-add-preset" style="font-size: 11.5px; padding: 5px 12px; gap: 6px;">➕ 新規プリセット作成 <span class="kbd-sub">N</span></button>
             <button type="button" class="modal-close" id="btn-close-task-presets">✕</button>
           </div>
         </div>
@@ -2943,12 +2988,12 @@
         <div class="modal-body">
           <div class="preset-modal-intro">
             <div class="preset-intro-text">
-              <span>⚡ 頻繁に行う定型業務や突発的な割り込みタスクを、<b>フル属性（優先度・ドメイン・部門・プロジェクト・メモ等）を保持したままワンクリック（または数字キー [1]~[0]）で即座に追加・開始</b>できます。</span>
+              <span>⚡ 頻繁に行う定型業務や突発的な割り込みタスクを、<b>フル属性（優先度・ドメイン・部門・プロジェクト・メモ等）を保持したままワンクリック（またはキー [1]~[0], [Q]~[T], [Y]~[P]）で即座に追加・開始</b>できます。</span>
               <span style="color: #f59e0b; font-weight: 600;">※ 実行中のタスクがある場合、自動的に「⏸️ 中断（時間積算）」に切り替わります。</span>
             </div>
           </div>
 
-          <!-- Presets Grid List (10 Cards Max with Keyboard Shortcuts [1]~[0]) -->
+          <!-- Presets Grid List (20 Cards Max with Keyboard Shortcuts [1]~[0], [Q]~[T], [Y]~[P]) -->
           <div class="preset-grid-container" id="preset-cards-grid">
             <!-- Dynamically populated by JS -->
           </div>
@@ -3442,6 +3487,7 @@
   </div>
 
   <script src="js/config.js"></script>
+  <script src="js/services/profileMasterService.js"></script>
   <script src="js/sampleData.js"></script>
   <script src="js/utils/dateUtils.js"></script>
   <script src="js/engine/recurrenceEngine.js"></script>
@@ -3452,6 +3498,7 @@
   <script src="js/services/undoService.js"></script>
   <script src="js/services/storageService.js"></script>
   <script src="js/services/resumeNoteService.js"></script>
+  <script src="js/services/taskCloneHelper.js"></script>
   <script src="js/services/taskTimerService.js"></script>
   <script src="js/components/cardRenderers.js"></script>
   <script src="js/components/modalService.js"></script>

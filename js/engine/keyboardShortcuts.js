@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive - Keyboard Shortcuts Engine (with Strict Modal Isolation & Ctrl+Enter Submit)
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -50,31 +50,28 @@ function setupKeyboardShortcuts() {
           }
 
           const isInputActive = ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName);
-          if (!isInputActive) {
-            // 'P' or 'p': Switch to New Preset View
-            if (e.key === 'p' || e.key === 'P') {
+          if (!isInputActive && !isCtrlOrCmd && !e.altKey) {
+            // Normalize full-width characters (IME consideration) & to uppercase
+            const normalizedKey = e.key.replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).toUpperCase();
+
+            // 'N': Switch to New Preset View (Recommended Scheme A)
+            if (normalizedKey === 'N') {
               e.preventDefault();
               if (typeof showPresetEditView === 'function') showPresetEditView(true);
               return;
             }
 
-            // '1' ~ '9': Instant Execute Preset 1 ~ 9
-            if (e.key >= '1' && e.key <= '9') {
-              e.preventDefault();
-              const idx = parseInt(e.key, 10) - 1;
-              const presets = state.taskPresets || loadTaskPresets();
-              if (presets[idx] && typeof executePresetTask === 'function') {
-                executePresetTask(presets[idx].id);
-              }
-              return;
-            }
+            // 20 Preset Shortcut Keys: Row 1 (1~5), Row 2 (6~0), Row 3 (Q~T), Row 4 (Y~P)
+            const targetKeys = (typeof PRESET_SHORTCUT_KEYS !== 'undefined' && Array.isArray(PRESET_SHORTCUT_KEYS))
+              ? PRESET_SHORTCUT_KEYS
+              : ['1','2','3','4','5','6','7','8','9','0','Q','W','E','R','T','Y','U','I','O','P'];
 
-            // '0': Instant Execute Preset 10 (idx 9)
-            if (e.key === '0') {
+            const keyIdx = targetKeys.indexOf(normalizedKey);
+            if (keyIdx !== -1) {
               e.preventDefault();
               const presets = state.taskPresets || loadTaskPresets();
-              if (presets[9] && typeof executePresetTask === 'function') {
-                executePresetTask(presets[9].id);
+              if (presets[keyIdx] && typeof executePresetTask === 'function') {
+                executePresetTask(presets[keyIdx].id);
               }
               return;
             }
@@ -272,7 +269,12 @@ function setupKeyboardShortcuts() {
     }
 
     // 4. Global Shortcuts (Only when NO modal is open)
-    const filtered = typeof getFilteredHabits === 'function' ? getFilteredHabits() : [];
+    let filtered = [];
+    try {
+      if (typeof getFilteredHabits === 'function') filtered = getFilteredHabits();
+    } catch (err) {
+      console.warn('Error evaluating getFilteredHabits in keydown:', err);
+    }
 
     switch (e.key) {
       case '0':
@@ -327,6 +329,11 @@ function setupKeyboardShortcuts() {
         e.preventDefault();
         if (state.currentMode === 'table' && state.masterSubtab === 'analytics') {
           if (typeof toggleAnalyticsVisualMode === 'function') toggleAnalyticsVisualMode();
+        } else if (state.currentMode === 'focus') {
+          if (typeof cycleFocusCount === 'function') cycleFocusCount();
+        } else if (state.currentMode === 'bucket') {
+          // GTDバケツ画面は単発タスク専用（ハビットは不要）のためビュータイプ切替をスキップ
+          return;
         } else {
           if (typeof cycleViewType === 'function') cycleViewType();
         }
@@ -401,7 +408,9 @@ function setupKeyboardShortcuts() {
       case 'j':
       case 'J':
         e.preventDefault();
-        if (state.selectedIndex < filtered.length - 1) {
+        if (state.currentMode === 'focus') {
+          if (typeof navigateFocusTask === 'function') navigateFocusTask(1);
+        } else if (state.selectedIndex < filtered.length - 1) {
           state.selectedIndex++;
           if (typeof renderApp === 'function') renderApp();
         }
@@ -410,7 +419,9 @@ function setupKeyboardShortcuts() {
       case 'k':
       case 'K':
         e.preventDefault();
-        if (state.selectedIndex > 0) {
+        if (state.currentMode === 'focus') {
+          if (typeof navigateFocusTask === 'function') navigateFocusTask(-1);
+        } else if (state.selectedIndex > 0) {
           state.selectedIndex--;
           if (typeof renderApp === 'function') renderApp();
         }

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Recurring Single Task Clone & Deduplication Test Suite</title>
+</head>
+<body>
+  <h1>Test Suite: Recurring Single Task Clone & Deduplication Engine</h1>
+  <div id="results"></div>
+
+  <!-- Load dependencies in sequence -->
+  <script src="../js/config.js"></script>
+  <script src="../js/services/taskCloneHelper.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+  <script src="../js/services/taskTimerService.js"></script>
+
+  <script>
+    window.__TEST_SUMMARY__ = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      results: [],
+      allPassed: false
+    };
+
+    function assert(desc, condition) {
+      window.__TEST_SUMMARY__.total++;
+      if (condition) {
+        window.__TEST_SUMMARY__.passed++;
+        window.__TEST_SUMMARY__.results.push({ pass: true, message: desc });
+      } else {
+        window.__TEST_SUMMARY__.failed++;
+        window.__TEST_SUMMARY__.results.push({ pass: false, message: desc });
+      }
+    }
+
+    // Mock state and global dependencies for test environment
+    const mockTodayKey = '2026-09-10';
+    function getTodayKey() { return mockTodayKey; }
+    function getSelectedDateKey() { return mockTodayKey; }
+    function saveTasks() {}
+    function saveHabits() {}
+    function renderApp() {}
+    let lastUndoAction = null;
+    function pushUndoAction(action) { lastUndoAction = action; }
+
+    // isTaskForSelectedDate as implemented in app.js
+    function isTaskForSelectedDate(task, dateObj = null) {
+      if (!task || task.isDisabled) return false;
+      // 自動生成された定期タスクのクローン単発タスクはデイリー画面から除外（親の定期タスクが直接表示・管理されるため二重表示・二重集計を防止）
+      if (task.isRecurringInstance) return false;
+      if (task.bucket && task.bucket !== 'today') return false;
+
+      const isValidDateInput = (dateObj instanceof Date) || (typeof dateObj === 'string' && dateObj.length >= 8);
+      const d = isValidDateInput ? new Date(dateObj) : new Date(mockTodayKey);
+      const dateKey = mockTodayKey;
+      const todayKey = getTodayKey();
+
+      const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType) || (Boolean(task.recurrence) && task.recurrence.type && task.recurrence.type !== 'none');
+
+      if (isRec) {
+        if (dateKey < todayKey) return false;
+        return true;
+      }
+
+      if (task.scheduledDate) {
+        return task.scheduledDate === dateKey;
+      }
+      return dateKey === todayKey;
+    }
+
+    // deleteExecutionLog as implemented in app.js
+    function deleteExecutionLog(type, itemId, logId) {
+      const list = type === 'habit' ? state.habits : state.tasks;
+      const item = list.find(x => String(x.id) === String(itemId));
+      if (!item || !Array.isArray(item.executionLogs)) return;
+
+      const targetLog = item.executionLogs.find(l => l.id === logId);
+      const logDateKey = targetLog ? targetLog.dateKey : null;
+
+      item.executionLogs = item.executionLogs.filter(l => l.id !== logId);
+
+      // 定期タスクの実行ログが削除された場合、連動するクローン単発タスクも自動削除
+      if (type === 'task' && typeof removeRecurringInstanceSingleTasks === 'function') {
+        removeRecurringInstanceSingleTasks(itemId, logDateKey, logId, state.tasks);
+      }
+
+      if (type === 'habit') {
+        saveHabits();
+      } else {
+        saveTasks();
+      }
+    }
+
+    window.state = {
+      tasks: [],
+      habits: [],
+      selectedDateOffset: 0,
+      activeTaskId: null,
+      currentSection: '第2セッション',
+      filters: { status: 'all', domain: null, dept: null, proj: null }
+    };
+
+    try {
+      // -------------------------------------------------------------
+      // Test 1: Helper recognition of recurring vs pure single vs instance
+      // -------------------------------------------------------------
+      const recTask = { id: 'rt1', title: '毎朝の動画チェック', taskType: 'recurring', type: 'recurring', status: 'uncompleted' };
+      const singleTask = { id: 'st1', title: 'クライアントへ納品', taskType: 'single', type: 'single', status: 'uncompleted' };
+      const cloneInstance = { id: 'ci1', title: '毎朝の動画チェック', taskType: 'single', type: 'single', status: 'completed', isRecurringInstance: true, recurringSourceId: 'rt1' };
+
+      assert("Test 1.1: isRecurringTaskItem identifies recurring task", isRecurringTaskItem(recTask) === true);
+      assert("Test 1.2: isRecurringTaskItem identifies single task as false", isRecurringTaskItem(singleTask) === false);
+      assert("Test 1.3: isRecurringTaskItem identifies clone instance as false", isRecurringTaskItem(cloneInstance) === false);
+      assert("Test 1.4: isPureSingleTask identifies singleTask as true", isPureSingleTask(singleTask) === true);
+      assert("Test 1.5: isPureSingleTask identifies cloneInstance as false", isPureSingleTask(cloneInstance) === false);
+      assert("Test 1.6: isRecurringInstanceTask identifies cloneInstance as true", isRecurringInstanceTask(cloneInstance) === true);
+
+      // -------------------------------------------------------------
+      // Test 2: PC completeTask on recurring task generates clone single task
+      // -------------------------------------------------------------
+      const fullRecTask = {
+        id: 'rt_full_1',
+        title: '定期YouTube分析',
+        taskType: 'recurring',
+        type: 'recurring',
+        status: 'uncompleted',
+        section: '第2セッション',
+        estMin: 30,
+        domain: 'PN2',
+        domainMajor: 'PN2',
+        domainMinor: 'マーケ',
+        domainDetail: 'マーケ',
+        dept: '制作本部',
+        deptMajor: '制作本部',
+        deptMinor: '動画班',
+        deptDetail: '動画班',
+        proj: 'ビジネス',
+        projMajor: 'ビジネス',
+        projMinor: '0→1案件',
+        projDetail: '0→1案件',
+        matrix: { importance: 'high', urgency: 'mid', cognition: 'deep', physical: 'low', frog: 'no', spark: 'high' },
+        priority: 'high',
+        label: 'focus',
+        tags: ['動画', '分析'],
+        note: '元定期タスクのメモ',
+        executionLogs: [],
+        history: []
+      };
+      state.tasks = [fullRecTask];
+
+      completeTask('rt_full_1', '今日の実績メモ', 35);
+
+      // Check parent recurring task
+      assert("Test 2.1: Parent recurring task marked completed", fullRecTask.status === 'completed');
+      assert("Test 2.2: Parent recurring task actMin recorded", fullRecTask.actMin === 35);
+      assert("Test 2.3: Parent recurring task executionLog recorded", fullRecTask.executionLogs.length === 1);
+
+      // Check cloned single task
+      const createdClone = state.tasks.find(t => t.isRecurringInstance === true);
+      assert("Test 2.4: Cloned single task is created in state.tasks", !!createdClone);
+      assert("Test 2.5: Cloned task has taskType single and status completed", createdClone.taskType === 'single' && createdClone.status === 'completed');
+      assert("Test 2.6: Cloned task has recurringSourceId pointing to parent", createdClone.recurringSourceId === 'rt_full_1');
+      assert("Test 2.7: Cloned task copies title and actMin", createdClone.title === '定期YouTube分析' && createdClone.actMin === 35);
+      assert("Test 2.8: Cloned task copies userNote and domain/dept/proj", createdClone.note === '今日の実績メモ' && createdClone.domainMajor === 'PN2' && createdClone.deptMinor === '動画班' && createdClone.projMinor === '0→1案件');
+      assert("Test 2.9: Cloned task copies 6-axis matrix", createdClone.matrix && createdClone.matrix.importance === 'high' && createdClone.importance === 'high');
+      assert("Test 2.10: Cloned task has scheduledDate set to mockTodayKey", createdClone.scheduledDate === mockTodayKey);
+
+      // -------------------------------------------------------------
+      // Test 3: PC completeTask on pure single task does NOT create extra clone
+      // -------------------------------------------------------------
+      const plainSingleTask = {
+        id: 'st_plain_1',
+        title: '純粋な単発タスク',
+        taskType: 'single',
+        type: 'single',
+        status: 'uncompleted',
+        estMin: 20
+      };
+      state.tasks.push(plainSingleTask);
+      const initialTaskCount = state.tasks.length;
+
+      completeTask('st_plain_1', '', 20);
+      assert("Test 3.1: Single task completion does NOT create clone", state.tasks.length === initialTaskCount);
+
+      // -------------------------------------------------------------
+      // Test 4: Toast Undo removes cloned single task
+      // -------------------------------------------------------------
+      // Reset tasks with fresh recurring task
+      fullRecTask.status = 'uncompleted';
+      fullRecTask.executionLogs = [];
+      state.tasks = [fullRecTask];
+
+      completeTask('rt_full_1', 'Undoテスト用メモ', 30);
+      const cloneBeforeUndo = state.tasks.find(t => t.isRecurringInstance === true);
+      assert("Test 4.1: Clone exists before undo", !!cloneBeforeUndo);
+
+      if (lastUndoAction && typeof lastUndoAction.undo === 'function') {
+        lastUndoAction.undo();
+      }
+      const cloneAfterUndo = state.tasks.find(t => t.isRecurringInstance === true);
+      assert("Test 4.2: Cloned single task is automatically removed on Undo", !cloneAfterUndo);
+      assert("Test 4.3: Parent recurring task status reverted to uncompleted", fullRecTask.status === 'uncompleted');
+
+      // -------------------------------------------------------------
+      // Test 5: toggleTask removes cloned single task when untoggled
+      // -------------------------------------------------------------
+      completeTask('rt_full_1', 'トグル用メモ', 25);
+      const cloneBeforeToggle = state.tasks.find(t => t.isRecurringInstance === true);
+      assert("Test 5.1: Clone exists before toggleTask", !!cloneBeforeToggle);
+
+      toggleTask('rt_full_1'); // from completed to uncompleted
+      const cloneAfterToggle = state.tasks.find(t => t.isRecurringInstance === true);
+      assert("Test 5.2: Cloned single task is automatically removed on toggleTask uncomplete", !cloneAfterToggle);
+      assert("Test 5.3: Parent recurring task status is uncompleted", fullRecTask.status === 'uncompleted');
+
+      // -------------------------------------------------------------
+      // Test 6: deleteExecutionLog removes corresponding cloned single task
+      // -------------------------------------------------------------
+      completeTask('rt_full_1', 'ログ削除テストメモ', 40);
+      const cloneForLogDel = state.tasks.find(t => t.isRecurringInstance === true);
+      const logIdToDel = fullRecTask.executionLogs[0].id;
+      assert("Test 6.1: Clone exists with recurringLogId", cloneForLogDel && cloneForLogDel.recurringLogId === logIdToDel);
+
+      deleteExecutionLog('task', 'rt_full_1', logIdToDel);
+      const cloneAfterLogDel = state.tasks.find(t => t.isRecurringInstance === true);
+      assert("Test 6.2: Cloned single task is automatically removed on deleteExecutionLog", !cloneAfterLogDel);
+
+      // -------------------------------------------------------------
+      // Test 7: Deduplication in isTaskForSelectedDate and Carryover
+      // -------------------------------------------------------------
+      fullRecTask.executionLogs = [];
+      state.tasks = [fullRecTask];
+      completeTask('rt_full_1', '重複防止テスト', 30);
+      const activeClone = state.tasks.find(t => t.isRecurringInstance === true);
+
+      // Daily board check:
+      assert("Test 7.1: isTaskForSelectedDate includes parent recurring task", isTaskForSelectedDate(fullRecTask) === true);
+      assert("Test 7.2: isTaskForSelectedDate EXCLUDES cloned single task (preventing duplicate display)", isTaskForSelectedDate(activeClone) === false);
+
+      // Carryover check:
+      activeClone.scheduledDate = '2026-09-01'; // simulate past date
+      const pastIncompletes = getPastIncompleteTasks();
+      assert("Test 7.3: getPastIncompleteTasks excludes cloned single task", !pastIncompletes.some(t => t.id === activeClone.id));
+
+      // -------------------------------------------------------------
+      // Test 8: Deduplicated log retrieval helper (future analytics)
+      // -------------------------------------------------------------
+      const dedupLogs = getDeduplicatedTaskLogs(mockTodayKey, state.tasks);
+      assert("Test 8.1: getDeduplicatedTaskLogs returns exactly 1 log for rt_full_1 (no double counting)", dedupLogs.filter(l => l.taskId === 'rt_full_1').length === 1);
+      assert("Test 8.2: getDeduplicatedTaskLogs does NOT duplicate with cloned instance", !dedupLogs.some(l => l.taskId === activeClone.id));
+
+      // -------------------------------------------------------------
+      // Test 9: Mobile completeTask and uncompleteTask verification
+      // -------------------------------------------------------------
+      window.mState = {
+        tasks: [
+          { id: 'm_rt1', title: 'モバイル定期タスク', type: 'recurring', taskType: 'recurring', status: 'uncompleted', executionLogs: [], history: {} }
+        ],
+        habits: [],
+        selectedDateOffset: 0,
+        activeTaskId: null
+      };
+
+      const mTask = mState.tasks[0];
+      const now = new Date();
+      mTask.actMin = 25;
+      mTask.status = 'completed';
+      const mLogId = 'tlog_m_1';
+      mTask.executionLogs = [{ id: mLogId, dateKey: mockTodayKey, durationMin: 25 }];
+
+      // Trigger clone logic as implemented in mobile.js
+      const mClone = createRecurringSingleTaskClone(mTask, {
+        userNote: '',
+        userDurationMin: 25,
+        dateKey: mockTodayKey,
+        now: now,
+        logId: mLogId
+      });
+      mState.tasks.push(mClone);
+
+      assert("Test 9.1: Mobile creates cloned single task in mState.tasks", mState.tasks.length === 2 && mState.tasks[1].isRecurringInstance === true);
+
+      // Trigger mobile uncompleteTask logic
+      removeRecurringInstanceSingleTasks(mTask.id, mockTodayKey, null, mState.tasks);
+      assert("Test 9.2: Mobile uncompleteTask removes cloned single task", mState.tasks.length === 1 && !mState.tasks.some(t => t.isRecurringInstance));
+
+      window.__TEST_SUMMARY__.allPassed = (window.__TEST_SUMMARY__.failed === 0);
+    } catch (err) {
+      window.__TEST_SUMMARY__.failed++;
+      window.__TEST_SUMMARY__.results.push({ pass: false, message: "Unhandled exception: " + err.message + "\n" + err.stack });
+      window.__TEST_SUMMARY__.allPassed = false;
+    }
+
+    // Render on screen
+    const resDiv = document.getElementById('results');
+    resDiv.innerHTML = `
+      <h2>Results: ${window.__TEST_SUMMARY__.passed} / ${window.__TEST_SUMMARY__.total} passed (${window.__TEST_SUMMARY__.failed} failed)</h2>
+      <ul>
+        ${window.__TEST_SUMMARY__.results.map(r => `<li style="color: ${r.pass ? 'green' : 'red'};">${r.pass ? 'PASS' : 'FAIL'}: ${r.message}</li>`).join('')}
+      </ul>
+    `;
+  </script>
+</body>
+</html>
