@@ -198,7 +198,9 @@ function renderTaskPresetsCards() {
   const container = document.getElementById('preset-cards-grid');
   if (!container) return;
 
-  const presets = state.taskPresets || DEFAULT_TASK_PRESETS;
+  // [FIX③] state.taskPresetsが空配列([])のときもDEFAULT_TASK_PRESETSにフォールバックしない。
+  // 空配列は「ユーザーが全削除した状態」として扱う。nullやundefinedのみフォールバック。
+  const presets = (state.taskPresets != null) ? state.taskPresets : DEFAULT_TASK_PRESETS;
   if (presets.length === 0) {
     container.innerHTML = `<div class="empty-state" style="grid-column: 1/-1; padding: 20px;"><p>登録されているプリセットはありません。「➕ 新規プリセット作成 (N)」から作成できます。</p></div>`;
     return;

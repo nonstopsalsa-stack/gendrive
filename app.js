@@ -588,7 +588,9 @@ function sanitizeDailyState() {
     // 翌朝ゴースト実行中サニタイズ: 18時間以上経過した古い未完了タイマーは安全にリセット
     if (task.status === 'in_progress' || task.status === 'paused') {
       const isStartedYesterday = task.startTimestamp && (Date.now() - task.startTimestamp > 18 * 60 * 60 * 1000);
-      if (isStartedYesterday) {
+      // [FIX①] startTimestampがnullの paused タスク（orphan paused）も翌朝リセット対象にする
+      const isOrphanPaused = task.status === 'paused' && !task.startTimestamp;
+      if (isStartedYesterday || isOrphanPaused) {
         task.status = 'uncompleted';
         task.startTimestamp = null;
         task.accumulatedSeconds = 0;
@@ -1522,7 +1524,7 @@ function updateHeaderAndStatus() {
     console.log(`[Day-Rollover] Date changed from ${state.lastProcessedDate} to ${curTodayKey}. Running auto-sanitizer...`);
     state.lastProcessedDate = curTodayKey;
     if (typeof sanitizeDailyState === 'function') sanitizeDailyState();
-    if (typeof renderApp === 'function') renderApp();
+    // [FIX②] renderApp()の再帰呼び出しを削除。再描画は呼び出し元のrenderApp()が担当。
   } else if (!state.lastProcessedDate) {
     state.lastProcessedDate = curTodayKey;
   }

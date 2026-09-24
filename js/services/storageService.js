@@ -187,7 +187,10 @@ function restoreFromSnapshot(snapshotIndex = 0) {
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
       state.goals = snap.data.goals || {};
       state.manifesto = snap.data.manifesto || {};
-      state.taskPresets = snap.data.taskPresets || [];
+      // [FIX③] 空配列で上書きしない。スナップにプリセットがない場合は現在のstateを維持。
+      state.taskPresets = (Array.isArray(snap.data.taskPresets) && snap.data.taskPresets.length > 0)
+        ? snap.data.taskPresets
+        : state.taskPresets;
 
       localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
       localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
@@ -521,11 +524,19 @@ function mergeTasksDeep(localTasks, cloudTasks) {
       finalTask.accumulatedSeconds = localTask.accumulatedSeconds || cloudTask.accumulatedSeconds || 0;
     } else if (localTask.status === 'paused') {
       // ローカルで中断中の場合、古いクラウドのin_progressで勝手に再開（ゾンビ復活）させない
-      finalTask.status = 'paused';
-      finalTask.startTimestamp = null;
-      finalTask.actStart = localTask.actStart || cloudTask.actStart;
-      finalTask.accumulatedSeconds = Math.max(localTask.accumulatedSeconds || 0, cloudTask.accumulatedSeconds || 0);
-      finalTask.actMin = Math.max(localTask.actMin || 0, cloudTask.actMin || 0);
+      // [FIX①] ただし、startTimestampのないorphan pausedはクラウドのuncompleted/completedを優先
+      const isOrphanLocalPaused = !localTask.startTimestamp && !localTask.accumulatedSeconds;
+      if (isOrphanLocalPaused && (cloudTask.status === 'uncompleted' || cloudTask.status === 'completed')) {
+        finalTask.status = cloudTask.status;
+        finalTask.startTimestamp = null;
+        finalTask.accumulatedSeconds = 0;
+      } else {
+        finalTask.status = 'paused';
+        finalTask.startTimestamp = null;
+        finalTask.actStart = localTask.actStart || cloudTask.actStart;
+        finalTask.accumulatedSeconds = Math.max(localTask.accumulatedSeconds || 0, cloudTask.accumulatedSeconds || 0);
+        finalTask.actMin = Math.max(localTask.actMin || 0, cloudTask.actMin || 0);
+      }
     } else if (cloudTask.status === 'in_progress') {
       // クラウド側がin_progressの場合、ローカルで別のタスクまたはハビットが実行中でない場合のみ反映
       const hasOtherLocalRunning = (typeof state !== 'undefined' && state.tasks && state.tasks.some(t => String(t.id) !== strId && t.status === 'in_progress')) ||
@@ -768,6 +779,10 @@ function loadTaskPresets() {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      // [FIX③] 空配列が保存されていた場合の警告ログ
+      if (Array.isArray(parsed) && parsed.length === 0) {
+        console.warn('[loadTaskPresets] localStorage has empty array. Falling back to DEFAULT_TASK_PRESETS. Check snapshot restore or cloud sync.');
+      }
     } catch (e) {
       console.error('Failed to parse task presets:', e);
     }

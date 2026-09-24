@@ -2,6 +2,28 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.3] - 2026-09-24
+### Fixed & Protected
+- **Daily Reset Sanitizer, Rollover Recursion Guard & Presets Snapshot Defense Engine**:
+  1. **翌朝ゴースト中断タスク自動リセット (`sanitizeDailyState`)**:
+     - `startTimestamp` が `null` のまま残存していた orphan paused タスク（日付をまたいで中断中になっていたタスク）を検知し、翌朝に安全に `uncompleted` へリセット、タイマー時間と `activeTaskId` を確実に初期化。
+  2. **クラウドマージにおける paused 過剰保護の適正化 (`mergeTasksDeep`)**:
+     - タイムスタンプや積算時間を持たない orphan paused タスクについて、クラウド側が `uncompleted` または `completed` の場合はクラウド側ステータスを優先。手動でポーズされたタスクの保護は維持しつつ、翌朝のゾンビ中断タスク残存を根絶。
+  3. **日付ロールオーバー時の二重再描画再帰呼び出しの排除 (`updateHeaderAndStatus`)**:
+     - 日付変更検知時に `sanitizeDailyState()` の実行後に行われていた冗長な `renderApp()` 再帰呼び出しを撤廃。早朝・日付境界での完了ボタン固まりや画面フリーズを解消。
+  4. **スナップショット復元時のプリセット消失防止ガード (`restoreFromSnapshot`)**:
+     - バックアップスナップショット復元時に `snap.data.taskPresets` が空配列の場合に `state.taskPresets` を空配列で上書きしてしまう不具合を修正。現在のプリセット配列を安全に保護。
+  5. **プリセット読み込み・表示時の null/空配列ガード強化 (`loadTaskPresets` / `renderTaskPresetsCards`)**:
+     - 空配列保存時の検知警告ログ追加および、全削除状態（空配列）と初期未設定（null/undefined）の厳密な判定分離。
+  6. **バージョン管理とキャッシュバスターの統一 (`v1.9.3`)**:
+     - `js/config.js`, `index.html`, `mobile.html` のバージョン表記および全スクリプトタグ・CSSクエリパラメータを `?v=1.9.3` に更新。
+
+## [v1.9.2] - 2026-09-23
+### Added
+- **Soul Quotes 628選・多行フレーズ対応エンジン (`focusView.js`)**:
+  - フォーカスボード下部の魂着火フレーズに「Get Busy Living or Get Busy Dying」4行一体ブロックを追加（計628件）。
+  - `renderSoulQuoteBanner()` に `white-space: pre-line` 動的スタイル付与を導入し、複数行フレーズの改行レンダリングに対応。
+
 ## [v1.9.1] - 2026-09-21
 ### Fixed & Protected
 - **Habit/Task Instant Start, Optimistic DOM Mutation Guard & Zero-Rollback Cloud Integrity (ハビット・タスク即時開始＆即時DOM更新ガード＆クラウド同期完全排他インテグリティ)**:
