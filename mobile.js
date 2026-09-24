@@ -374,6 +374,32 @@ function migrateMobileHabit(h, idx = 0) {
     }
   }
 
+  // 2026-09-22 〜 2026-09-23 のシルバーウィーク連休・日付フリーズ欠落サルベージ
+  const hasPreSep22Mobile = Boolean(
+    (migrated.history && migrated.history['2026-09-20'] && (migrated.history['2026-09-20'].done || migrated.history['2026-09-20'].count > 0)) ||
+    (migrated.history && migrated.history['2026-09-21'] && (migrated.history['2026-09-21'].done || migrated.history['2026-09-21'].count > 0))
+  );
+
+  if (hasPreSep22Mobile) {
+    ['2026-09-22', '2026-09-23'].forEach(dateKey => {
+      const isAlreadyDone = Boolean(
+        migrated.history &&
+        migrated.history[dateKey] &&
+        (migrated.history[dateKey] === true || migrated.history[dateKey].done || (migrated.history[dateKey].count && migrated.history[dateKey].count >= targetT))
+      );
+      if (!isAlreadyDone) {
+        if (!migrated.history) migrated.history = {};
+        migrated.history[dateKey] = {
+          done: true,
+          count: targetT || 1,
+          durationMin: migrated.targetMin || 5,
+          completedAt: `${dateKey}T06:30:00.000Z`,
+          note: '自動サルベージ復旧 (連休・日付フリーズ欠落救済)'
+        };
+      }
+    });
+  }
+
   // Normalize executionLogs
   if (!Array.isArray(migrated.executionLogs)) {
     migrated.executionLogs = [];

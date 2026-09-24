@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.9.4';
-const APP_VERSION_NAME = 'Habit Ghost Reset Sanitizer & Practical Presets Restoration Engine';
+const APP_VERSION = 'v1.9.5';
+const APP_VERSION_NAME = 'Habit & Task Continuity Scoreboard Full Restoration & Silver Week Auto-Salvage Engine';
 
 const SECTIONS_CONFIG = [
   { id: 'sec_1', name: '第1セッション', start: 3, end: 6, label: '🌅 第1セッション (03:00 - 06:00)', desc: '起床・静寂の自己投資・思考整理', startStr: '03:00', endStr: '06:00' },

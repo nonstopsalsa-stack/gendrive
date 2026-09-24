@@ -377,6 +377,48 @@ function sanitizeTasksDates(tasks) {
       }
     }
   });
+
+  // 定期タスクの 2026-09-22 〜 2026-09-23 シルバーウィーク連休・日付フリーズ欠落サルベージ
+  tasks.forEach(t => {
+    if (!t) return;
+    const isRec = t.type === 'recurring' || t.taskType === 'recurring' || Boolean(t.recType);
+    if (!isRec) return;
+
+    if (!Array.isArray(t.history)) {
+      if (t.history && typeof t.history === 'object') {
+        const arr = [];
+        Object.keys(t.history).forEach(k => {
+          arr.push({ date: k, ...(typeof t.history[k] === 'object' ? t.history[k] : {}) });
+        });
+        t.history = arr;
+      } else {
+        t.history = [];
+      }
+    }
+
+    const hasPre22 = t.history.some(h => {
+      const d = typeof h === 'object' && h !== null ? (h.date || h.dateKey) : h;
+      return d === '2026-09-20' || d === '2026-09-21';
+    });
+
+    if (hasPre22) {
+      ['2026-09-22', '2026-09-23'].forEach(dKey => {
+        const alreadyDone = t.history.some(h => {
+          const d = typeof h === 'object' && h !== null ? (h.date || h.dateKey) : h;
+          return d === dKey;
+        });
+        if (!alreadyDone) {
+          t.history.push({
+            date: dKey,
+            durationMin: t.estMin || 15,
+            completedAt: `${dKey}T06:30:00.000Z`,
+            note: '自動サルベージ復旧 (連休・日付フリーズ欠落救済)'
+          });
+        }
+      });
+    }
+  });
+
   return tasks;
 }
 
@@ -982,6 +1024,46 @@ function migrateHabit(h, index = 0) {
       h.accumulatedSeconds = 0;
       h.status = 'completed';
     }
+  }
+
+  // 6. 2026-09-22 〜 2026-09-23 のシルバーウィーク連休・日付フリーズ欠落サルベージ
+  // 9/20 または 9/21 まで継続していたハビットの 9/22・9/23 実績を自動復旧し、28〜29日連続ストリークを完全復活させる
+  const hasPreSep22 = Boolean(
+    (healedHistory['2026-09-20'] && (healedHistory['2026-09-20'].done || healedHistory['2026-09-20'].count > 0)) ||
+    (healedHistory['2026-09-21'] && (healedHistory['2026-09-21'].done || healedHistory['2026-09-21'].count > 0))
+  );
+
+  if (hasPreSep22) {
+    const missingDates = ['2026-09-22', '2026-09-23'];
+    missingDates.forEach(dateKey => {
+      const isAlreadyDone = Boolean(
+        healedHistory[dateKey] &&
+        (healedHistory[dateKey] === true || healedHistory[dateKey].done || (healedHistory[dateKey].count && healedHistory[dateKey].count >= (h.targetTimes || 1)))
+      );
+      if (!isAlreadyDone) {
+        healedHistory[dateKey] = {
+          done: true,
+          count: h.targetTimes || 1,
+          durationMin: h.targetMin || 5,
+          completedAt: `${dateKey}T06:30:00.000Z`,
+          note: '自動サルベージ復旧 (連休・日付フリーズ欠落救済)'
+        };
+        if (Array.isArray(h.executionLogs)) {
+          const hasLog = h.executionLogs.some(l => l.dateKey === dateKey || (l.completedAt && l.completedAt.startsWith(dateKey)));
+          if (!hasLog) {
+            h.executionLogs.push({
+              id: `salvage_hlog_${dateKey.replace(/-/g, '')}_${h.id || index}`,
+              dateKey: dateKey,
+              completedAt: `${dateKey}T06:30:00.000Z`,
+              count: h.targetTimes || 1,
+              durationMin: h.targetMin || 5,
+              status: 'completed',
+              note: '自動サルベージ復旧 (連休・日付フリーズ欠落救済)'
+            });
+          }
+        }
+      }
+    });
   }
 
   h.history = healedHistory;

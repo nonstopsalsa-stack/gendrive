@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive - Master Data Editor & Multi-Key Sorting Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  * High-Performance Grid Editor with Bulk Operations & Drag & Drop Reordering
@@ -2151,35 +2151,84 @@ function getHabitCurrentStreak(habit) {
   return streak;
 }
 
-function getTaskCurrentStreak(task) {
-  if (!task || !Array.isArray(task.history) || task.history.length === 0) {
-    return task.status === 'completed' ? 1 : 0;
+function isTaskDoneOnDate(task, dateKey) {
+  if (!task || !dateKey) return false;
+  const targetNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(dateKey) : dateKey;
+
+  // 1. オブジェクト形式 (history)
+  if (task.history && typeof task.history === 'object' && !Array.isArray(task.history)) {
+    const entry = task.history[dateKey] || task.history[targetNorm];
+    if (entry === true) return true;
+    if (typeof entry === 'object' && entry !== null) {
+      if (entry.done || entry.status === 'completed' || (entry.durationMin && entry.durationMin > 0)) return true;
+    }
+    for (const k of Object.keys(task.history)) {
+      const kNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(k) : k;
+      if (kNorm === targetNorm) {
+        const val = task.history[k];
+        if (val === true) return true;
+        if (typeof val === 'object' && val !== null) {
+          if (val.done || val.status === 'completed' || (val.durationMin && val.durationMin > 0)) return true;
+        }
+      }
+    }
   }
-  const isDoneOnDate = (dateKey) => {
-    const targetNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(dateKey) : dateKey;
-    return task.history.some(h => {
+
+  // 2. 配列形式 (history)
+  if (Array.isArray(task.history)) {
+    const found = task.history.some(h => {
+      if (typeof h === 'string') {
+        const hNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(h) : h;
+        return hNorm === targetNorm;
+      }
       if (typeof h === 'object' && h !== null) {
-        const rawD = h.date || h.dateKey;
+        const rawD = h.date || h.dateKey || h.completedAt;
         const dNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
         return dNorm === targetNorm;
       }
       return false;
     });
-  };
+    if (found) return true;
+  }
+
+  // 3. executionLogs (実行タイムライン)
+  if (Array.isArray(task.executionLogs)) {
+    const foundLog = task.executionLogs.some(log => {
+      const rawD = log.dateKey || log.date;
+      const dNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
+      if (dNorm === targetNorm) return true;
+      if (log.completedAt) {
+        const compNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(log.completedAt) : null;
+        if (compNorm === targetNorm) return true;
+      }
+      return false;
+    });
+    if (foundLog) return true;
+  }
+
+  return false;
+}
+
+function getTaskCurrentStreak(task) {
+  if (!task) return 0;
 
   let streak = 0;
   const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : (typeof getDateKeyOffset === 'function' ? getDateKeyOffset(0) : '2026-08-27');
-  const isTodayDone = isDoneOnDate(todayKey);
+  const isTodayDone = isTaskDoneOnDate(task, todayKey);
 
   let startOffset = isTodayDone ? 0 : 1;
 
   for (let i = startOffset; i < 365; i++) {
     const key = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : todayKey;
-    if (isDoneOnDate(key)) {
+    if (isTaskDoneOnDate(task, key)) {
       streak++;
     } else {
       break;
     }
+  }
+
+  if (streak === 0 && task.status === 'completed' && (!task.history || (Array.isArray(task.history) && task.history.length === 0))) {
+    return 1;
   }
 
   return streak;
@@ -2187,22 +2236,15 @@ function getTaskCurrentStreak(task) {
 
 function getTaskPeriodRate(task, days) {
   if (!task) return 0;
-  if (!Array.isArray(task.history) || task.history.length === 0) {
-    return task.status === 'completed' ? 100 : 0;
-  }
   let completedDays = 0;
   for (let i = 0; i < days; i++) {
     const key = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : null;
-    const targetNorm = key && (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(key) : key);
-    if (targetNorm && task.history.some(h => {
-      if (typeof h === 'object' && h !== null) {
-        const rawD = h.date || h.dateKey;
-        return (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD) === targetNorm;
-      }
-      return false;
-    })) {
+    if (key && isTaskDoneOnDate(task, key)) {
       completedDays++;
     }
+  }
+  if (completedDays === 0 && task.status === 'completed' && (!task.history || (Array.isArray(task.history) && task.history.length === 0))) {
+    return 100;
   }
   return Math.min(100, Math.round((completedDays / days) * 100));
 }

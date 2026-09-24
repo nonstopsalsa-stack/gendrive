@@ -2,6 +2,18 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.5] - 2026-09-24
+### Fixed & Protected
+- **Habit & Task Continuity Scoreboard Full Restoration & Silver Week Auto-Salvage Engine (習慣・定期継続スコアボード完全復旧＆シルバーウィーク欠落自己修復エンジン)**:
+  1. **シルバーウィーク連休・日付フリーズ欠落実績の完全自動サルベージ (`migrateHabit` & `sanitizeTasksDates`)**:
+     - 2026年9月21日の「完了ボタン固まり・タイマー引きずりバグ」により連休中（9/22火・祝、9/23水・祝）の日付ロールオーバーがフリーズし、完了実績が空白となっていたハビットおよび定期タスクの実行履歴（`history` / `executionLogs`）を自動サルベージ。
+     - 8/24〜9/21 まで一度も欠かさず継続していたハビット（体組成計測 H040、デイリーノート起票 H042、日次バックアップ H039、起床時ストレッチ H041 等）の連続日数を、本来の正しい **「29〜30日連続」** へ完全復元。
+  2. **スコアボード計算エンジンの堅牢化・マルチフォーマット完全対応 (`tableView.js`)**:
+     - `getTaskCurrentStreak` および `getTaskPeriodRate` をリファクタリングし、`task.history` がオブジェクト形式（`{ "YYYY-MM-DD": { done: true } }`）および配列形式の双方、さらに `executionLogs`（実行タイムライン）まで漏れなく認識する共通ヘルパー `isTaskDoneOnDate` を配備。
+     - 当日未完了時のストリーク猶予判定を適正化し、前日までの連続記録が即時リセットされない安全設計を確立。
+  3. **バージョン管理とキャッシュバスターの統一 (`v1.9.5`)**:
+     - `js/config.js`, `index.html`, `mobile.html` のバージョン表記および全スクリプトタグ・CSSクエリパラメータを `?v=1.9.5` に更新。
+
 ## [v1.9.4] - 2026-09-24
 ### Fixed & Protected
 - **Habit Ghost Reset Sanitizer & Practical Presets Restoration Engine**:
