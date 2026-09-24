@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gendrive Habit Deep-Merge & Sync Lifecycle Test Suite</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }
+    h1 { color: #38bdf8; font-size: 20px; }
+    .test-card { background: #1e293b; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; border-left: 4px solid #64748b; }
+    .test-card.pass { border-left-color: #22c55e; }
+    .test-card.fail { border-left-color: #ef4444; }
+    .status { font-weight: bold; }
+    .pass .status { color: #22c55e; }
+    .fail .status { color: #ef4444; }
+    #summary-box { background: #1e293b; padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #334155; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Gendrive Habit Zero-Rollback Deep-Merge Engine Automated Tests (v1.8.6)</h1>
+  <div id="summary-box">実行中...</div>
+  <div id="results"></div>
+
+  <!-- Load dependencies -->
+  <script src="../js/config.js"></script>
+  <script src="../js/sampleData.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+  <script src="../js/engine/statsEngine.js"></script>
+  <script src="../js/services/undoService.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../mobile.js"></script>
+
+  <script>
+    window.__TEST_SUMMARY__ = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      allPassed: false,
+      results: []
+    };
+
+    function assert(name, condition, message = '') {
+      window.__TEST_SUMMARY__.total++;
+      const res = { name, pass: !!condition, message: condition ? 'OK' : (message || 'Assertion failed') };
+      if (res.pass) {
+        window.__TEST_SUMMARY__.passed++;
+      } else {
+        window.__TEST_SUMMARY__.failed++;
+      }
+      window.__TEST_SUMMARY__.results.push(res);
+
+      const div = document.createElement('div');
+      div.className = `test-card ${res.pass ? 'pass' : 'fail'}`;
+      div.innerHTML = `<span class="status">[${res.pass ? 'PASS' : 'FAIL'}]</span> <strong>${name}</strong>${res.pass ? '' : `<br><small style="color:#f87171">${message}</small>`}`;
+      document.getElementById('results').appendChild(div);
+    }
+
+    async function runTestSuite() {
+      // Test 1: mergeHabitsDeep protects completed status against in_progress cloud rollback
+      try {
+        const today = typeof getTodayKey === 'function' ? getTodayKey() : '2026-09-21';
+        const localHabits = [{
+          id: 'H019',
+          name: '朝食後 キッチンリセット',
+          status: 'completed',
+          startTimestamp: null,
+          history: {
+            [today]: { done: true, count: 1, durationMin: 60, completedAt: `${today}T02:40:00.000Z` }
+          },
+          executionLogs: [{ id: 'log_loc_1', dateKey: today, count: 1, completedAt: `${today}T02:40:00.000Z` }]
+        }];
+        const cloudHabits = [{
+          id: 'H019',
+          name: '朝食後 キッチンリセット',
+          status: 'in_progress',
+          startTimestamp: 1789867104336,
+          history: {},
+          executionLogs: []
+        }];
+
+        const merged = mergeHabitsDeep(localHabits, cloudHabits);
+        const h019 = merged.find(h => h.id === 'H019');
+        assert('PC mergeHabitsDeep protects completed status against in_progress', h019 && h019.status === 'completed' && h019.startTimestamp === null);
+        assert('PC mergeHabitsDeep preserves local completion history', h019 && h019.history[today] && h019.history[today].done === true);
+        assert('PC mergeHabitsDeep integrates executionLogs', h019 && h019.executionLogs.some(l => l.id === 'log_loc_1'));
+      } catch (e) {
+        assert('PC mergeHabitsDeep execution', false, e.message);
+      }
+
+      // Test 2: mergeMobileHabitsDeep protects completed status on mobile
+      try {
+        const today = typeof getTodayKey === 'function' ? getTodayKey() : '2026-09-21';
+        const localHabits = [{
+          id: 'H019',
+          name: '朝食後 キッチンリセット',
+          status: 'completed',
+          startTimestamp: null,
+          history: {
+            [today]: { done: true, count: 1, durationMin: 60, completedAt: `${today}T02:40:00.000Z` }
+          },
+          executionLogs: [{ id: 'm_log_1', dateKey: today, count: 1, completedAt: `${today}T02:40:00.000Z` }]
+        }];
+        const cloudHabits = [{
+          id: 'H019',
+          name: '朝食後 キッチンリセット',
+          status: 'in_progress',
+          startTimestamp: 1789867104336,
+          history: {},
+          executionLogs: []
+        }];
+
+        const mobileMerged = mergeMobileHabitsDeep(localHabits, cloudHabits);
+        const mh019 = mobileMerged.find(h => h.id === 'H019');
+        assert('Mobile mergeMobileHabitsDeep protects completed status against in_progress', mh019 && mh019.status === 'completed' && mh019.startTimestamp === null);
+        assert('Mobile mergeMobileHabitsDeep preserves local history', mh019 && mh019.history[today] && mh019.history[today].done === true);
+      } catch (e) {
+        assert('Mobile mergeMobileHabitsDeep execution', false, e.message);
+      }
+
+      // Test 3: H019 Self-Healing Salvage for 2026-09-20
+      try {
+        const rawStuckH019 = {
+          id: 'H019',
+          name: '朝食後 キッチンリセット',
+          status: 'in_progress',
+          startTimestamp: 1789867104336,
+          history: {
+            '2026-09-18': { done: true, count: 1, durationMin: 1 }
+          },
+          executionLogs: []
+        };
+        const healed = migrateHabit(rawStuckH019, 0);
+        const today = typeof getTodayKey === 'function' ? getTodayKey() : '2026-09-21';
+        const is20260920Today = (today === '2026-09-20');
+        assert('H019 self-healing restores 2026-09-20 completion history', healed.history['2026-09-20'] && healed.history['2026-09-20'].done === true);
+        assert('H019 self-healing sets status to completed (if today) or resets for new day with clear timestamp', is20260920Today ? (healed.status === 'completed' && healed.startTimestamp === null) : (healed.startTimestamp === null));
+        assert('H019 self-healing appends timeline executionLog', healed.executionLogs.some(l => l.dateKey === '2026-09-20'));
+      } catch (e) {
+        assert('H019 self-healing salvage', false, e.message);
+      }
+
+      // Test 4: Offline / Local-only habit preservation
+      try {
+        const localHabits = [
+          { id: 'H001', name: 'ハビット1', status: 'completed' },
+          { id: 'H_OFFLINE_NEW', name: 'オフライン新規ハビット', status: 'uncompleted', sortOrder: 99 }
+        ];
+        const cloudHabits = [
+          { id: 'H001', name: 'ハビット1', status: 'completed' }
+        ];
+        const merged = mergeHabitsDeep(localHabits, cloudHabits);
+        const hasOffline = merged.some(h => h.id === 'H_OFFLINE_NEW');
+        assert('mergeHabitsDeep preserves local-only / offline created habits', hasOffline);
+      } catch (e) {
+        assert('Local-only habit preservation', false, e.message);
+      }
+
+      // Update summary box
+      window.__TEST_SUMMARY__.allPassed = window.__TEST_SUMMARY__.failed === 0;
+      const box = document.getElementById('summary-box');
+      box.innerHTML = `
+        <h2 style="margin:0 0 8px 0; color:${window.__TEST_SUMMARY__.allPassed ? '#22c55e' : '#ef4444'}">
+          ${window.__TEST_SUMMARY__.allPassed ? '✅ 全テスト合格 (All Passed)' : '❌ テスト失敗 (Failures Detected)'}
+        </h2>
+        <div>合計: ${window.__TEST_SUMMARY__.total} | 成功: ${window.__TEST_SUMMARY__.passed} | 失敗: ${window.__TEST_SUMMARY__.failed}</div>
+      `;
+    }
+
+    window.addEventListener('DOMContentLoaded', runTestSuite);
+  </script>
+</body>
+</html>

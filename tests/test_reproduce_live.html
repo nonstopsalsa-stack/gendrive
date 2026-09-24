@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Live Reproduce Test</title>
+</head>
+<body>
+  <div id="app-root">
+    <div id="section-task-container"></div>
+    <div id="section-habit-container"></div>
+    <div id="current-time-display"></div>
+    <div id="current-section-name"></div>
+    <div id="section-scale-fill"></div>
+    <div id="section-scale-percent"></div>
+    <div id="section-scale-boundary-start"></div>
+    <div id="section-scale-boundary-end"></div>
+    <div id="section-habit-progress"></div>
+    <div id="count-section-habits"></div>
+    <div id="section-progress-bar"></div>
+  </div>
+
+  <script src="real_gas_data.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/services/profileMasterService.js"></script>
+  <script src="../js/sampleData.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+  <script src="../js/engine/statsEngine.js"></script>
+  <script src="../js/engine/matrixEngine.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+  <script src="../js/engine/keyboardShortcuts.js"></script>
+  <script src="../js/services/undoService.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/services/resumeNoteService.js"></script>
+  <script src="../js/services/taskCloneHelper.js"></script>
+  <script src="../js/services/taskTimerService.js"></script>
+  <script src="../js/components/cardRenderers.js"></script>
+  <script src="../js/components/modalService.js"></script>
+  <script src="../js/components/taskPresetsService.js"></script>
+  <script src="../js/components/dragAndDropService.js"></script>
+  <script src="../js/views/calendarView.js"></script>
+  <script src="../js/views/sectionView.js"></script>
+  <script src="../js/views/focusView.js"></script>
+  <script src="../js/views/allView.js"></script>
+  <script src="../js/views/tableView.js"></script>
+  <script src="../js/views/bucketView.js"></script>
+  <script src="../js/views/goalsView.js"></script>
+  <script src="../js/views/timerView.js"></script>
+  <script src="../app.js"></script>
+
+  <script>
+    window.__RESULT__ = null;
+
+    async function runTest() {
+      const logs = [];
+      const errors = [];
+      window.addEventListener('error', e => errors.push(e.message + ' at ' + e.filename + ':' + e.lineno));
+
+      try {
+        if (window.__REAL_GAS_DATA__ && window.__REAL_GAS_DATA__.data) {
+          state.tasks = window.__REAL_GAS_DATA__.data.tasks || [];
+          state.habits = window.__REAL_GAS_DATA__.data.habits || [];
+          localStorage.setItem('gendrive_tasks_v1', JSON.stringify(state.tasks));
+          localStorage.setItem('gendrive_habits_v1', JSON.stringify(state.habits));
+        }
+
+        logs.push('State initialized. Habits count: ' + (state.habits ? state.habits.length : 0));
+        
+        // Find H043
+        const h043 = state.habits.find(h => h.id === 'H043');
+        logs.push('H043 found: ' + (h043 ? h043.name : 'NO'));
+        if (!h043) {
+          window.__RESULT__ = { logs, errors };
+          return;
+        }
+
+        // Set section to 第1セッション
+        state.currentSection = '第1セッション';
+        state.selectedDateOffset = 0;
+        h043.status = 'in_progress';
+        h043.startTimestamp = Date.now() - 30000;
+        state.activeHabitId = 'H043';
+
+        renderApp();
+        logs.push('After renderApp with in_progress:');
+        const habitContainer = document.getElementById('section-habit-container');
+        const cardBefore = habitContainer ? habitContainer.querySelector('.habit-card[data-id="H043"]') : null;
+        logs.push('Card in DOM before complete: ' + (cardBefore ? 'YES (classes: ' + cardBefore.className + ')' : 'NO'));
+
+        // Now call completeHabit('H043')
+        logs.push('Calling completeHabit("H043")...');
+        completeHabit('H043');
+
+        logs.push('h043 status after completeHabit: ' + h043.status);
+        logs.push('h043 startTimestamp: ' + h043.startTimestamp);
+        logs.push('h043 history[today]: ' + JSON.stringify(h043.history[getSelectedDateKey()]));
+
+        const cardAfter = habitContainer ? habitContainer.querySelector('.habit-card[data-id="H043"]') : null;
+        logs.push('Card in DOM after complete: ' + (cardAfter ? 'STILL IN DOM (classes: ' + cardAfter.className + ')' : 'REMOVED FROM DOM'));
+
+        // Check getFilteredHabits('section')
+        const filtered = getFilteredHabits('section');
+        logs.push('Filtered habits count: ' + filtered.length);
+        logs.push('H043 in filtered: ' + filtered.some(h => h.id === 'H043'));
+
+        window.__RESULT__ = { logs, errors, success: true };
+      } catch (err) {
+        window.__RESULT__ = { fatal: err.message, stack: err.stack, logs, errors };
+      }
+    }
+
+    setTimeout(runTest, 500);
+  </script>
+</body>
+</html>

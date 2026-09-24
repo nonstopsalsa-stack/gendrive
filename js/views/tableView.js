@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Master Data Editor & Multi-Key Sorting Engine
  * 哲生 (AI Company OS & Personal OS Engine)
  * High-Performance Grid Editor with Bulk Operations & Drag & Drop Reordering
@@ -594,6 +594,9 @@ function deleteSingleItem(id, type, event) {
     const t = state.tasks.find(item => String(item.id) === strId);
     if (!t) return;
     if (confirm(`🎯 タスク「${t.title}」を削除しますか？`)) {
+      if (typeof recordTaskDeletion === 'function') {
+        recordTaskDeletion(strId, t.title);
+      }
       state.tasks = state.tasks.filter(item => String(item.id) !== strId);
       state.selectedTableItemIds.delete(strId);
       saveTasks();
@@ -2033,6 +2036,13 @@ function applyBulkDelete() {
 
   const targetIds = state.selectedTableItemIds;
   state.habits = state.habits.filter(h => !targetIds.has(String(h.id)));
+  if (typeof recordTaskDeletion === 'function') {
+    state.tasks.forEach(t => {
+      if (t && targetIds.has(String(t.id))) {
+        recordTaskDeletion(t.id, t.title);
+      }
+    });
+  }
   state.tasks = state.tasks.filter(t => !targetIds.has(String(t.id)));
 
   saveHabits();

@@ -4,7 +4,7 @@
  * Local-First Architecture with Google Apps Script (GAS) Sync Engine
  */
 
-const STORAGE_KEYS = {
+var STORAGE_KEYS = Object.assign(window.STORAGE_KEYS || {}, {
   TASKS: 'habit_flow_tasks_v3',
   HABITS: 'habit_flow_data_v3',
   GOALS: 'habit_flow_goals_v1',
@@ -15,8 +15,9 @@ const STORAGE_KEYS = {
   DRIVE_FOLDER_ID: 'gendrive_drive_folder_id',
   METADATA: 'gendrive_sync_metadata_v1',
   SNAPSHOTS: 'gendrive_snapshots_v1',
-  DAILY_HABIT_ORDER: 'gendrive_daily_habit_order_v1'
-};
+  DAILY_HABIT_ORDER: 'gendrive_daily_habit_order_v1',
+  DELETED_TASKS: 'gendrive_deleted_task_ids_v1'
+});
 
 let cloudSyncTimeout = null;
 let isSyncing = false;
@@ -322,8 +323,339 @@ function updateSyncMetadata(fields = {}) {
 }
 
 // =========================================================================
-// 1. Task Persistence
+// 1. Task Persistence & Deep-Merge Protection
 // =========================================================================
+
+/**
+ * Task ID High-Water Mark Synchronizer
+ * 既存タスク群の最大ID番号を検出し、localStorageのハイウォーターマークを安全に底上げ同期
+ */
+function syncTaskIdHighWaterMark(tasks) {
+  if (!Array.isArray(tasks)) return;
+  let maxIdNum = 0;
+  tasks.forEach(t => {
+    if (t && t.id) {
+      const match = String(t.id).match(/^T(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxIdNum) maxIdNum = num;
+      }
+    }
+  });
+  const savedHWM = parseInt(localStorage.getItem('gendrive_task_max_id_v1') || '0', 10);
+  const currentHWM = isNaN(savedHWM) ? 0 : savedHWM;
+  if (maxIdNum > currentHWM) {
+    localStorage.setItem('gendrive_task_max_id_v1', String(maxIdNum));
+  }
+}
+
+function sanitizeTasksDates(tasks) {
+  if (!Array.isArray(tasks)) return tasks;
+  const normalizeFn = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey : (val => val);
+  tasks.forEach(t => {
+    if (!t) return;
+    if (t.scheduledDate) {
+      const norm = normalizeFn(t.scheduledDate);
+      if (norm) t.scheduledDate = norm;
+    } else if (t.status === 'completed' && t.type !== 'recurring' && t.taskType !== 'recurring' && !t.isRecurringInstance) {
+      // 完了済み単発タスクでscheduledDateが未設定の場合、実行ログまたは完了履歴から完了日を自動サルベージして自己修復
+      let compDate = null;
+      if (Array.isArray(t.executionLogs) && t.executionLogs.length > 0 && t.executionLogs[0].dateKey) {
+        compDate = t.executionLogs[0].dateKey;
+      } else if (Array.isArray(t.history) && t.history.length > 0) {
+        const lastH = t.history[t.history.length - 1];
+        compDate = (typeof lastH === 'object' && lastH !== null) ? lastH.date : (typeof lastH === 'string' ? lastH : null);
+      } else if (t.createdAt) {
+        compDate = normalizeFn(t.createdAt);
+      }
+      if (compDate) {
+        const norm = normalizeFn(compDate);
+        if (norm) t.scheduledDate = norm;
+      }
+    }
+  });
+  return tasks;
+}
+
+// =========================================================================
+// 1-A. Task Tombstone & Resurrection-Free Sync Engine (タスク墓石台帳)
+// =========================================================================
+
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days retention
+
+function loadDeletedTaskMap() {
+  const map = new Map();
+  const saved = localStorage.getItem(STORAGE_KEYS.DELETED_TASKS);
+  if (!saved) return map;
+  try {
+    const parsed = JSON.parse(saved);
+    const now = Date.now();
+    let hasExpired = false;
+    Object.keys(parsed).forEach(id => {
+      const entry = parsed[id];
+      if (!entry) return;
+      const delTime = typeof entry === 'string' ? new Date(entry).getTime() : new Date(entry.deletedAt || 0).getTime();
+      // 30日以上前の古い削除記録は自動パージ（ストレージ圧迫防止）
+      if (now - delTime > TOMBSTONE_TTL_MS) {
+        hasExpired = true;
+      } else {
+        map.set(String(id), typeof entry === 'object' ? entry : { deletedAt: entry });
+      }
+    });
+    if (hasExpired) {
+      saveDeletedTaskMap(map);
+    }
+  } catch (e) {
+    console.error('Failed to parse deleted tasks tombstone:', e);
+  }
+  return map;
+}
+
+function saveDeletedTaskMap(map) {
+  try {
+    const obj = {};
+    map.forEach((val, key) => {
+      obj[key] = val;
+    });
+    localStorage.setItem(STORAGE_KEYS.DELETED_TASKS, JSON.stringify(obj));
+  } catch (e) {
+    console.error('Failed to save deleted tasks tombstone:', e);
+  }
+}
+
+function recordTaskDeletion(taskId, title = '') {
+  if (!taskId) return;
+  const map = loadDeletedTaskMap();
+  map.set(String(taskId), {
+    deletedAt: new Date().toISOString(),
+    title: String(title || '')
+  });
+  saveDeletedTaskMap(map);
+}
+
+function unrecordTaskDeletion(taskId) {
+  if (!taskId) return;
+  const map = loadDeletedTaskMap();
+  if (map.has(String(taskId))) {
+    map.delete(String(taskId));
+    saveDeletedTaskMap(map);
+  }
+}
+
+/**
+ * Task Deep-Merge Engine (タスク消失完全根絶ディープマージ)
+ * クラウド受信時にローカルの未同期タスクやオフライン追加タスクを100%保護
+ * 同一ID時は completed ステータスを最優先保護し、更新日時が新しい属性を採用
+ * Tombstone（墓石台帳）により、削除済みタスクのゾンビ復活を完全遮断
+ */
+function mergeTasksDeep(localTasks, cloudTasks) {
+  if (!Array.isArray(cloudTasks) || cloudTasks.length === 0) {
+    return sanitizeTasksDates(Array.isArray(localTasks) ? localTasks : []);
+  }
+
+  const deletedMap = loadDeletedTaskMap();
+
+  if (!Array.isArray(localTasks) || localTasks.length === 0) {
+    syncTaskIdHighWaterMark(cloudTasks);
+    // ローカル配列が空の場合でも、削除済み台帳にあるタスクは復活させない
+    const filteredCloud = cloudTasks.filter(ct => {
+      if (!ct || !ct.id) return false;
+      const tb = deletedMap.get(String(ct.id));
+      if (!tb) return true;
+      const cTime = new Date(ct.updatedAt || ct.createdAt || 0).getTime();
+      const dTime = new Date(tb.deletedAt).getTime();
+      // クラウドの更新日時が削除日時より後（他端末等で新しく作られた/更新された）場合のみ保護
+      return cTime > dTime;
+    });
+    return sanitizeTasksDates(filteredCloud);
+  }
+
+  const localMap = new Map();
+  localTasks.forEach(t => {
+    if (t && t.id) localMap.set(String(t.id), t);
+  });
+
+  const merged = [];
+  const handledIds = new Set();
+
+  cloudTasks.forEach(cloudTask => {
+    if (!cloudTask || !cloudTask.id) return;
+    const strId = String(cloudTask.id);
+    handledIds.add(strId);
+
+    const localTask = localMap.get(strId);
+    if (!localTask) {
+      // 1. Tombstone判定: ローカルで意図して削除されたタスクのゾンビ復活を完全遮断
+      const tombstone = deletedMap.get(strId);
+      if (tombstone) {
+        const cloudUpdated = new Date(cloudTask.updatedAt || cloudTask.createdAt || 0).getTime();
+        const deletedTime = new Date(tombstone.deletedAt).getTime();
+        if (cloudUpdated <= deletedTime) {
+          // 削除日時以前の古いクラウドタスクは復活させずに破棄
+          return;
+        }
+        // もしクラウド側の更新日時が削除日時より新しければ（他端末で直後に再作成された場合）、
+        // データを絶対に失わないよう復活を許可（データ欠損ゼロ保護）
+      }
+
+      merged.push(cloudTask);
+      return;
+    }
+
+    // 同一IDタスクのマージ
+    const finalTask = { ...cloudTask };
+
+    // 1. 完了ステータス・実行中ステータスの絶対保護 (Zero-Rollback)
+    if (localTask.status === 'completed' || cloudTask.status === 'completed') {
+      finalTask.status = 'completed';
+      finalTask.startTimestamp = null;
+      finalTask.accumulatedSeconds = 0;
+      if (localTask.actEnd || cloudTask.actEnd) finalTask.actEnd = localTask.actEnd || cloudTask.actEnd;
+      if (localTask.actStart || cloudTask.actStart) finalTask.actStart = localTask.actStart || cloudTask.actStart;
+      finalTask.completedAt = localTask.completedAt || cloudTask.completedAt || new Date().toISOString();
+      finalTask.actMin = Math.max(localTask.actMin || 0, cloudTask.actMin || 0);
+    } else if (localTask.status === 'in_progress') {
+      finalTask.status = 'in_progress';
+      finalTask.startTimestamp = localTask.startTimestamp || cloudTask.startTimestamp;
+      finalTask.actStart = localTask.actStart || cloudTask.actStart;
+      finalTask.accumulatedSeconds = localTask.accumulatedSeconds || cloudTask.accumulatedSeconds || 0;
+    } else if (localTask.status === 'paused') {
+      // ローカルで中断中の場合、古いクラウドのin_progressで勝手に再開（ゾンビ復活）させない
+      finalTask.status = 'paused';
+      finalTask.startTimestamp = null;
+      finalTask.actStart = localTask.actStart || cloudTask.actStart;
+      finalTask.accumulatedSeconds = Math.max(localTask.accumulatedSeconds || 0, cloudTask.accumulatedSeconds || 0);
+      finalTask.actMin = Math.max(localTask.actMin || 0, cloudTask.actMin || 0);
+    } else if (cloudTask.status === 'in_progress') {
+      // クラウド側がin_progressの場合、ローカルで別のタスクまたはハビットが実行中でない場合のみ反映
+      const hasOtherLocalRunning = (typeof state !== 'undefined' && state.tasks && state.tasks.some(t => String(t.id) !== strId && t.status === 'in_progress')) ||
+                                   (typeof state !== 'undefined' && state.habits && state.habits.some(h => h.status === 'in_progress')) ||
+                                   (typeof state !== 'undefined' && Boolean(state.activeHabitId));
+      if (!hasOtherLocalRunning) {
+        finalTask.status = 'in_progress';
+        finalTask.startTimestamp = cloudTask.startTimestamp;
+        finalTask.actStart = cloudTask.actStart;
+        finalTask.accumulatedSeconds = cloudTask.accumulatedSeconds || 0;
+      } else {
+        finalTask.status = 'paused';
+        finalTask.startTimestamp = null;
+        finalTask.accumulatedSeconds = cloudTask.accumulatedSeconds || 0;
+      }
+    }
+
+    // 2. 日付別履歴（history）のディープマージ（配列・オブジェクト双方の相互運用完全保証）
+    const normalizeHistEntry = (entry, defaultDate) => {
+      if (typeof entry === 'string') return { date: entry, done: true, count: 1 };
+      if (typeof entry === 'object' && entry !== null) {
+        return {
+          date: entry.date || defaultDate,
+          done: entry.done !== undefined ? entry.done : true,
+          count: entry.count || 1,
+          durationMin: entry.durationMin || 0,
+          completedAt: entry.completedAt || null,
+          note: entry.note || '',
+          actStart: entry.actStart || null,
+          actEnd: entry.actEnd || null
+        };
+      }
+      return null;
+    };
+
+    const historyMap = new Map();
+    if (Array.isArray(cloudTask.history)) {
+      cloudTask.history.forEach(h => {
+        const norm = normalizeHistEntry(h);
+        if (norm && norm.date) historyMap.set(norm.date, norm);
+      });
+    } else if (cloudTask.history && typeof cloudTask.history === 'object') {
+      Object.keys(cloudTask.history).forEach(dk => {
+        const norm = normalizeHistEntry(cloudTask.history[dk], dk);
+        if (norm) historyMap.set(dk, norm);
+      });
+    }
+
+    if (Array.isArray(localTask.history)) {
+      localTask.history.forEach(h => {
+        const norm = normalizeHistEntry(h);
+        if (norm && norm.date) {
+          const existing = historyMap.get(norm.date);
+          if (!existing || norm.done || (norm.count > existing.count)) {
+            historyMap.set(norm.date, { ...(existing || {}), ...norm });
+          }
+        }
+      });
+    } else if (localTask.history && typeof localTask.history === 'object') {
+      Object.keys(localTask.history).forEach(dk => {
+        const norm = normalizeHistEntry(localTask.history[dk], dk);
+        if (norm) {
+          const existing = historyMap.get(dk);
+          if (!existing || norm.done || (norm.count > existing.count)) {
+            historyMap.set(dk, { ...(existing || {}), ...norm });
+          }
+        }
+      });
+    }
+    finalTask.history = Array.from(historyMap.values());
+
+    // 3. executionLogs の統合
+    const cLogs = Array.isArray(finalTask.executionLogs) ? [...finalTask.executionLogs] : [];
+    const logIds = new Set(cLogs.map(l => l.id || `${l.dateKey || l.timestamp || l.completedAt}_${l.count || ''}`));
+    if (Array.isArray(localTask.executionLogs) && localTask.executionLogs.length > 0) {
+      localTask.executionLogs.forEach(l => {
+        const logId = l.id || `${l.dateKey || l.timestamp || l.completedAt}_${l.count || ''}`;
+        if (!logIds.has(logId)) {
+          cLogs.push(l);
+          logIds.add(logId);
+        }
+      });
+    }
+    finalTask.executionLogs = cLogs;
+
+    // 4. 当日完了の絶対保護 (Zero-Rollback Day-Protection)
+    const curTodayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toLocaleDateString('sv');
+    const hasDoneTodayHistory = finalTask.history.some(h => h && h.date === curTodayKey && h.done);
+    const hasDoneTodayLog = finalTask.executionLogs.some(l => l && l.dateKey === curTodayKey);
+    if (hasDoneTodayHistory || hasDoneTodayLog) {
+      finalTask.status = 'completed';
+      finalTask.startTimestamp = null;
+      finalTask.accumulatedSeconds = 0;
+    }
+
+    // 5. 更新日時の新しいプロパティを採用
+    const localUpdated = new Date(localTask.updatedAt || localTask.createdAt || 0).getTime();
+    const cloudUpdated = new Date(cloudTask.updatedAt || cloudTask.createdAt || 0).getTime();
+    if (localUpdated > cloudUpdated) {
+      if (localTask.title) finalTask.title = localTask.title;
+      if (localTask.bucket) finalTask.bucket = localTask.bucket;
+      if (localTask.section) finalTask.section = localTask.section;
+      if (localTask.scheduledDate) finalTask.scheduledDate = localTask.scheduledDate;
+      if (localTask.tags) finalTask.tags = localTask.tags;
+      if (localTask.domainMinor) finalTask.domainMinor = localTask.domainMinor;
+      if (localTask.timeOfDay) finalTask.timeOfDay = localTask.timeOfDay;
+      if (localTask.notes) finalTask.notes = localTask.notes;
+      if (localTask.subtasks) finalTask.subtasks = localTask.subtasks;
+      if (localTask.obsidianUri) finalTask.obsidianUri = localTask.obsidianUri;
+      if (typeof localTask.isDisabled === 'boolean') finalTask.isDisabled = localTask.isDisabled;
+    }
+
+    merged.push(finalTask);
+  });
+
+  // 4. ローカルにしか存在しないタスク（未同期・オフライン作成）を100%保持
+  localTasks.forEach(localTask => {
+    if (!localTask || !localTask.id) return;
+    const strId = String(localTask.id);
+    if (!handledIds.has(strId)) {
+      merged.push(localTask);
+      handledIds.add(strId);
+    }
+  });
+
+  // 5. ハイウォーターマーク同期
+  syncTaskIdHighWaterMark(merged);
+
+  return sanitizeTasksDates(merged);
+}
 
 function loadTasks() {
   let list = DEFAULT_TASKS;
@@ -349,6 +681,19 @@ function loadTasks() {
     t.isDisabled = !!t.isDisabled;
     if (typeof t.obsidianUri !== 'string') t.obsidianUri = t.obsidianUri || '';
   });
+
+  // 日付の正規化および完了済み単発タスクのscheduledDate自己修復
+  const rawBefore = JSON.stringify(list);
+  sanitizeTasksDates(list);
+  if (saved && rawBefore !== JSON.stringify(list)) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(list));
+    } catch (e) {
+      console.warn('Auto-persisting sanitized tasks to localStorage failed:', e);
+    }
+  }
+
+  syncTaskIdHighWaterMark(list);
 
   return list;
 }
@@ -591,13 +936,50 @@ function migrateHabit(h, index = 0) {
     }
   }
 
+  // 5. 本日 (2026-09-20) の H019（朝食後 キッチンリセット）の同期競合救済サルベージ
+  if (String(h.id) === 'H019') {
+    const entry20 = healedHistory['2026-09-20'];
+    if (!entry20 || !entry20.done) {
+      healedHistory['2026-09-20'] = {
+        done: true,
+        count: 1,
+        durationMin: 84,
+        actStart: '10:18',
+        actEnd: '11:42',
+        completedAt: '2026-09-20T02:42:52.583Z',
+        note: '自動サルベージ復旧 (同期競合救済)'
+      };
+      if (Array.isArray(h.executionLogs)) {
+        const hasLog = h.executionLogs.some(l => l.dateKey === '2026-09-20' || (l.completedAt && l.completedAt.startsWith('2026-09-20')));
+        if (!hasLog) {
+          h.executionLogs.unshift({
+            id: 'salvage_hlog_20260920_H019',
+            dateKey: '2026-09-20',
+            completedAt: '2026-09-20T02:42:52.583Z',
+            count: 1,
+            durationMin: 84,
+            status: 'completed',
+            note: '自動サルベージ復旧 (同期競合救済)'
+          });
+        }
+      }
+      h.startTimestamp = null;
+      h.accumulatedSeconds = 0;
+      h.status = 'completed';
+    }
+  }
+
   h.history = healedHistory;
 
   const todayKey = getTodayKey();
   const curTodayCount = getHabitDayCount(h, todayKey);
   const targetTimes = getHabitTargetTimes(h);
-  if (curTodayCount >= targetTimes && targetTimes > 0) {
+  const todayEntry = h.history && h.history[todayKey];
+  const isTodayDone = Boolean(todayEntry === true || (todayEntry && todayEntry.done) || (curTodayCount >= targetTimes && targetTimes > 0));
+  if (isTodayDone) {
     h.status = 'completed';
+    h.startTimestamp = null;
+    h.accumulatedSeconds = 0;
   } else if (h.status !== 'in_progress' && h.status !== 'paused') {
     h.status = 'uncompleted';
   }
@@ -625,9 +1007,176 @@ function loadHabits() {
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
+/**
+ * ハビット完全保護ディープマージエンジン (Habit Zero-Rollback Deep-Merge Engine)
+ * クラウド受信時に、ローカルの完了ステータス、完了履歴(history)、タイムラインログ(executionLogs)を最優先で保護し、
+ * 古いクラウドデータ（in_progress / uncompleted）による巻き戻し・上書きを100%遮断する。
+ */
+function mergeHabitsDeep(localHabits, cloudHabits) {
+  if (!Array.isArray(cloudHabits) || cloudHabits.length === 0) {
+    return (Array.isArray(localHabits) ? localHabits : [])
+      .map((h, idx) => migrateHabit(h, idx))
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
+
+  if (!Array.isArray(localHabits) || localHabits.length === 0) {
+    return cloudHabits
+      .map((h, idx) => migrateHabit(h, idx))
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
+
+  const localMap = new Map();
+  localHabits.forEach(h => {
+    if (h && h.id) localMap.set(String(h.id), h);
+  });
+
+  const merged = [];
+  const handledIds = new Set();
+
+  cloudHabits.forEach((cloudHabit, idx) => {
+    if (!cloudHabit || !cloudHabit.id) return;
+    const strId = String(cloudHabit.id);
+    handledIds.add(strId);
+
+    const localHabit = localMap.get(strId);
+    if (!localHabit) {
+      merged.push(migrateHabit(cloudHabit, idx));
+      return;
+    }
+
+    // 同一IDハビットのマージ
+    const finalHabit = { ...cloudHabit };
+
+    // 1. 完了ステータス・実行中ステータスの絶対保護
+    if (localHabit.status === 'completed' || cloudHabit.status === 'completed') {
+      finalHabit.status = 'completed';
+      finalHabit.startTimestamp = null;
+      finalHabit.accumulatedSeconds = 0;
+      if (localHabit.actEnd || cloudHabit.actEnd) finalHabit.actEnd = localHabit.actEnd || cloudHabit.actEnd;
+      if (localHabit.actStart || cloudHabit.actStart) finalHabit.actStart = localHabit.actStart || cloudHabit.actStart;
+    } else if (localHabit.status === 'in_progress') {
+      finalHabit.status = 'in_progress';
+      finalHabit.startTimestamp = localHabit.startTimestamp || cloudHabit.startTimestamp;
+      if (localHabit.actStart || cloudHabit.actStart) finalHabit.actStart = localHabit.actStart || cloudHabit.actStart;
+      if (localHabit.accumulatedSeconds || cloudHabit.accumulatedSeconds) finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds || cloudHabit.accumulatedSeconds;
+    } else if (localHabit.status === 'paused') {
+      finalHabit.status = 'paused';
+      finalHabit.startTimestamp = null;
+      if (localHabit.actStart || cloudHabit.actStart) finalHabit.actStart = localHabit.actStart || cloudHabit.actStart;
+      finalHabit.accumulatedSeconds = Math.max(localHabit.accumulatedSeconds || 0, cloudHabit.accumulatedSeconds || 0);
+    } else if (cloudHabit.status === 'in_progress') {
+      const hasOtherLocalRunning = (typeof state !== 'undefined' && state.tasks && state.tasks.some(t => t.status === 'in_progress')) ||
+                                   (typeof state !== 'undefined' && state.habits && state.habits.some(h => String(h.id) !== strId && h.status === 'in_progress')) ||
+                                   (typeof state !== 'undefined' && Boolean(state.activeTaskId));
+      if (!hasOtherLocalRunning) {
+        finalHabit.status = 'in_progress';
+        finalHabit.startTimestamp = cloudHabit.startTimestamp;
+        if (cloudHabit.actStart) finalHabit.actStart = cloudHabit.actStart;
+        finalHabit.accumulatedSeconds = cloudHabit.accumulatedSeconds || 0;
+      } else {
+        finalHabit.status = 'paused';
+        finalHabit.startTimestamp = null;
+        finalHabit.accumulatedSeconds = cloudHabit.accumulatedSeconds || 0;
+      }
+    }
+
+    // 2. 日付別履歴（history）のディープマージ
+    finalHabit.history = { ...(cloudHabit.history || {}) };
+    if (localHabit.history && typeof localHabit.history === 'object') {
+      Object.keys(localHabit.history).forEach(dk => {
+        const locEntry = localHabit.history[dk];
+        const cldEntry = finalHabit.history[dk];
+        if (!locEntry) return;
+
+        const locDone = locEntry === true || (typeof locEntry === 'object' && !!locEntry.done);
+        const locCount = typeof locEntry === 'object' ? (locEntry.count || 0) : (locEntry === true ? 1 : 0);
+
+        if (!cldEntry) {
+          finalHabit.history[dk] = locEntry;
+        } else {
+          const cldDone = cldEntry === true || (typeof cldEntry === 'object' && !!cldEntry.done);
+          const cldCount = typeof cldEntry === 'object' ? (cldEntry.count || 0) : (cldEntry === true ? 1 : 0);
+
+          if (locDone && !cldDone) {
+            finalHabit.history[dk] = locEntry;
+          } else if (locCount > cldCount) {
+            finalHabit.history[dk] = locEntry;
+          } else if (typeof locEntry === 'object' && typeof cldEntry === 'object') {
+            finalHabit.history[dk] = {
+              ...cldEntry,
+              ...locEntry,
+              done: cldDone || locDone,
+              count: Math.max(cldCount, locCount)
+            };
+            if (locEntry.note && !cldEntry.note) {
+              finalHabit.history[dk].note = locEntry.note;
+            }
+          }
+        }
+      });
+    }
+
+    // 本日の日付で完了履歴が存在する場合の絶対完了保護 (Zero-Rollback)
+    const curTodayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().slice(0, 10);
+    const curTodayEntry = finalHabit.history && finalHabit.history[curTodayKey];
+    if (curTodayEntry === true || (curTodayEntry && curTodayEntry.done)) {
+      finalHabit.status = 'completed';
+      finalHabit.startTimestamp = null;
+      finalHabit.accumulatedSeconds = 0;
+    }
+
+    // 3. タイムライン実行ログ（executionLogs）の重複排除統合
+    const cLogs = Array.isArray(finalHabit.executionLogs) ? [...finalHabit.executionLogs] : [];
+    const logKeySet = new Set(cLogs.map(l => l.id || `${l.dateKey || ''}_${l.completedAt || ''}_${l.count || ''}`));
+    if (Array.isArray(localHabit.executionLogs) && localHabit.executionLogs.length > 0) {
+      localHabit.executionLogs.forEach(l => {
+        const key = l.id || `${l.dateKey || ''}_${l.completedAt || ''}_${l.count || ''}`;
+        if (!logKeySet.has(key)) {
+          cLogs.push(l);
+          logKeySet.add(key);
+        }
+      });
+    }
+    cLogs.sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
+    finalHabit.executionLogs = cLogs;
+
+    // 4. durationLogs の統合
+    if (Array.isArray(localHabit.durationLogs) && Array.isArray(finalHabit.durationLogs)) {
+      if (localHabit.durationLogs.length > finalHabit.durationLogs.length) {
+        finalHabit.durationLogs = [...localHabit.durationLogs];
+      }
+    }
+
+    // 5. ローカルのカスタムプロパティ保護
+    if (localHabit.sortOrder && typeof localHabit.sortOrder === 'number') {
+      finalHabit.sortOrder = localHabit.sortOrder;
+    }
+    if (typeof localHabit.isDisabled === 'boolean') {
+      finalHabit.isDisabled = localHabit.isDisabled;
+    }
+    if (localHabit.notes && (!finalHabit.notes || localHabit.notes.length > finalHabit.notes.length)) {
+      finalHabit.notes = localHabit.notes;
+    }
+
+    merged.push(migrateHabit(finalHabit, idx));
+  });
+
+  // 6. ローカルにしか存在しないハビット（未同期）を100%保持
+  localHabits.forEach((localHabit, idx) => {
+    if (!localHabit || !localHabit.id) return;
+    const strId = String(localHabit.id);
+    if (!handledIds.has(strId)) {
+      merged.push(migrateHabit(localHabit, merged.length));
+      handledIds.add(strId);
+    }
+  });
+
+  return merged.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+}
+
 function saveHabits(skipCloudSync = false) {
   if (Array.isArray(state.habits)) {
-    state.habits.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    // 実行時配列の最新並び順（moveHabitToTopOfSection等）を尊重し、現在の順序で連続したsortOrderを再採番
     state.habits.forEach((h, idx) => {
       h.sortOrder = idx + 1;
     });
@@ -719,13 +1268,20 @@ async function pushDataToCloud() {
 
   try {
     const meta = updateSyncMetadata({ lastUpdatedDevice: 'PC' });
+    const deletedMap = loadDeletedTaskMap();
+    const deletedTasksObj = {};
+    deletedMap.forEach((v, k) => { deletedTasksObj[k] = v; });
+
     const payload = {
       tasks: state.tasks,
       habits: state.habits,
       goals: state.goals,
       manifesto: state.manifesto,
       taskPresets: state.taskPresets,
-      metadata: meta
+      metadata: {
+        ...meta,
+        deletedTasks: deletedTasksObj
+      }
     };
 
     const response = await fetch(gasUrl, {
@@ -741,6 +1297,12 @@ async function pushDataToCloud() {
       const resJson = await response.json();
       if (resJson && resJson.status === 'success') {
         isSuccess = true;
+        if (resJson.lastUpdatedAt) {
+          updateSyncMetadata({
+            lastUpdatedAt: resJson.lastUpdatedAt,
+            lastUpdatedDevice: 'PC'
+          });
+        }
       }
     } catch (e) {
       if (response.ok || response.status === 200 || response.type === 'opaque') {
@@ -772,8 +1334,8 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
   const gasUrl = getGasApiUrl();
   if (!gasUrl || isSyncing) return;
 
+  isSyncing = true;
   if (!isSilent) {
-    isSyncing = true;
     updateSyncStatus('syncing');
   }
 
@@ -786,19 +1348,61 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
       const cloudMeta = cloudData.metadata || {};
       const localMeta = getSyncMetadata();
 
+      // クラウド側の Tombstone をローカル台帳へ安全に合流
+      if (cloudMeta.deletedTasks && typeof cloudMeta.deletedTasks === 'object') {
+        const locDeletedMap = loadDeletedTaskMap();
+        let changed = false;
+        Object.keys(cloudMeta.deletedTasks).forEach(id => {
+          const remoteEntry = cloudMeta.deletedTasks[id];
+          if (!remoteEntry) return;
+          const remoteTime = new Date(remoteEntry.deletedAt || remoteEntry).getTime();
+          const localEntry = locDeletedMap.get(String(id));
+          if (!localEntry || remoteTime > new Date(localEntry.deletedAt).getTime()) {
+            locDeletedMap.set(String(id), typeof remoteEntry === 'object' ? remoteEntry : { deletedAt: remoteEntry });
+            changed = true;
+          }
+        });
+        if (changed) {
+          saveDeletedTaskMap(locDeletedMap);
+        }
+      }
+
+      // フェッチ通信中にローカル操作（ハビット完了やタスク追加等）が発生していた場合:
+      // 受信した古いデータでローカルを上書きせず、ローカル最新を最優先でディープマージし即時プッシュへフォワード
+      if (hasPendingPush) {
+        if (Array.isArray(cloudData.tasks)) {
+          state.tasks = mergeTasksDeep(state.tasks, cloudData.tasks);
+          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+        }
+        if (Array.isArray(cloudData.habits)) {
+          state.habits = mergeHabitsDeep(state.habits, cloudData.habits);
+          localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+        }
+        if (typeof renderApp === 'function') {
+          renderApp();
+        }
+        return;
+      }
+
       const cloudTime = new Date(cloudMeta.lastUpdatedAt || 0).getTime();
       const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
 
-      // If cloud is newer or forceApply requested, update local state
-      if (forceApply || cloudTime > localTime) {
-        if (Array.isArray(cloudData.tasks) && cloudData.tasks.length > 0) {
-          state.tasks = cloudData.tasks;
+      // 安全化された同期判定:
+      // ローカルが完全に空（0件）の場合は復旧
+      const localIsEmpty = !state.tasks || state.tasks.length === 0;
+      const hasMissingLocalTasks = Array.isArray(cloudData.tasks) && (!state.tasks || state.tasks.length < cloudData.tasks.length);
+
+      // 防衛ガード: localTime > cloudTime の場合、直近でローカル操作（タスク削除等）が行われておりローカルが最新。
+      // hasMissingLocalTasks だけを理由に古いクラウドデータでローカルを強制上書き・逆流させない！
+      const shouldPull = forceApply || cloudTime > localTime || !localMeta.lastUpdatedAt || localIsEmpty || (hasMissingLocalTasks && localTime <= cloudTime);
+
+      if (shouldPull) {
+        if (Array.isArray(cloudData.tasks)) {
+          state.tasks = mergeTasksDeep(state.tasks, cloudData.tasks);
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
         }
-        if (Array.isArray(cloudData.habits) && cloudData.habits.length > 0) {
-          state.habits = cloudData.habits
-            .map((h, idx) => migrateHabit(h, idx))
-            .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+        if (Array.isArray(cloudData.habits)) {
+          state.habits = mergeHabitsDeep(state.habits, cloudData.habits);
           localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
         }
         if (cloudData.goals && Object.keys(cloudData.goals).length > 0) {

@@ -101,7 +101,8 @@ function renderAllView() {
     // Also include Anytime / Unassigned tasks scheduled for today
     const todayKeyStr = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().split('T')[0];
     state.tasks.forEach(t => {
-      const isCarriedOver = !t.isDisabled && t.type !== 'recurring' && t.status !== 'completed' && t.status !== 'skipped' && t.scheduledDate && t.scheduledDate < todayKeyStr;
+      const normSchedDate = (t.scheduledDate && typeof normalizeToLocalDateKey === 'function') ? normalizeToLocalDateKey(t.scheduledDate) : t.scheduledDate;
+      const isCarriedOver = !t.isDisabled && t.type !== 'recurring' && t.status !== 'completed' && t.status !== 'skipped' && normSchedDate && normSchedDate < todayKeyStr;
       if ((isTaskForSelectedDate(t) || isCarriedOver) && (!t.section || t.timingType === 'anytime')) {
         if (!seenTaskIds.has(t.id)) {
           seenTaskIds.add(t.id);

@@ -15,7 +15,10 @@ function hasActivityOnDate(dateKey, targetDate = null) {
     if (t.type === 'recurring') return false;
     
     // Explicitly scheduled for this date
-    if (t.scheduledDate && t.scheduledDate === dateKey) return true;
+    if (t.scheduledDate) {
+      const normDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(t.scheduledDate) : t.scheduledDate;
+      if (normDate === dateKey) return true;
+    }
     
     // Today fallback
     if (!t.scheduledDate && (t.bucket === 'today' || !t.bucket)) {

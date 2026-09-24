@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gendrive Holiday & Date Navigation Test Suite</title>
+</head>
+<body>
+  <h1>Gendrive Japanese Holiday & Safe Date Navigation Test Suite</h1>
+  <div id="test-output"></div>
+
+  <!-- Load dependencies -->
+  <script src="../js/config.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+
+  <script>
+    const results = [];
+    function assert(name, condition, extraInfo = '') {
+      const pass = Boolean(condition);
+      results.push({
+        name: name,
+        pass: pass,
+        message: `${pass ? 'PASS' : 'FAIL'}: ${name}${extraInfo ? ' (' + extraInfo + ')' : ''}`
+      });
+      console.log(`${pass ? 'PASS' : 'FAIL'}: ${name} ${extraInfo}`);
+    }
+
+    // 1. Basic Holiday Detection (No recursion)
+    assert('2026-01-01 is 元日', getJapaneseHolidayName(new Date(2026, 0, 1)) === '元日');
+    assert('2026-01-12 is 成人の日 (第2月曜)', getJapaneseHolidayName(new Date(2026, 0, 12)) === '成人の日');
+    assert('2026-02-11 is 建国記念の日', getJapaneseHolidayName(new Date(2026, 1, 11)) === '建国記念の日');
+    assert('2026-02-23 is 天皇誕生日', getJapaneseHolidayName(new Date(2026, 1, 23)) === '天皇誕生日');
+    assert('2026-03-20 is 春分の日', getJapaneseHolidayName(new Date(2026, 2, 20)) === '春分の日');
+    assert('2026-04-29 is 昭和の日', getJapaneseHolidayName(new Date(2026, 3, 29)) === '昭和の日');
+    assert('2026-05-03 is 憲法記念日', getJapaneseHolidayName(new Date(2026, 4, 3)) === '憲法記念日');
+    assert('2026-05-04 is みどりの日', getJapaneseHolidayName(new Date(2026, 4, 4)) === 'みどりの日');
+    assert('2026-05-05 is こどもの日', getJapaneseHolidayName(new Date(2026, 4, 5)) === 'こどもの日');
+    assert('2026-07-20 is 海の日 (第3月曜)', getJapaneseHolidayName(new Date(2026, 6, 20)) === '海の日');
+    assert('2026-08-11 is 山の日', getJapaneseHolidayName(new Date(2026, 7, 11)) === '山の日');
+    assert('2026-09-21 is 敬老の日 (第3月曜)', getJapaneseHolidayName(new Date(2026, 8, 21)) === '敬老の日');
+    assert('2026-09-23 is 秋分の日', getJapaneseHolidayName(new Date(2026, 8, 23)) === '秋分の日');
+    assert('2026-10-12 is スポーツの日 (第2月曜)', getJapaneseHolidayName(new Date(2026, 9, 12)) === 'スポーツの日');
+    assert('2026-11-03 is 文化の日', getJapaneseHolidayName(new Date(2026, 10, 3)) === '文化の日');
+    assert('2026-11-23 is 勤労感謝の日', getJapaneseHolidayName(new Date(2026, 10, 23)) === '勤労感謝の日');
+
+    // 2. 2026 September Sequence Verification (The primary bug scenario)
+    // 2026-09-20 (Sun)
+    assert('2026-09-20 (Sun): not holiday', getJapaneseHolidayName(new Date(2026, 8, 20)) === null);
+    assert('2026-09-20 (Sun): isBusinessDay is false', isBusinessDay(new Date(2026, 8, 20)) === false);
+
+    // 2026-09-21 (Mon): 敬老の日
+    assert('2026-09-21 (Mon): is 敬老の日', getJapaneseHolidayName(new Date(2026, 8, 21)) === '敬老の日');
+    assert('2026-09-21 (Mon): isBusinessDay is false', isBusinessDay(new Date(2026, 8, 21)) === false);
+
+    // 2026-09-22 (Tue): 国民の休日 (Sandwiched between 敬老の日 and 秋分の日)
+    assert('2026-09-22 (Tue): is 国民の休日', getJapaneseHolidayName(new Date(2026, 8, 22)) === '国民の休日');
+    assert('2026-09-22 (Tue): isBusinessDay is false', isBusinessDay(new Date(2026, 8, 22)) === false);
+
+    // 2026-09-23 (Wed): 秋分の日
+    assert('2026-09-23 (Wed): is 秋分の日', getJapaneseHolidayName(new Date(2026, 8, 23)) === '秋分の日');
+    assert('2026-09-23 (Wed): isBusinessDay is false', isBusinessDay(new Date(2026, 8, 23)) === false);
+
+    // 2026-09-24 (Thu): Regular Business Day (MUST NOT STACK OVERFLOW!)
+    let h24 = null, err24 = null;
+    try {
+      h24 = getJapaneseHolidayName(new Date(2026, 8, 24));
+    } catch (e) {
+      err24 = e.message;
+    }
+    assert('2026-09-24 (Thu): No stack overflow on holiday check', err24 === null, err24 || '');
+    assert('2026-09-24 (Thu): Holiday is null', h24 === null, `actual: ${h24}`);
+    assert('2026-09-24 (Thu): isBusinessDay is true', isBusinessDay(new Date(2026, 8, 24)) === true);
+
+    // 2026-09-25 (Fri): Regular Business Day (MUST NOT STACK OVERFLOW!)
+    let h25 = null, err25 = null;
+    try {
+      h25 = getJapaneseHolidayName(new Date(2026, 8, 25));
+    } catch (e) {
+      err25 = e.message;
+    }
+    assert('2026-09-25 (Fri): No stack overflow on holiday check', err25 === null, err25 || '');
+    assert('2026-09-25 (Fri): Holiday is null', h25 === null, `actual: ${h25}`);
+    assert('2026-09-25 (Fri): isBusinessDay is true', isBusinessDay(new Date(2026, 8, 25)) === true);
+
+    // 2026-09-26 (Sat): Weekend
+    assert('2026-09-26 (Sat): Holiday is null', getJapaneseHolidayName(new Date(2026, 8, 26)) === null);
+    assert('2026-09-26 (Sat): isBusinessDay is false', isBusinessDay(new Date(2026, 8, 26)) === false);
+
+    // 3. 2026 October Sequence Verification (The secondary reported bug scenario)
+    // 2026-10-12 (Mon): スポーツの日
+    assert('2026-10-12 (Mon): is スポーツの日', getJapaneseHolidayName(new Date(2026, 9, 12)) === 'スポーツの日');
+    assert('2026-10-12 (Mon): isBusinessDay is false', isBusinessDay(new Date(2026, 9, 12)) === false);
+
+    // 2026-10-13 (Tue) through 2026-10-16 (Fri): Regular Business Days (MUST NOT STACK OVERFLOW!)
+    for (let d = 13; d <= 16; d++) {
+      let hOct = null, errOct = null;
+      try {
+        hOct = getJapaneseHolidayName(new Date(2026, 9, d));
+      } catch (e) {
+        errOct = e.message;
+      }
+      assert(`2026-10-${d}: No stack overflow`, errOct === null, errOct || '');
+      assert(`2026-10-${d}: Holiday is null`, hOct === null, `actual: ${hOct}`);
+      assert(`2026-10-${d}: isBusinessDay is true`, isBusinessDay(new Date(2026, 9, d)) === true);
+    }
+
+    // 4. Substitute Holiday (振替休日) Verification
+    // 2024-02-11 is Sunday (建国記念の日) -> 2024-02-12 is 振替休日
+    assert('2024-02-11 (Sun): is 建国記念の日', getJapaneseHolidayName(new Date(2024, 1, 11)) === '建国記念の日');
+    assert('2024-02-12 (Mon): is 振替休日', getJapaneseHolidayName(new Date(2024, 1, 12)) === '振替休日');
+    assert('2024-02-12 (Mon): isBusinessDay is false', isBusinessDay(new Date(2024, 1, 12)) === false);
+    // 2024-02-13 (Tue) must be regular business day (Not falsely marked as substitute holiday)
+    assert('2024-02-13 (Tue): is not holiday (no false positive)', getJapaneseHolidayName(new Date(2024, 1, 13)) === null);
+    assert('2024-02-13 (Tue): isBusinessDay is true', isBusinessDay(new Date(2024, 1, 13)) === true);
+
+    // 2024-05-05 (Sun) こどもの日 -> 2024-05-06 (Mon) is 振替休日
+    assert('2024-05-06 (Mon): is 振替休日', getJapaneseHolidayName(new Date(2024, 4, 6)) === '振替休日');
+
+    // 2025-11-23 (Sun) 勤労感謝の日 -> 2025-11-24 (Mon) is 振替休日
+    assert('2025-11-24 (Mon): is 振替休日', getJapaneseHolidayName(new Date(2025, 10, 24)) === '振替休日');
+
+    // 5. Recurrence Engine Integration Verification
+    const businessHabit = {
+      id: 'h_test_b',
+      name: '平日業務ハビット',
+      recurrence: { type: 'business_days' }
+    };
+    assert('Business habit scheduled on 2026-09-21 (敬老の日) is false', isHabitScheduledForDate(businessHabit, new Date(2026, 8, 21)) === false);
+    assert('Business habit scheduled on 2026-09-22 (国民の休日) is false', isHabitScheduledForDate(businessHabit, new Date(2026, 8, 22)) === false);
+    assert('Business habit scheduled on 2026-09-23 (秋分の日) is false', isHabitScheduledForDate(businessHabit, new Date(2026, 8, 23)) === false);
+    assert('Business habit scheduled on 2026-09-24 (Thu) is true', isHabitScheduledForDate(businessHabit, new Date(2026, 8, 24)) === true);
+    assert('Business habit scheduled on 2026-09-25 (Fri) is true', isHabitScheduledForDate(businessHabit, new Date(2026, 8, 25)) === true);
+    assert('Business habit scheduled on 2026-09-26 (Sat) is false', isHabitScheduledForDate(businessHabit, new Date(2026, 8, 26)) === false);
+
+    // 6. Stress Test: 3 full years (2025 - 2027: 1,095 days)
+    let stressSuccess = true;
+    let stressError = null;
+    const startD = new Date(2025, 0, 1);
+    const endD = new Date(2027, 11, 31);
+    const cur = new Date(startD);
+    let count = 0;
+    try {
+      while (cur <= endD) {
+        getJapaneseHolidayName(cur);
+        isBusinessDay(cur);
+        isHabitScheduledForDate(businessHabit, cur);
+        cur.setDate(cur.getDate() + 1);
+        count++;
+      }
+    } catch (e) {
+      stressSuccess = false;
+      stressError = e.message;
+    }
+    assert(`Stress test over ${count} consecutive days completed with 0 errors`, stressSuccess, stressError || `checked ${count} days`);
+
+    // Summary calculation
+    const passedCount = results.filter(r => r.pass).length;
+    const failedCount = results.filter(r => !r.pass).length;
+    window.__TEST_SUMMARY__ = {
+      total: results.length,
+      passed: passedCount,
+      failed: failedCount,
+      allPassed: failedCount === 0,
+      results: results
+    };
+
+    // Visual render
+    const outputDiv = document.getElementById('test-output');
+    outputDiv.innerHTML = `
+      <h2>Results: ${passedCount} / ${results.length} Passed</h2>
+      <ul>${results.map(r => `<li style="color: ${r.pass ? '#10b981' : '#ef4444'}">${r.message}</li>`).join('')}</ul>
+    `;
+  </script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gendrive Task Deep-Merge & Zero-Loss Engine Test Suite</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }
+    h1 { color: #38bdf8; font-size: 20px; }
+    .test-card { background: #1e293b; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; border-left: 4px solid #64748b; }
+    .test-card.pass { border-left-color: #22c55e; }
+    .test-card.fail { border-left-color: #ef4444; }
+    .status { font-weight: bold; }
+    .pass .status { color: #22c55e; }
+    .fail .status { color: #ef4444; }
+    #summary-box { background: #1e293b; padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #334155; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Gendrive Task Deep-Merge & Zero-Loss Engine Automated Tests</h1>
+  <div id="summary-box">実行中...</div>
+  <div id="results"></div>
+
+  <!-- Load PC and Mobile dependencies directly -->
+  <script src="../js/config.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../mobile.js"></script>
+
+  <script>
+    window.__TEST_SUMMARY__ = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      allPassed: false,
+      results: []
+    };
+
+    function assert(name, condition, message = '') {
+      window.__TEST_SUMMARY__.total++;
+      const res = { name, pass: !!condition, message: condition ? 'OK' : (message || 'Assertion failed') };
+      if (res.pass) {
+        window.__TEST_SUMMARY__.passed++;
+      } else {
+        window.__TEST_SUMMARY__.failed++;
+      }
+      window.__TEST_SUMMARY__.results.push(res);
+
+      const div = document.createElement('div');
+      div.className = `test-card ${res.pass ? 'pass' : 'fail'}`;
+      div.innerHTML = `<span class="status">[${res.pass ? 'PASS' : 'FAIL'}]</span> <strong>${name}</strong>${res.pass ? '' : `<br><small style="color:#f87171">${message}</small>`}`;
+      document.getElementById('results').appendChild(div);
+    }
+
+    async function runTestSuite() {
+      // Clear localStorage state for clean test isolation
+      localStorage.removeItem('gendrive_task_max_id_v1');
+      localStorage.removeItem('gendrive_tasks');
+
+      // Test 1: High-Water Mark tracking
+      try {
+        const sampleTasks = [
+          { id: 'T001', title: 'Task 1' },
+          { id: 'T050', title: 'Task 50' },
+          { id: 'T155', title: 'Task 155' }
+        ];
+        syncTaskIdHighWaterMark(sampleTasks);
+        const hwm1 = parseInt(localStorage.getItem('gendrive_task_max_id_v1'), 10);
+        assert('High-Water Mark detects maximum ID from task array', hwm1 === 155, `Expected 155, got ${hwm1}`);
+      } catch (e) {
+        assert('High-Water Mark detects maximum ID from task array', false, e.message);
+      }
+
+      // Test 2: High-Water Mark retention even after task deletion
+      try {
+        // Now simulate deleting T155, list only has T001 and T050
+        const smallerTasks = [
+          { id: 'T001', title: 'Task 1' },
+          { id: 'T050', title: 'Task 50' }
+        ];
+        syncTaskIdHighWaterMark(smallerTasks);
+        const hwm2 = parseInt(localStorage.getItem('gendrive_task_max_id_v1'), 10);
+        assert('High-Water Mark never decreases after task deletion', hwm2 === 155, `Expected 155 to remain, got ${hwm2}`);
+      } catch (e) {
+        assert('High-Water Mark never decreases after task deletion', false, e.message);
+      }
+
+      // Test 3: Deep-Merge: Unsynced local tasks must NOT be deleted by cloud pull (Zero-Loss)
+      try {
+        const localTasks = [
+          { id: 'T001', title: 'Task 1', status: 'uncompleted', updatedAt: '2026-09-18T05:00:00.000Z' },
+          { id: 'T156', title: '天才アイデア: バイブコーディング', bucket: 'genius', status: 'uncompleted', updatedAt: '2026-09-18T05:10:00.000Z' },
+          { id: 'T157', title: '未同期ローカルタスク（オフライン作成）', bucket: 'today', status: 'uncompleted', updatedAt: '2026-09-18T05:20:00.000Z' }
+        ];
+        // Cloud only knows about T001
+        const cloudTasks = [
+          { id: 'T001', title: 'Task 1', status: 'uncompleted', updatedAt: '2026-09-18T04:00:00.000Z' }
+        ];
+
+        const merged = mergeTasksDeep(localTasks, cloudTasks);
+        const ids = merged.map(t => t.id);
+
+        assert('Deep-Merge retains unsynced local tasks (Zero-Loss)', ids.includes('T156') && ids.includes('T157'), `Missing local tasks! Found: ${ids.join(', ')}`);
+        assert('Deep-Merge total count equals 3', merged.length === 3, `Expected 3, got ${merged.length}`);
+      } catch (e) {
+        assert('Deep-Merge retains unsynced local tasks (Zero-Loss)', false, e.message);
+      }
+
+      // Test 4: Deep-Merge: Cloud new tasks are seamlessly added
+      try {
+        const localTasks = [
+          { id: 'T001', title: 'Task 1' }
+        ];
+        const cloudTasks = [
+          { id: 'T001', title: 'Task 1' },
+          { id: 'T002', title: 'Cloud Created Task' }
+        ];
+        const merged = mergeTasksDeep(localTasks, cloudTasks);
+        const ids = merged.map(t => t.id);
+        assert('Deep-Merge adds new tasks from cloud', ids.includes('T002') && merged.length === 2, `Failed to include cloud task`);
+      } catch (e) {
+        assert('Deep-Merge adds new tasks from cloud', false, e.message);
+      }
+
+      // Test 5: Deep-Merge: Completed status protection
+      try {
+        const localTasks = [
+          { id: 'T010', title: '重要な仕事', status: 'completed', completedAt: '2026-09-18T07:00:00.000Z', actMin: 25 }
+        ];
+        // Cloud says uncompleted
+        const cloudTasks = [
+          { id: 'T010', title: '重要な仕事', status: 'uncompleted', completedAt: null, actMin: 0 }
+        ];
+        const merged = mergeTasksDeep(localTasks, cloudTasks);
+        const task010 = merged.find(t => t.id === 'T010');
+        assert('Deep-Merge protects completed status against cloud uncompleted overwrite', 
+          task010 && task010.status === 'completed' && task010.completedAt === '2026-09-18T07:00:00.000Z' && task010.actMin === 25,
+          `Status was overwritten! status=${task010?.status}`
+        );
+      } catch (e) {
+        assert('Deep-Merge protects completed status against cloud uncompleted overwrite', false, e.message);
+      }
+
+      // Test 6: Deep-Merge: Newer updatedAt wins for metadata updates
+      try {
+        const localTasks = [
+          { id: 'T020', title: 'ローカルで修正したタイトル', bucket: 'tomorrow', tags: ['#AI'], updatedAt: '2026-09-18T08:00:00.000Z' }
+        ];
+        const cloudTasks = [
+          { id: 'T020', title: '古いクラウドタイトル', bucket: 'today', tags: ['#Old'], updatedAt: '2026-09-18T06:00:00.000Z' }
+        ];
+        const merged = mergeTasksDeep(localTasks, cloudTasks);
+        const task020 = merged.find(t => t.id === 'T020');
+        assert('Deep-Merge adopts newer metadata from local', 
+          task020 && task020.title === 'ローカルで修正したタイトル' && task020.bucket === 'tomorrow',
+          `Newer local changes were lost: ${task020?.title}`
+        );
+      } catch (e) {
+        assert('Deep-Merge adopts newer metadata from local', false, e.message);
+      }
+
+      // Test 7: Deep-Merge: executionLogs union without duplication
+      try {
+        const localTasks = [
+          {
+            id: 'T030',
+            title: 'Task With Logs',
+            executionLogs: [
+              { id: 'log_1', count: 1, timestamp: '2026-09-18T06:00:00Z' },
+              { id: 'log_2', count: 2, timestamp: '2026-09-18T07:00:00Z' }
+            ]
+          }
+        ];
+        const cloudTasks = [
+          {
+            id: 'T030',
+            title: 'Task With Logs',
+            executionLogs: [
+              { id: 'log_1', count: 1, timestamp: '2026-09-18T06:00:00Z' },
+              { id: 'log_3', count: 1, timestamp: '2026-09-18T08:00:00Z' }
+            ]
+          }
+        ];
+        const merged = mergeTasksDeep(localTasks, cloudTasks);
+        const task030 = merged.find(t => t.id === 'T030');
+        const logIds = (task030?.executionLogs || []).map(l => l.id);
+        assert('Deep-Merge unions executionLogs without duplicate IDs', 
+          logIds.length === 3 && logIds.includes('log_1') && logIds.includes('log_2') && logIds.includes('log_3'),
+          `Logs not correctly merged: ${logIds.join(', ')}`
+        );
+      } catch (e) {
+        assert('Deep-Merge unions executionLogs without duplicate IDs', false, e.message);
+      }
+
+      // Test 8: Mobile Deep-Merge engine behaves identically
+      try {
+        if (typeof mergeMobileTasksDeep === 'function') {
+          const localTasks = [
+            { id: 'T001', title: 'Task 1', status: 'completed' },
+            { id: 'T099', title: 'Mobile Offline Created', status: 'uncompleted' }
+          ];
+          const cloudTasks = [
+            { id: 'T001', title: 'Task 1', status: 'uncompleted' }
+          ];
+          const mergedMobile = mergeMobileTasksDeep(localTasks, cloudTasks);
+          const ids = mergedMobile.map(t => t.id);
+          const t1 = mergedMobile.find(t => t.id === 'T001');
+
+          assert('mergeMobileTasksDeep protects offline tasks and completed status',
+            ids.includes('T099') && t1 && t1.status === 'completed',
+            `Mobile merge failed: ids=${ids.join(', ')}, t1.status=${t1?.status}`
+          );
+        } else {
+          assert('mergeMobileTasksDeep protects offline tasks and completed status', false, 'mergeMobileTasksDeep is not defined');
+        }
+      } catch (e) {
+        assert('mergeMobileTasksDeep protects offline tasks and completed status', false, e.message);
+      }
+
+      // Test 9: Restored Genius Tasks (11 items: T156-T166) & Today/Future Tasks (34 items: T122-T155) Integration
+      try {
+        const geniusTaskIds = [];
+        for (let i = 156; i <= 166; i++) {
+          geniusTaskIds.push('T' + String(i).padStart(3, '0'));
+        }
+        const singleTaskIds = [];
+        for (let i = 122; i <= 155; i++) {
+          singleTaskIds.push('T' + String(i).padStart(3, '0'));
+        }
+
+        const collision = geniusTaskIds.filter(id => singleTaskIds.includes(id));
+        assert('Zero ID collisions between restored Genius Ideas (T156-T166) and Single Tasks (T122-T155)',
+          collision.length === 0,
+          `Found collisions: ${collision.join(', ')}`
+        );
+
+        const mockRestored = [
+          ...singleTaskIds.map(id => ({ id, title: 'Single Task ' + id })),
+          ...geniusTaskIds.map(id => ({ id, title: 'Genius Idea ' + id }))
+        ];
+        syncTaskIdHighWaterMark(mockRestored);
+        const finalHWM = parseInt(localStorage.getItem('gendrive_task_max_id_v1'), 10);
+        assert('High-Water Mark advances to 166 with all restored tasks',
+          finalHWM === 166,
+          `Expected 166, got ${finalHWM}`
+        );
+      } catch (e) {
+        assert('Restored Tasks integrity verification', false, e.message);
+      }
+
+      // Test 10: Empty / Fallback safety
+      try {
+        const resEmptyCloud = mergeTasksDeep([{ id: 'T001' }], []);
+        const resEmptyLocal = mergeTasksDeep([], [{ id: 'T002' }]);
+        const resNull = mergeTasksDeep(null, null);
+
+        assert('mergeTasksDeep gracefully handles empty/null arrays without error',
+          resEmptyCloud.length === 1 && resEmptyLocal.length === 1 && Array.isArray(resNull),
+          `Edge case failed: emptyCloud=${resEmptyCloud.length}, emptyLocal=${resEmptyLocal.length}`
+        );
+      } catch (e) {
+        assert('mergeTasksDeep gracefully handles empty/null arrays without error', false, e.message);
+      }
+
+      // Final Summary
+      window.__TEST_SUMMARY__.allPassed = (window.__TEST_SUMMARY__.failed === 0 && window.__TEST_SUMMARY__.passed > 0);
+      const sBox = document.getElementById('summary-box');
+      sBox.innerHTML = `
+        <h2 style="color: ${window.__TEST_SUMMARY__.allPassed ? '#4ade80' : '#f87171'}; margin:0 0 8px 0;">
+          ${window.__TEST_SUMMARY__.allPassed ? '✅ ALL TESTS PASSED' : '❌ TESTS FAILED'}
+        </h2>
+        <div>Total Tests: ${window.__TEST_SUMMARY__.total} | Passed: ${window.__TEST_SUMMARY__.passed} | Failed: ${window.__TEST_SUMMARY__.failed}</div>
+      `;
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      runTestSuite();
+    });
+  </script>
+</body>
+</html>

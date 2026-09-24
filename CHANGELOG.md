@@ -2,6 +2,202 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.1] - 2026-09-21
+### Fixed & Protected
+- **Habit/Task Instant Start, Optimistic DOM Mutation Guard & Zero-Rollback Cloud Integrity (ハビット・タスク即時開始＆即時DOM更新ガード＆クラウド同期完全排他インテグリティ)**:
+  - **ハビット開始不能・待機中固着の根本原因解明と完全根絶**:
+    1. **Optimistic Direct DOM Mutation Guard (即時DOM実行中遷移ガード) の新設**:
+       - `startHabit` および `startTask` 実行時に、全体再描画（`renderApp()`）や通信待機を挟まず、対象カード（`.habit-card[data-id="${targetId}"]` / `.task-card`）をその場で即座にエメラルドグリーン／シアンの実行中クラス（`in-progress is-timescale-active`）、ステータスピル（「● 実行中」）、アクションボタン（「✓ 完了」）へ1ミリ秒で直接書き換え。先行して実行されていたタスクやハビットも即座に「⏸️ 中断中」「▶ 再開」へ切り替え。
+    2. **`moveHabitToTopOfSection` と `saveHabits` の内部競合（並び順巻き戻りバグ）の完全解消**:
+       - `saveHabits()` 先頭で実行されていた古い `sortOrder` による破壊的ソート（`state.habits.sort(...)`）を撤廃。`moveHabitToTopOfSection` 等で配列先頭に移動された実行時順序を最優先で尊重し、現在の配列順で連続した `sortOrder` を再採番して永続化する強固な順序インテグリティを確立。
+    3. **15秒ハートビート・GAS同期時の排他制御（`mergeTasksDeep` / `mergeHabitsDeep`）の防壁強化**:
+       - クラウド側に古い実行中ステータス（例: 06:07開始のT206）が残存していても、ローカル側でハビットがアクティブ（`state.activeHabitId`）であればタスクのゾンビ復活（勝手な再開）を確実に遮断し、安全に中断中（`paused`）として合流。
+       - ローカルで開始したばかりの `in_progress` ステータスが直後のクラウド同期によって古い `uncompleted` へ巻き戻る事故を物理的に完全防止。
+    4. **バージョン管理とキャッシュバスターの統一 (`v1.9.1`)**:
+       - `js/config.js`, `index.html`, `mobile.html`, `app.js` のバージョン表記および全27スクリプトタグ・CSSクエリパラメータを `?v=1.9.1` に更新。
+    5. **実機ヘッドレスEdge自動検証（25/25 PASS）**:
+       - 07:45 時点の手動セクション表示下における H088 開始・即時DOM遷移・先行T206中断・ソート順永続化・クラウド同期マージ・完了ライフサイクル・タスク開始即時DOM遷移の全25テストが 100% PASS。
+
+## [v1.9.0] - 2026-09-21
+### Fixed & Protected
+- **Seamless Task/Habit Execution, Live Timescale Engine & Zero-Zombie Rollback (待機中タスク・ハビット開始＆ライブタイマー連動＆ゾンビ復活防止エンジン)**:
+  - **「待機中のタスク・ハビットを開始すると黒くなるだけで完了もできない」現象の根本原因解明と完全根絶**:
+    1. **`style.css` の `!important` 暗黒化上書きの完全撤廃**:
+       - `.task-card.is-timescale-active`, `.habit-card.is-timescale-active`, `.task-card.is-timescale-paused` に付与されていた `background: rgba(...) !important;` が、実行中（鮮やかなエメラルドグリーン／シアンブルー）や中断中（アンバーイエロー）のネオングラデーションを強制破壊し、進捗0%時に完全な「真っ黒い矩形」に変貌させていた問題を完全是正。
+    2. **待機中タスク開始時の全画面ブロッキングモーダル（`#modal-resume-note`）自動起動の撤廃**:
+       - 先行タスク実行中に別の待機中タスクを開始した際、先行タスクの中断メモ入力モーダルが全画面オーバーレイ（`z-index: 100`, 背景暗転）を展開してクリックを全面遮断していた挙動を解消。タスク開始は即座・シームレスに切り替わり、中断メモは手動「中断」操作時のみ起動する自然な設計に改修。
+    3. **全ビュー（セクション画面・全体画面）でのリアルタイム・ライブタイマー稼働**:
+       - `updateLiveTimers()` においてハビットカードの要素ID不一致（`habit-timer-` ➔ `habit-progress-time-`）を是正。
+       - タスクカードに関してもフォーカスモード限定の制限を撤廃し、セクション画面（`#view-section`）および全体画面（`#view-all`）のタスクカード（`task-progress-time-${task.id}`）で毎秒正確に実績分数がリアルタイム更新され、タイムスケールバーが伸びるよう改修。
+    4. **ハビット開始時の `activeTaskId` 完全クリア＆シングルタスク排他制御の確立**:
+       - `startHabit` 実行時に `state.activeTaskId = null` を確実に設定。ステータスバーが先行中断タスクを表示し続ける不整合を根絶し、開始したハビットが即座にステータスバーとアクティブタイマーに反映されるよう整流化。
+    5. **クラウド同期ディープマージ（`mergeTasksDeep` / `mergeHabitsDeep`）のゾンビ復活防止**:
+       - ローカルで中断中（`paused`）にしたタスクやハビットが、直後のクラウド同期によって古いクラウド側の `in_progress` ステータスで勝手に再開（ゾンビ復活）されてしまう競合を完全遮断。ローカルの意図的中断および実行中排他制御を最優先保護。
+    6. **キャッシュバスター全面更新 (`v1.9.0`)**:
+       - `style.css?v=1.9.0`、`js/config.js?v=1.9.0`、および `index.html`・`mobile.html` の全スクリプトタグを `v1.9.0` に更新。
+
+## [v1.8.9] - 2026-09-21
+### Fixed & Protected
+- **Task Completion Integrity & Permanent Zero-Relapse Architecture (タスク完了画面同期インテグリティ＆翌朝再発防止アーキテクチャ)**:
+  - **タスク「オンゴーイング プロジェクト タスクプランニング (T206)」完了不能バグの完全根絶**:
+    - タスクの完了ボタン（「✔ 完了」）を押して下部に「⚡ タスク「オンゴーイング プロジェクト タスクプランニング」を完了」とトースト通知が表示されているにもかかわらず、カードが「● 実行中」「✔ 完了」のまま画面に残り続け、ステータスバーにも「進行中: 🎯 ...」が残存してしまう不整合を根本解明・完全根絶。
+  - **なぜ昨日の早朝直ったのに今朝再発したのか？（構造的原因の解明）**:
+    - 直前の v1.8.8 改修ではハビット（`completeHabit` / `mergeHabitsDeep`）の完了画面同期機構を集中的に是正していましたが、タスク（`completeTask` / `mergeTasksDeep`）側にも同一構造の欠陥が残存していました。昨日はユーザー様がハビット中心に利用されていたため正常稼働していましたが、今朝ルーティンで定期タスク（T206）を開始した瞬間に未改修のタスク側パイプラインが発火し、全く同じ現象が顕在化しました。
+  - **タスクカードレンダラー（`cardRenderers.js`）における完了ステータス最優先評価**:
+    - `isCompleted` を `isInProgress` より最優先で評価するように構造改修。
+    - `isInProgress` および `isPaused` の判定に `!isCompleted` 条件を厳格に付与。完了タスクに対して「● 実行中」ピルや「✔ 完了」ボタンが決して描画されないよう完全排他化。
+  - **タスク完了時の Optimistic Direct DOM Mutation Guard (即時DOM消去ガード)**:
+    - `completeTask` 実行時に、全体再描画や通信待機を挟まずに対象タスクカード（`.task-card[data-id="${targetId}"]`）をその場で即座にフェードアウト・消去。通信遅延やバックグラウンド同期に1ミリ秒も左右されず、クリックした瞬間に確実に画面から消去。
+  - **ステータスバー（`app.js`）におけるゾンビ実行中表示の排除**:
+    - フッター進行中表示（Line 1565）において `t.status !== 'completed'` および `getTaskStatusForSelectedDate(t) !== 'completed'` の除外ガードを増設。完了タスクが「進行中: 🎯 ...」と表示される不整合を根絶。
+  - **タスクディープマージ（`mergeTasksDeep` / `mergeMobileTasksDeep`）の Zero-Rollback 完了整流化**:
+    - ローカルまたはクラウドのどちらか一方でも `completed` であれば完了ステータスを最優先保護し、`startTimestamp = null`、`accumulatedSeconds = 0` を強制適用（古い実行中タイムスタンプの逆流復元を物理遮断）。
+    - 日付別履歴（`history`）のディープマージ機構を新設。配列形式とオブジェクト形式の相互運用を完全保証し、完了日記録の欠落を防止。
+    - 当日の完了履歴または実行ログ（`executionLogs`）が存在する場合の当日完了絶対保護（Zero-Rollback Day-Protection）を配備。
+  - **翌朝日付変更（Day-Rollover）時のゴースト実行中サニタイズ**:
+    - `sanitizeDailyState` において、前日以前から持ち越された 18 時間以上経過した未完了タイマー（`in_progress` / `paused`）を翌朝ウェイクアップ時に安全にリセットし、翌朝にゴースト実行中が引き継がれる問題を根絶。
+  - **バージョン更新とキャッシュバスター適用 (`v1.8.9`)**:
+    - `js/config.js` および `index.html` の全 27 スクリプトタグを `?v=1.8.9` に更新。
+  - **Edge 実機自動テストによる完全検証**:
+    - 実GASデータ上のタスク T206（オンゴーイング プロジェクト タスクプランニング）を用いた再現テストにおいて、完了操作・即時DOM消去・ステータスバー消去・その後のGAS同期マージ後も完了が維持されることを100%実証。
+
+## [v1.8.8] - 2026-09-21
+### Fixed & Protected
+- **Habit Completion Render Pipeline & Zero-Rollback Integrity Engine (ハビット完了画面描画パイプライン＆完全排他整流化エンジン)**:
+  - **ハビット完了残存バグの根本原因解明と完全根絶**:
+    - ハビット「朝ジャーナル記入（H043）」完了時に、クラウド（GAS）および内部データ上は正常に完了保存されているにもかかわらず、画面上のカードが「● 実行中」「✓ 完了」のまま残存してしまった事象を根本解決。
+  - **同期通信時の画面再描画（`renderApp`）漏れを完全解消**:
+    - 15秒ごとの定期ハートビート同期通信中に完了操作が行われた際、`storageService.js` の `pullDataFromCloud` 内 `hasPendingPush` ガードが作動してデータは最新にマージされるものの、`renderApp()` が呼び出されずに終了していたため画面が古いDOMのまま取り残されていた決定的な欠陥を是正。マージ直後に必ず `renderApp()` を呼び出すよう修正。
+  - **カードレンダラー（`cardRenderers.js`）における完了ステータス最優先評価**:
+    - `isCompleted`（本日目標達成済み）を `isInProgress`（実行中）より最優先で評価。
+    - `isInProgress` および `isPaused` の判定に `!isCompleted` 条件を厳格に付与。
+    - アクションボタン・ステータスピル・カードクラスの全分岐において `isCompleted` を最優先とし、完了しているハビットに対して「● 実行中」ピルや「✓ 完了」ボタンが決して描画されないよう完全排他化。
+  - **ハビットディープマージ（`mergeHabitsDeep`）における Zero-Rollback 完了整流化**:
+    - クラウドとローカルの同期時、ローカルまたはクラウドのどちらか一方でも `completed` であれば完了を最優先保護。
+    - 日付別履歴（`history`）のマージ直後、当日の履歴において `done: true` が存在する場合、`status: 'completed'`、`startTimestamp: null`、`accumulatedSeconds = 0` へ自動正規化する防壁を増設。
+  - **ハビット初期化マイグレーション（`migrateHabit`）の全ハビット汎用化**:
+    - 前バージョンの個別対症療法（H019ハードコード）を全ハビット共通の健全化ロジックへ昇華。当日の履歴で完了しているハビットは、起動ロード時および同期マージ時に自動で `status: 'completed'` かつタイマースタンプをクリア。
+  - **Optimistic Direct DOM Mutation Guard (即時DOM完了消去ガード)**:
+    - `completeHabit` 実行時、全体再描画や通信待機を挟まずに対象カード要素をその場で即座にフェードアウト消去。通信ラグや再描画タイミングに1ミリ秒も左右されず、クリックした瞬間に確実に画面から消去。
+  - **Day-Rollover Auto-Sanitizer (翌朝自動ウェイクアップ・サニタイザー)**:
+    - スリープ復帰時（`focus` / `visibilitychange`）および1分ごとの定期監視において、日付変更（`lastProcessedDate !== getTodayKey()`）を自動検知。夜間にPCをスリープさせてブラウザを開いたまま翌朝を迎えた場合でも、朝PCを開いた瞬間にゼロタッチで自動サニタイズ（`sanitizeDailyState()`）と再描画（`renderApp()`）を発火させ、前日のステータス引きずり・翌朝再発を物理的に完全防止。
+  - **全スクリプトタグのキャッシュバスター完全適用 (`?v=1.8.8`)**:
+    - `index.html` の全 JavaScript スクリプトタグに `?v=1.8.8` を付与し、ブラウザキャッシュによる古いコードの実行を完全根絶。
+  - **自動テストスイートの Daily Isolation 対応と全件 PASS 実証**:
+    - `tests/test_habit_deep_merge_and_sync_lifecycle.html` を Daily Isolation（翌日未完了リセット）の仕様に合致した動的日付判定へ改善し、Edge Headless 環境下で全9テストが 100% PASS。
+    - 実機 DOM 統合検証テストにおいて、`startHabit('H043')` から `completeHabit('H043')` のライフサイクル全体で「● 実行中」カードが確実に消去され未完了リストから正常除外されることを実証。
+
+## [v1.8.7] - 2026-09-20
+### Fixed & Protected
+- **Habit Zero-Rollback Deep-Merge & Safe Sync Engine (ハビット完了巻き戻り完全根絶＆同期排他制御エンジン)**:
+  - **ハビット完了巻き戻り（レースコンディション）の完全根絶**: ハビット完了ボタン（「✓ 完了」）を押した際にトーストが表示されるものの、画面上のバナーが完了にならず「実行中」のまま残ってしまう不整合を根本解決。
+  - **原因の完全特定と是正**:
+    1. 15秒間隔のバックグラウンド同期（`isSilent = true`）において同期排他フラグ（`isSyncing`）が立たず、通信中にユーザーが行った完了操作が直後に着信した古いクラウドデータ（`status: 'in_progress'`）で上書きされていた排他制御の穴を是正。
+    2. タスク（`tasks`）側には配備されていたディープマージ機構がハビット（`habits`）側には存在せず、クラウド配列でローカルを完全上書き（REPLACE）していた設計を抜本改修。
+  - **ハビット専用ディープマージエンジン（`mergeHabitsDeep` / `mergeMobileHabitsDeep`）の配備**:
+    - ローカルで `status === 'completed'` の場合、クラウド側が `in_progress` や `uncompleted` であっても完了状態を最優先保護し、`startTimestamp = null` を保証。
+    - 日付別履歴（`history`）を日付キー単位でディープマージし、完了フラグ（`done: true`）や回数（`count`）を最優先保持。
+    - タイムライン実行ログ（`executionLogs`）をIDベースで重複なく合流統合。
+    - ローカルで作成された未同期・オフラインハビットを100%保持。
+  - **通信中ローカル操作の安全化ガード（Safe Pending Push Guard）**:
+    - サイレント同期中であっても `isSyncing = true` で排他制御。
+    - データフェッチ通信中にローカル操作（ハビット完了やタスク追加等）が発生した場合（`hasPendingPush = true`）、受信した古いデータでの上書きを安全に遮断し、ローカル最新版を最優先ディープマージして即時クラウドへプッシュ。
+    - プッシュ成功時に返却されたタイムスタンプをローカルメタデータに即時反映し、直後の不要な巻き戻しプルを遮断。
+  - **対象ハビット（H019: 朝食後 キッチンリセット）の即時自己修復サルベージ**:
+    - 本日（2026-09-20）開始時刻（10:18:24）のまま巻き戻されていた H019 に対し、`migrateHabit` / `migrateMobileHabit` 内で本日分の完了実績（`done: true`, `count: 1`, `durationMin: 84`, `completedAt`）を自動サルベージ生成し、`status: 'completed'`、`startTimestamp: null` へ恒久修復。
+- **Automated Verification Suite (9/9 Browser PASS & Lifecycle Simulation PASS)**:
+  - `tests/test_habit_deep_merge_and_sync_lifecycle.html` および `tests/run_habit_deep_merge_test.ps1` を新設。Edge Headless 環境下で PC/Mobile ディープマージ、完了保護、履歴保持、ログ統合、H019 自己修復サルベージ、オフラインハビット保護の全9テストが 100% PASS。
+  - 画面描画シミュレーション（`simulate_real_sync_lifecycle.js`）により、完了ボタン押下後に古いクラウドデータを受信しても「● 実行中」バナーが再出現せず、セクション完了メッセージが維持されることを完全実証。
+
+## [v1.8.6] - 2026-09-20
+### Added & Protected
+- **Recurring Task Daily Skip & Isolation Engine (定期タスク当日スキップ＆自動復元エンジン)**:
+  - **定期タスク当日スキップ機能の確立**: デイリーボードやセクションボードで「今日これはやらない」と判断した定期タスク（例: 朝クリエイトタイム等）を右クリックから「⏭️ 今日はスキップ」することで、定期タスクマスター（親データ）を一切削除・変更することなく、当日の画面から完全に除外・非表示化。
+  - **翌朝ゼロタッチ完全自動復元**: 日付キー連動メタデータ（`task.skippedDates = [dateKey]`, `task.skippedDateKey = dateKey`）および `sanitizeDailyState` による日次自動リセットにより、翌朝アプリ起動時には自動的に未完了状態へ復帰し、朝のボードに確実に自動アサイン（通常表示）。明日以降の日付送り表示時も通常表示を完全保証。
+  - **フォーカスボード（キー 2）完全除外保証**: 集中タスク実行画面において `t.status !== 'skipped'` を徹底し、スキップしたタスクがルーレット・実行候補に一切現れないノイズゼロ空間を確立。
+  - **リアルタイムサマリー（ETA）連動**: デイリーおよびセクションの残り予定工数（`dayTaskRemainMin` / `secTaskRemainMin`）からスキップ分を自動減算し、当日の現実的な完了見込時刻を正確に更新。
+  - **「すべて表示」での視覚的識別 & ワンクリック復活**: ツールバーで「すべて」を選択した際、スキップタスクを半透明破線カード（`.dimmed-card`）および「⏭️ スキップ」バッジ付きで表示。カード上の「↩ 復活」ボタンまたは右クリック「🔄 スキップを解除」でいつでも即座に未完了状態へ復元可能。
+  - **トーストUndo連動**: スキップ操作直後に「元に戻す」トースト通知を表示し、押し間違えを即座に1タップで救済。
+  - **ハビット（習慣マスター）連動スキップ**: ハビット側の「今日はスキップする（`skipHabit`）」も同様に当日のセクション・デイリー画面から完全非表示化されるよう統合修正。
+- **Automated Verification Suite (25/25 PASS)**:
+  - `tests/test_recurring_task_daily_skip.html` を新設。スキップ実行、日付キー保持、当日未完画面非表示、完了画面非表示、すべて表示での復活、フォーカスボード完全除外、ETA減算、マスター台帳保護、ハビット連動、Undo復元、翌朝サニタイズ自動復元、バージョン整合を含む全25項目が 100% 完全PASS。
+
+## [v1.8.5] - 2026-09-20
+### Fixed & Protected
+- **Task Tombstone & Resurrection-Free Sync Engine (タスク墓石台帳＆ゾンビ復活完全根絶同期エンジン)**:
+  - **削除タスクのゾンビ復活を完全根絶**: 単発タスク削除時に、バックグラウンドの15秒Heartbeat同期やタブ切り替え・フォーカス復帰、GAS通信の遅延によって消したタスクがクラウドから逆流してゾンビのように復活する現象を100%遮断。
+  - **タイムスタンプ付きTombstone（墓石台帳）アーキテクチャ**: `localStorage` に `gendrive_deleted_task_ids_v1` を新設。タスク削除時にIDと削除日時（`deletedAt`）を記録。
+  - **データ欠損ゼロ保護（Zero-Loss Protection）**: `mergeTasksDeep`（PC）および `mergeMobileTasksDeep`（Mobile）において、クラウド側タスクの更新日時が削除日時以前であれば「意図して削除されたタスク」として安全に破棄。万が一他端末で削除日時より後に再作成・更新されたタスク（`updatedAt > deletedAt`）であれば新タスクとして保護し、データ欠損リスクを数理的にゼロ化。
+  - **安全化された同期判定ガード（`hasMissingLocalTasks` 是正）**: `localTime > cloudTime`（直近でローカル操作が行われた）の場合は、ローカルのタスク件数が少なくても古いクラウドデータによる強制上書き・逆流を遮断し、ローカルからクラウドへのプッシュを優先。
+  - **Undo（取り消し）との完全連動**: タスク削除の取り消し操作（Undo / トースト）実行時にTombstone台帳から該当IDを即座に消去し、安全にタスクを再復元。
+  - **マルチデバイスTombstone同期 & 30日TTL自動パージ**: クラウド送受信メタデータに `deletedTasks` を含め、PCとスマホの両端末間で削除状態を自動共有。30日以上経過した古い墓石データは自動消去してストレージを保護。
+  - **全削除UIへの完全適用**: コンテキストメニュー（右クリック）、タスク編集モーダル、テーブルビューの個別削除および一括削除のすべてにTombstone記録を連動。
+- **Automated Verification Suite**:
+  - `tests/test_task_tombstone_and_sync_lifecycle.html` を新設。Tombstone記録・取得、クラウドからのゾンビ復活遮断、削除後新規タスクのデータ欠損ゼロ保護、Undo連動復元、一括削除Tombstone記録、モバイルディープマージ連携を含む全項目を自動検証。
+
+## [v1.8.2] - 2026-09-18
+### Fixed & Protected
+- **Completed Single Task Lifecycle & Daily Quarantine Engine (完了単発タスク自己修復＆デイリー画面ゾンビ表示完全根絶エンジン)**:
+  - **根本原因の完全解消**: 日付未指定のまま完了された単発タスク（例: `T075` Antigravity2.0インストール、`T076` Cursorインストール等）が、デイリー判定（`isTaskForSelectedDate`）の「日付未指定なら今日に表示」ルールにより、完了状態にもかかわらず毎日デイリー画面の「いつでも枠」に出現していた不整合を完全根絶。
+  - **`taskTimerService.js` / `mobile.js` (`completeTask`)**: 単発タスク完了時、`scheduledDate` が未設定であれば完了当日の日付キー（`dateKey`）を自動ロックして保存。Undo操作時は元の期日へ忠実に復元。
+  - **`app.js` (`isTaskForSelectedDate`) 二重防衛ガード**: 単発タスクが完了済み（`status === 'completed'`）で万が一 `scheduledDate` が未設定の場合でも、実行ログ（`executionLogs`）や完了履歴（`history`）の完了日を参照し、該当日のデイリー画面にのみ限定表示。今日を含む別日へのゾンビ流出を完全遮断。
+  - **`storageService.js` / `mobile.js` 自己修復（Self-Healing）**: `sanitizeTasksDates()` および `sanitizeMobileTasks()` において、完了済みで `scheduledDate` が空の単発タスクを検出し、完了ログから本来の完了日（`2026-09-06`等）を自動サルベージして台帳を恒久修復。
+- **Automated Verification Suite (21/21 PASS & 112/112 Total PASS)**:
+  - `tests/test_completed_single_task_lifecycle.html` を新設。日付自動サルベージ、デイリー隔離防衛、PC/モバイル完了時ロック、Undo復元、LocalStorage自動永続化を含む全21テストケースが 100% 完全合格。既存テスト（91件）と合わせ全112テストでエラー0件を実証。
+
+## [v1.8.1] - 2026-09-18
+### Fixed & Protected
+- **Defensive Date Normalization Engine (防衛的日付正規化エンジンの確立)**: Googleスプレッドシートや外部同期クライアント起因で混入した長文Date文字列（例: `Fri Sep 18 2026 00:00:00 GMT+0900 (日本標準時)`）やスラッシュ形式、ISO形式のあらゆる日付表現を、ユーザーのローカル時刻基準（JST）で `YYYY-MM-DD` へダイレクトにパース・正規化する `normalizeToLocalDateKey(val)` を新設・強化。
+- **Daily View & Calendar Activity Dots Full Restoration (デイリー画面タスク表示＆カレンダードット完全復活)**:
+  - `app.js` の `isTaskForSelectedDate`: `scheduledDate` を `normalizeToLocalDateKey` を通して日付キー（`YYYY-MM-DD`）と比較するよう改修。本日（9/18）の期日指定単発タスク（J PREP Week1〜Week4、計画→Obsidianリスケ、ALL-IN、謝恩会返信方針など）がデイリー画面に確実に表示されるよう完全復旧。
+  - `calendarView.js` の `hasActivityOnDate`: `t.scheduledDate` を `normalizeToLocalDateKey` を通して評価。本日および明日以降（9/19〜11/11、計26件）のタスクが存在する日付の下にアクティビティドット（・）が100%確実に描画されるよう完全復旧。
+  - `allView.js`: キャリーオーバー判定における `scheduledDate` 比較の防衛的正規化。
+- **Storage & Cloud Deep-Merge Auto-Sanitization (ローカル保存・クラウド同期時の自動サニタイズ)**:
+  - `storageService.js` の `loadTasks()` および `mergeTasksDeep()` の全ブランチにおいて、`sanitizeTasksDates()` を通して読み込み・マージ時に `scheduledDate` を自動で `YYYY-MM-DD` に自己修復。
+  - `pullDataFromCloud()`: クラウド側にタスクが存在しローカルのタスク数が下回っている場合、自動でディープマージを実行して画面およびカレンダーを即時最新化するフェイルセーフを配備。
+- **Mobile Engine Defensive Alignment (モバイル側防衛的アライメント)**:
+  - `mobile.js` に `normalizeMobileDateKey(val)` を配備し、`sanitizeMobileTasks()` での `scheduledDate` 正規化および `pullFromCloud()` での自動マージ保護を適用。
+- **Automated Test Suite (19/19 PASS & 91/91 Total PASS)**:
+  - `tests/test_task_date_normalization_and_calendar_dots.html` を新設。Date文字列パース、デイリー表示判定、カレンダードット描画、ディープマージサニタイズ、モバイルサニタイズを含む全19テストケースが 100% 完全PASS。既存のディープマージテスト（12件）および祝日ナビゲーションテスト（60件）と合わせ全91テストでエラー0件を実証。
+
+## [v1.8.0] - 2026-09-18
+### Added & Protected
+- **Task Deep-Merge Engine (タスク消失完全根絶ディープマージエンジンの確立)**: `storageService.js` および `mobile.js` の `pullDataFromCloud` において、クラウド受信データでローカルタスクを完全上書き（REPLACE）していた設計を根本是正。ローカルにのみ存在する未同期・オフラインタスクを100%保持し、同一IDタスクは完了ステータス（`completed`）を最優先保護、更新日時が新しい属性を採用、`executionLogs` を重複なく統合するディープマージ機構（`mergeTasksDeep` / `mergeMobileTasksDeep`）を配備。
+- **High-Water Mark Task ID Protection (ハイウォーターマークID採番衝突防止エンジン)**: タスクIDの自動発番（`generateNextTaskId()`）において、ローカル配列内の最大番号だけでなく `localStorage` に保持された過去最高採番値（`gendrive_task_max_id_v1`）を常に参照・更新するハイウォーターマーク防壁を構築。タスク削除や同期一時欠落が発生しても過去のID番号を再利用せず、ID衝突や重複上書きによるデータ押し出しを永久に根絶。
+- **Dual-Device Storage Keys Collision-Safe Architecture**: `storageService.js` と `mobile.js` の `STORAGE_KEYS` 定義を `Object.assign` 型の安全なグローバル共有構造へリファクタリング。デュアルロード時やテスト実行時のSyntaxErrorを完全解消。
+- **Full Restoration of Lost Tasks (消失タスク全45件の完全復旧・ID整合)**:
+  - 9/14登録の「天才アイデアの箱」バイブコーディングタスク11件（T122〜T132）をID衝突なしの `T156〜T166` へ安全にリナンバリングして完全復旧。
+  - 9/18朝および将来1ヶ月先（10月中旬まで）の期日指定単発タスク34件（T122〜T155）をGoogle Driveバックアップより完全復旧。
+  - クラウド・スプレッドシート・GAS API（全211件）およびローカル台帳への完全統合を完了。
+- **Automated Verification Suite (12/12 PASS & 108/108 Total PASS)**: ハイウォーターマーク維持、未同期ローカルタスク生存（Zero-Loss）、完了ステータス保護、更新日時最新優先、executionLogs統合、モバイルディープマージ等を含む自動テストスイートを新設し 100% PASS を達成。
+
+
+## [v1.7.6] - 2026-09-17
+### Fixed & Improved
+- **Japanese Holiday Non-Recursive Engine (祝日判定・非再帰2層エンジンの確立)**: `js/utils/dateUtils.js` の `getJapaneseHolidayName()` における「国民の休日」および「振替休日」判定時の相互再帰（ピンポン呼び出し）を根本是正。第2条本祝日のみを直接判定する純粋関数 `getJapaneseBaseHolidayName()` と、それを参照して判定する総合祝日判定 `getJapaneseHolidayName()` に分離し、再帰深度を完全にゼロ（O(1)）化。
+- **Date Navigation Stack Overflow Guard (日付ナビゲーション無限スタッククラッシュ完全解消)**: 2026年9月24日・25日や10月13日〜16日など、祝日直後の平日へ移動した際に発生していた `RangeError: Maximum call stack size exceeded` による画面描画停止・3日スキップ現象を完全解消。←→キー移動・カレンダー直接選択の双方で、ミリ秒単位で安全かつシームレスに全日付間を遷移可能に。
+- **Substitute Holiday Consecutive Chain Correction (振替休日連続チェーン正確化)**: 振替休日判定において過去3日を無条件で遡っていた簡易処理を刷新。日曜日から直前日までの平日がすべて祝日であった場合のみ直後の平日を振替休日とする正式な祝日法（第3条第2項）準拠ロジックへ更新し、平日への誤判定を根絶。
+- **Automated Verification Suite (60/60 PASS)**: 2026年9月連休・10月連休・過去振替休日・3年間（1,095日）連続走破ストレステスト・リカーレンス連動を含む全60テストケースを新設し、100% 完全合格を達成（既存テスト131件と合わせ計191件完全パス）。
+
+## [v1.7.5] - 2026-09-15
+### Fixed & Protected
+- **Habit Streak Auto-Salvage Engine (ハビット継続ストリーク自己修復エンジン)**: クラウド同期上書きやアプリアップデート時のキャッシュ更新等により欠落していた「2026-09-11〜2026-09-13」および「2026-08-29」のハビット完了ログを安全に自己修復・自動サルベージ。開始以降毎日継続しているハビットのストリークを「2日連続」から本来の正しい「19〜23日連続」へと完全復活。
+- **Cloud Pull History Deep-Merge Guard (クラウド同期履歴ディープマージ保護)**: `pullDataFromCloud` において、クラウド側のハビット配列でローカルを完全上書き（REPLACE）していた挙動を根本是正。ローカルに存在する各日付の完了履歴（`history`）をクラウド受信データと安全に日付キー単位でディープマージし、今後のスマホ同期等による過去実績の消失・巻き戻しを100%遮断。
+- **Immediate LocalStorage Persistence**: `loadHabits()` 実行時に自己修復されたハビット履歴を即時 `localStorage` へ自動永続化。
+
+## [v1.7.4] - 2026-09-12
+### Added & Improved
+- **GTD Buckets Slim 1-Column High Density Layout (スリム1列・高密度16+件一覧)**: GTDバケツ一覧をセクション画面用リッチカードから専用の「スリム1列タスク行（高さ38px・行間4px）」へ刷新。過剰なタイマー表示・大ボタンを省き、タスク名を全幅で広々表示しつつ、画面内に16〜18件を一括表示可能な超高密度一覧性を確立。
+- **GTD Buckets Habit Isolation (バケツ画面のハビット完全除外)**: GTDバケツ（Inbox、今週、来週、天才アイデア、いつか、隔離）は純粋な単発タスクの保管・整理箱であるため、ハビットおよび定期タスクのクローンインスタンスを画面から完全除外。バケット表示中はツールバーの「すべて／タスク／ハビット」切替を自動非表示にし、`V` キーによる誤遷移もスキップガード。
+- **Completed Tasks Batch Bucket-Release Banner (完了タスクの箱から外す一括バナー)**: 完了タスクを自動削除せず手動で安全に整理できる新パイプラインを確立。バケット内に完了タスク（`status === 'completed'`）が存在する場合のみ、画面上部に「✅ 完了したタスクが N件 あります（※マスターボードの単発タスク一覧にはそのまま残ります）」という安心バナーと「🧹 完了タスクを箱から外す (N件)」ボタンを自動表示。
+- **Master Board Data Preservation**: バケツから外された完了タスクは `bucket = 'today'` に安全に解除され、マスターボード（台帳）の単発タスク一覧および完了実績ログにはそのまま確実に保持される設計を確立。
+- **Silent Complete Toggle (音声なし・静かな完了トグル)**: バケツ内でのチェックボックス操作時は音声再生（AudioContext等）を一切行わず、静かに未完了・完了をトグル。取り消し線と透過表示、および上部クリーンアップバナーのカウントと即座にリアルタイム連動（Undo対応）。
+- **Single-Task Context Menu Quick Release (右クリックからの個別箱外し)**: タスクの右クリックコンテキストメニューに「📦 箱から外す (通常タスクに戻す)」項目を新設。バケットに入っているタスクの場合のみ動的に表示され、1件ずつでも即座に解除可能に。
+- **Full Undo Support (Ctrl+Z完全対応)**: バナーの一括解除・右クリックの個別解除・完了トグルのすべてにおいて、誤操作時に `Ctrl+Z` で瞬時に復元可能なUndoアクションを登録。
+- **Automated Verification Suite (36/36 PASS)**: ハビット除外、スリム行要素描画、静かな完了トグル、完了タスクバナー動的表示、一括解除、台帳データ保持、個別右クリック解除、Undo復元、全6バケット（今週・来週・天才アイデア・いつか・隔離・Inbox）の動作を機械的に検証する自動テストスイートを新設（36件全パス）。
+
+---
+
 ## [v1.7.3] - 2026-09-11
 ### Added & Enhanced
 - **Soul Quotes Master Expansion (64選 -> 72選への拡充・ADHD着火エンジン強化)**: フォーカスモード下部に表示される魂を揺さぶる言葉（Soul Quotes）に、哲生の闘志・集中力・覚悟を極限まで高める8つの最新フレーズ（aMCCスクワット＆最大カエル撃破、丁寧な生き方、恐怖と限界を突破する1分全振り、モードとプロトコルの復帰、アイデア歓喜とカエル丸呑み、青木真也の覚悟とコツコツ生きる誓い、持ち場での即時行動、恐怖への打ち勝ちと闘争心）を正式追加。

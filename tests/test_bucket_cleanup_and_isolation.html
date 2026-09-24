@@ -1,0 +1,203 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gendrive Bucket Cleanup & Isolation Test Suite</title>
+</head>
+<body>
+  <div id="test-output"></div>
+
+  <!-- Minimal DOM fixtures -->
+  <div id="bucket-task-list"></div>
+  <div id="bucket-view-title"></div>
+  <div id="bucket-view-desc"></div>
+  <div id="bucket-cleanup-banner" class="hidden"></div>
+  <div id="task-context-menu" class="custom-context-menu">
+    <div id="context-menu-task-name"></div>
+    <div id="ctx-task-tomorrow-text"></div>
+    <div id="ctx-task-dayafter-text"></div>
+    <div id="ctx-task-nextweekday-text"></div>
+    <button id="ctx-task-remove-bucket" style="display: none;"></button>
+  </div>
+
+  <!-- Mock Global Functions and State -->
+  <script>
+    const results = [];
+    function assert(message, condition) {
+      results.push({ message, pass: !!condition });
+      console.log((condition ? 'PASS: ' : 'FAIL: ') + message);
+    }
+
+    // Mock functions & state
+    window.state = {
+      tasks: [],
+      habits: [],
+      currentMode: 'bucket',
+      currentBucketFilter: { type: 'bucket', id: 'this_week' },
+      undoStack: [],
+      selectedDateOffset: 0
+    };
+
+    window.getSelectedDateKey = () => '2026-09-12';
+    window.getTomorrowDateKey = () => '2026-09-13';
+    window.getDayAfterTomorrowDateKey = () => '2026-09-14';
+    window.getNextWeekdayDateKey = () => '2026-09-15';
+    window.saveTasks = () => {};
+    window.renderApp = () => { renderBucketView(); };
+    window.updateSidebarCounters = () => {};
+    window.showCarryoverToast = (msg) => { window.__lastToast = msg; };
+    window.showToast = (msg) => { window.__lastToast = msg; };
+    window.normalizeTags = (tags) => Array.isArray(tags) ? tags : [];
+    window.getEisenhowerLabelBadge = (l) => l ? { text: l.toUpperCase(), cls: l } : null;
+    window.pushUndoAction = (action) => { window.state.undoStack.push(action); };
+    window.executeUndo = () => {
+      const action = window.state.undoStack.pop();
+      if (action && typeof action.undo === 'function') action.undo();
+    };
+  </script>
+
+  <!-- Load script under test -->
+  <script src="../js/views/bucketView.js"></script>
+
+  <!-- Inline definition of removeSingleTaskFromBucket and context menu test helper -->
+  <script>
+    function removeSingleTaskFromBucket(taskId) {
+      const task = (state.tasks || []).find(t => String(t.id) === String(taskId));
+      if (!task) return;
+
+      const prevBucket = task.bucket;
+      const prevScheduledDate = task.scheduledDate;
+
+      task.bucket = 'today';
+      if (!task.scheduledDate) {
+        const logDate = (task.executionLogs && task.executionLogs[0] && task.executionLogs[0].dateKey)
+          || (task.history && task.history[0] && task.history[0].date)
+          || getSelectedDateKey();
+        task.scheduledDate = logDate;
+      }
+
+      saveTasks();
+
+      if (typeof pushUndoAction === 'function') {
+        pushUndoAction({
+          description: `タスク「${task.title}」を箱から外しました`,
+          undo: () => {
+            task.bucket = prevBucket;
+            task.scheduledDate = prevScheduledDate;
+            saveTasks();
+            renderApp();
+          }
+        });
+      }
+
+      renderApp();
+    }
+  </script>
+
+  <!-- Test Execution -->
+  <script>
+    try {
+      // -------------------------------------------------------------
+      // Test 1: Habit and Recurring Instance Exclusion in Bucket View & Slim Row Rendering
+      // -------------------------------------------------------------
+      state.tasks = [
+        { id: 't1', title: '今週やる単発タスク1', bucket: 'this_week', status: 'uncompleted', type: 'single', label: 'iron_rule', frog: 4, tags: ['仕事'] },
+        { id: 't2', title: '今週完了タスク2', bucket: 'this_week', status: 'completed', type: 'single' },
+        { id: 't3', title: '別箱のタスク', bucket: 'inbox', status: 'uncompleted', type: 'single' },
+        { id: 't4', title: '定期クローンタスク', bucket: 'this_week', status: 'completed', isRecurringInstance: true },
+        { id: 't5', title: '無効化されたタスク', bucket: 'this_week', status: 'uncompleted', isDisabled: true }
+      ];
+      state.habits = [
+        { id: 'h1', name: 'ハビット1', section: 'morning' }
+      ];
+
+      renderBucketView();
+
+      const taskListEl = document.getElementById('bucket-task-list');
+      const renderedRows = taskListEl.querySelectorAll('.bucket-task-row');
+      assert("Test 1.1: GTDバケツ描画で該当バケツの有効な単発タスク2件のみスリム行として描画される (定期クローン・無効タスクは除外)", renderedRows.length === 2);
+      assert("Test 1.2: ハビットのDOM要素は一切描画されない", taskListEl.querySelectorAll('.habit-card').length === 0);
+
+      // -------------------------------------------------------------
+      // Test 1.B: Slim Row Elements & Silent Toggle Verification
+      // -------------------------------------------------------------
+      const row1 = renderedRows[0];
+      assert("Test 1.3: スリム行にドラッグハンドルが存在する", row1.querySelector('.bucket-row-drag') !== null);
+      assert("Test 1.4: スリム行にチェックボックスが存在する", row1.querySelector('.bucket-checkbox') !== null);
+      assert("Test 1.5: スリム行にタイトルが表示される", row1.querySelector('.bucket-row-title').textContent === '今週やる単発タスク1');
+      assert("Test 1.6: カエル度バッジが表示される", row1.textContent.includes('🐸4'));
+
+      // 静かな完了トグルのテスト
+      toggleBucketTaskComplete('t1');
+      assert("Test 1.7: toggleBucketTaskCompleteでt1が完了状態になる", state.tasks.find(t => t.id === 't1').status === 'completed');
+      toggleBucketTaskComplete('t1');
+      assert("Test 1.8: 再度toggleBucketTaskCompleteでt1が未完了に戻る", state.tasks.find(t => t.id === 't1').status === 'uncompleted');
+
+      // -------------------------------------------------------------
+      // Test 2: Cleanup Banner Appears When Completed Tasks Exist
+      // -------------------------------------------------------------
+      const bannerEl = document.getElementById('bucket-cleanup-banner');
+      assert("Test 2.1: 完了タスクが存在する場合、整理バナーが表示される (!hidden)", !bannerEl.classList.contains('hidden'));
+      assert("Test 2.2: バナーに「完了したタスクが 1件 あります」と明記される", bannerEl.textContent.includes('1件'));
+      assert("Test 2.3: バナーに「マスターボード（台帳）の単発タスク一覧にはそのまま残ります」という安心文言が含まれる", bannerEl.textContent.includes('マスターボード（台帳）の単発タスク一覧にはそのまま残ります'));
+      assert("Test 2.4: 「🧹 完了タスクを箱から外す (1件)」ボタンが存在する", bannerEl.textContent.includes('🧹 完了タスクを箱から外す (1件)'));
+
+      // -------------------------------------------------------------
+      // Test 3: Batch Cleanup Button Execution
+      // -------------------------------------------------------------
+      removeCompletedTasksFromCurrentBucket();
+
+      const t2After = state.tasks.find(t => t.id === 't2');
+      assert("Test 3.1: 完了タスクt2のbucketが'today'に解除される", t2After.bucket === 'today');
+      assert("Test 3.2: 完了タスクt2のデータ自体は削除されず保持される", t2After.title === '今週完了タスク2');
+      assert("Test 3.3: scheduledDateが適切に補完される", t2After.scheduledDate === '2026-09-12');
+
+      const rowsAfterCleanup = taskListEl.querySelectorAll('.bucket-task-row');
+      assert("Test 3.4: バケツ一覧から完了タスクが消え、未完了タスク1件のみになる", rowsAfterCleanup.length === 1);
+      assert("Test 3.5: 完了タスクが0件になったため整理バナーが自動的に非表示になる", bannerEl.classList.contains('hidden'));
+
+      // -------------------------------------------------------------
+      // Test 4: Undo Support (Ctrl+Z)
+      // -------------------------------------------------------------
+      executeUndo();
+      assert("Test 4.1: Undo実行でt2のbucketが'this_week'に復元される", state.tasks.find(t => t.id === 't2').bucket === 'this_week');
+      assert("Test 4.2: Undo実行で整理バナーが再度表示される", !bannerEl.classList.contains('hidden'));
+
+      // -------------------------------------------------------------
+      // Test 5: Single Task Right-Click Removal
+      // -------------------------------------------------------------
+      removeSingleTaskFromBucket('t1');
+      assert("Test 5.1: 単体解除関数でt1のbucketが'today'に解除される", state.tasks.find(t => t.id === 't1').bucket === 'today');
+      assert("Test 5.2: t1データはそのまま保持される", state.tasks.find(t => t.id === 't1').status === 'uncompleted');
+
+      // -------------------------------------------------------------
+      // Test 6: All GTD Buckets Support (this_week, next_week, genius, someday, vault, inbox)
+      // -------------------------------------------------------------
+      const gtdBuckets = ['inbox', 'next_week', 'genius', 'someday', 'vault'];
+      gtdBuckets.forEach(b => {
+        state.currentBucketFilter = { type: 'bucket', id: b };
+        state.tasks = [
+          { id: `t_${b}_1`, title: `${b}タスク完了`, bucket: b, status: 'completed' },
+          { id: `t_${b}_2`, title: `${b}タスク未完`, bucket: b, status: 'uncompleted' }
+        ];
+        renderBucketView();
+        assert(`Test 6.${b}: バケット【${b}】で完了タスクバナーが表示される`, !bannerEl.classList.contains('hidden'));
+        removeCompletedTasksFromCurrentBucket();
+        assert(`Test 6.${b}_clean: バケット【${b}】で一括解除後バナーが非表示になる`, bannerEl.classList.contains('hidden'));
+        assert(`Test 6.${b}_state: 完了タスクがtodayに解除される`, state.tasks.find(t => t.id === `t_${b}_1`).bucket === 'today');
+      });
+
+    } catch (err) {
+      assert(`Runtime Exception: ${err.message}`, false);
+    }
+
+    window.__TEST_SUMMARY__ = {
+      total: results.length,
+      passed: results.filter(r => r.pass).length,
+      failed: results.filter(r => !r.pass).length,
+      allPassed: results.every(r => r.pass),
+      results: results
+    };
+  </script>
+</body>
+</html>

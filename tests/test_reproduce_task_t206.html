@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>T206 Task Complete Reproduction Test</title>
+</head>
+<body>
+  <div id="app-root">
+    <div id="section-title"></div>
+    <div id="section-desc"></div>
+    <div id="subgroup-section-tasks" style="display: flex;"></div>
+    <div id="subgroup-section-habits" style="display: flex;"></div>
+    <div id="section-task-list"></div>
+    <div id="section-habit-list"></div>
+    <div id="current-time-display"></div>
+    <div id="current-section-name"></div>
+    <div id="active-habit-name"></div>
+    <div id="section-task-progress"></div>
+    <div id="count-section-tasks"></div>
+    <div id="section-habit-progress"></div>
+    <div id="count-section-habits"></div>
+    <div id="section-progress-bar"></div>
+    <div id="filter-status-val"></div>
+    <div id="filter-domain-val"></div>
+    <div id="filter-dept-val"></div>
+    <div id="filter-proj-val"></div>
+    <div id="filter-tag-val"></div>
+    <button id="btn-reset-filters"></button>
+    <div id="smart-tag-bar"></div>
+    <div id="undo-toast" class="toast"><span id="undo-toast-text"></span><button id="btn-undo-action"></button></div>
+  </div>
+
+  <script src="real_gas_data.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/services/profileMasterService.js"></script>
+  <script src="../js/sampleData.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+  <script src="../js/engine/statsEngine.js"></script>
+  <script src="../js/engine/matrixEngine.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+  <script src="../js/engine/keyboardShortcuts.js"></script>
+  <script src="../js/services/undoService.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/services/resumeNoteService.js"></script>
+  <script src="../js/services/taskCloneHelper.js"></script>
+  <script src="../js/services/taskTimerService.js"></script>
+  <script src="../js/components/cardRenderers.js"></script>
+  <script src="../js/components/modalService.js"></script>
+  <script src="../js/components/taskPresetsService.js"></script>
+  <script src="../js/components/dragAndDropService.js"></script>
+  <script src="../js/views/calendarView.js"></script>
+  <script src="../js/views/sectionView.js"></script>
+  <script src="../js/views/focusView.js"></script>
+  <script src="../js/views/allView.js"></script>
+  <script src="../js/views/tableView.js"></script>
+  <script src="../js/views/bucketView.js"></script>
+  <script src="../js/views/goalsView.js"></script>
+  <script src="../js/views/timerView.js"></script>
+  <script src="../app.js"></script>
+
+  <script>
+    window.__TEST_LOGS__ = [];
+    function log(msg) {
+      window.__TEST_LOGS__.push(msg);
+      console.log(msg);
+    }
+
+    async function runTest() {
+      try {
+        log("=== Step 1: Initializing state with real GAS data ===");
+        state.tasks = JSON.parse(JSON.stringify(window.__REAL_GAS_DATA__.data.tasks || []));
+        state.habits = JSON.parse(JSON.stringify(window.__REAL_GAS_DATA__.data.habits || []));
+        state.selectedDateOffset = 0;
+        state.currentSection = '第1セッション';
+        state.currentMode = 'section';
+        state.filters.status = 'uncompleted';
+
+        const t206 = state.tasks.find(t => t.id === 'T206');
+        log("T206 initial found: " + Boolean(t206));
+        log("T206 initial title: " + (t206 ? t206.title : ''));
+        log("T206 initial status: " + (t206 ? t206.status : ''));
+        log("T206 initial isRec: " + (t206 ? (t206.type === 'recurring' || t206.taskType === 'recurring') : ''));
+        state.activeTaskId = 'T206';
+
+        renderApp();
+
+        const taskListEl = document.getElementById('section-task-list');
+        const cardBefore = taskListEl ? taskListEl.querySelector('.task-card[data-id="T206"]') : null;
+        log("Card in DOM before complete: " + (cardBefore ? 'YES (classes: ' + cardBefore.className + ')' : 'NO'));
+        const activeNameBefore = document.getElementById('active-habit-name') ? document.getElementById('active-habit-name').textContent : '';
+        log("Status bar before complete: " + activeNameBefore);
+
+        log("=== Step 2: Calling completeTask('T206') ===");
+        completeTask('T206');
+
+        log("T206 status right after completeTask: " + t206.status);
+        log("T206 startTimestamp right after completeTask: " + t206.startTimestamp);
+        log("state.activeTaskId right after completeTask: " + state.activeTaskId);
+        log("T206 history: " + JSON.stringify(t206.history));
+        log("T206 executionLogs count: " + (t206.executionLogs ? t206.executionLogs.length : 0));
+
+        const cardAfter = taskListEl ? taskListEl.querySelector('.task-card[data-id="T206"]') : null;
+        log("Card in DOM right after completeTask: " + (cardAfter ? 'STILL IN DOM (classes: ' + cardAfter.className + ')' : 'REMOVED (SUCCESS)'));
+        if (cardAfter) {
+          log("Card HTML right after: " + cardAfter.outerHTML);
+        }
+        const activeNameAfter = document.getElementById('active-habit-name') ? document.getElementById('active-habit-name').textContent : '';
+        log("Status bar right after completeTask: " + activeNameAfter);
+
+        log("=== Step 3: Simulating Cloud Sync (mergeTasksDeep with GAS data) ===");
+        const cloudTasks = JSON.parse(JSON.stringify(window.__REAL_GAS_DATA__.data.tasks || []));
+        state.tasks = mergeTasksDeep(state.tasks, cloudTasks);
+        renderApp();
+
+        const t206AfterMerge = state.tasks.find(t => t.id === 'T206');
+        log("T206 status after mergeTasksDeep: " + (t206AfterMerge ? t206AfterMerge.status : 'NOT FOUND'));
+        log("T206 startTimestamp after mergeTasksDeep: " + (t206AfterMerge ? t206AfterMerge.startTimestamp : ''));
+        log("T206 history after mergeTasksDeep: " + JSON.stringify(t206AfterMerge ? t206AfterMerge.history : null));
+        log("getTaskStatusForSelectedDate(T206): " + getTaskStatusForSelectedDate(t206AfterMerge));
+
+        const cardAfterMerge = taskListEl ? taskListEl.querySelector('.task-card[data-id="T206"]') : null;
+        log("Card in DOM after merge: " + (cardAfterMerge ? 'STILL IN DOM (classes: ' + cardAfterMerge.className + ')' : 'REMOVED (SUCCESS)'));
+        if (cardAfterMerge) {
+          log("Card HTML after merge: " + cardAfterMerge.outerHTML);
+        }
+        const activeNameAfterMerge = document.getElementById('active-habit-name') ? document.getElementById('active-habit-name').textContent : '';
+        log("Status bar after merge: " + activeNameAfterMerge);
+
+      } catch (err) {
+        log("ERROR: " + err.message + "\n" + err.stack);
+      }
+      window.__TEST_DONE__ = true;
+    }
+
+    setTimeout(runTest, 100);
+  </script>
+</body>
+</html>

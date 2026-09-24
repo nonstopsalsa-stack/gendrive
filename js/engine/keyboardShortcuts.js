@@ -331,6 +331,9 @@ function setupKeyboardShortcuts() {
           if (typeof toggleAnalyticsVisualMode === 'function') toggleAnalyticsVisualMode();
         } else if (state.currentMode === 'focus') {
           if (typeof cycleFocusCount === 'function') cycleFocusCount();
+        } else if (state.currentMode === 'bucket') {
+          // GTDバケツ画面は単発タスク専用（ハビットは不要）のためビュータイプ切替をスキップ
+          return;
         } else {
           if (typeof cycleViewType === 'function') cycleViewType();
         }

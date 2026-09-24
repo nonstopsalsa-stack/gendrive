@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Task Date Normalization & Calendar Dots</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #1a1a1a; color: #eee; }
+    h1 { color: #60a5fa; font-size: 20px; }
+    .test-case { margin: 8px 0; padding: 10px; border-radius: 6px; font-size: 14px; }
+    .pass { background: #064e3b; color: #6ee7b7; border-left: 4px solid #10b981; }
+    .fail { background: #7f1d1d; color: #fca5a5; border-left: 4px solid #ef4444; }
+  </style>
+</head>
+<body>
+  <h1>Gendrive Defensive Date Normalization & Calendar Dots Test Suite</h1>
+  <div id="results"></div>
+
+  <!-- Load dependencies -->
+  <script src="../js/config.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  
+  <script>
+    // Define state on window and global scope
+    window.state = {
+      tasks: [],
+      habits: [],
+      selectedDateOffset: 0,
+      currentSection: '第1セッション',
+      calendarViewYear: 2026,
+      calendarViewMonth: 8 // September (0-indexed: 8 = Sep)
+    };
+    var state = window.state;
+    window.DEFAULT_TASKS = [];
+
+    function normalizeSectionName(s) { return s || '第1セッション'; }
+    function isHabitScheduledForDate(t, d) { return true; }
+    function getTaskStatusForSelectedDate(t) { return t.status || 'uncompleted'; }
+    function updateSidebarBadges() {}
+    function renderSidebarCalendar() {}
+    function updateCarryoverBanner() {}
+    function updateHeaderAndStatus() {}
+    function updateFilterPillsUI() {}
+    function renderSectionView() {}
+    function renderFocusView() {}
+    function renderAllView() {}
+    function renderTableView() {}
+    function renderBucketView() {}
+    function renderGoalsView() {}
+  </script>
+
+  <!-- Load target scripts -->
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/views/calendarView.js"></script>
+  <script src="../mobile.js"></script>
+
+  <script>
+    // isTaskForSelectedDate as in app.js
+    function isTaskForSelectedDate(task, dateObj = null) {
+      if (!task || task.isDisabled) return false;
+      if (task.isRecurringInstance) return false;
+      if (task.bucket && task.bucket !== 'today') return false;
+
+      const isValidDateInput = (dateObj instanceof Date) || (typeof dateObj === 'string' && dateObj.length >= 8);
+      const d = isValidDateInput ? new Date(dateObj) : (() => {
+        const dt = new Date();
+        dt.setDate(dt.getDate() - (window.state ? window.state.selectedDateOffset : 0));
+        return dt;
+      })();
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const todayKey = getTodayKey();
+
+      const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType) || (Boolean(task.recurrence) && task.recurrence.type && task.recurrence.type !== 'none');
+
+      if (isRec) {
+        if (dateKey < todayKey) return false;
+        return isHabitScheduledForDate(task, d);
+      }
+
+      if (task.scheduledDate) {
+        const normDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(task.scheduledDate) : task.scheduledDate;
+        return normDate === dateKey;
+      }
+      return dateKey === todayKey;
+    }
+
+    const resultsDiv = document.getElementById('results');
+    const testResults = [];
+
+    function assert(name, condition, errorMsg = '') {
+      const pass = Boolean(condition);
+      testResults.push({ name, pass, message: pass ? 'OK' : errorMsg });
+      const el = document.createElement('div');
+      el.className = `test-case ${pass ? 'pass' : 'fail'}`;
+      el.textContent = `${pass ? '✅ PASS' : '❌ FAIL'}: ${name} ${pass ? '' : ' - ' + errorMsg}`;
+      resultsDiv.appendChild(el);
+    }
+
+    try {
+      // -------------------------------------------------------------
+      // Test 1: normalizeToLocalDateKey (Robust parsing of any format)
+      // -------------------------------------------------------------
+      assert('normalizeToLocalDateKey handles standard YYYY-MM-DD',
+        normalizeToLocalDateKey('2026-09-18') === '2026-09-18',
+        `Expected "2026-09-18", got "${normalizeToLocalDateKey('2026-09-18')}"`
+      );
+
+      assert('normalizeToLocalDateKey handles slash format YYYY/M/D',
+        normalizeToLocalDateKey('2026/9/18') === '2026-09-18',
+        `Expected "2026-09-18", got "${normalizeToLocalDateKey('2026/9/18')}"`
+      );
+
+      const jstDateStr = 'Fri Sep 18 2026 00:00:00 GMT+0900 (日本標準時)';
+      assert('normalizeToLocalDateKey handles full JST Date string format',
+        normalizeToLocalDateKey(jstDateStr) === '2026-09-18',
+        `Expected "2026-09-18", got "${normalizeToLocalDateKey(jstDateStr)}"`
+      );
+
+      const futureDateStr1 = 'Sat Sep 19 2026 00:00:00 GMT+0900 (日本標準時)';
+      assert('normalizeToLocalDateKey handles future date in September',
+        normalizeToLocalDateKey(futureDateStr1) === '2026-09-19',
+        `Expected "2026-09-19", got "${normalizeToLocalDateKey(futureDateStr1)}"`
+      );
+
+      const futureDateStr2 = 'Wed Nov 11 2026 00:00:00 GMT+0900 (日本標準時)';
+      assert('normalizeToLocalDateKey handles future date in November',
+        normalizeToLocalDateKey(futureDateStr2) === '2026-11-11',
+        `Expected "2026-11-11", got "${normalizeToLocalDateKey(futureDateStr2)}"`
+      );
+
+      assert('normalizeToLocalDateKey handles null / undefined / empty without error',
+        normalizeToLocalDateKey(null) === null &&
+        normalizeToLocalDateKey(undefined) === null &&
+        normalizeToLocalDateKey('') === null,
+        'Expected null for falsy inputs'
+      );
+
+      // -------------------------------------------------------------
+      // Test 2: isTaskForSelectedDate with Defensive Date Normalization
+      // -------------------------------------------------------------
+      const taskWithDateStr = {
+        id: 'T122',
+        title: 'J PREP TERM C Week3',
+        bucket: 'today',
+        scheduledDate: 'Fri Sep 18 2026 00:00:00 GMT+0900 (日本標準時)'
+      };
+      assert('isTaskForSelectedDate matches task with full Date string on 2026-09-18',
+        isTaskForSelectedDate(taskWithDateStr, '2026-09-18') === true,
+        'Task with Date string failed to match 2026-09-18'
+      );
+
+      const taskFuture = {
+        id: 'T127',
+        title: 'J PREP TERM B Week5',
+        bucket: 'today',
+        scheduledDate: 'Sat Sep 19 2026 00:00:00 GMT+0900 (日本標準時)'
+      };
+      assert('isTaskForSelectedDate rejects future task when viewing 2026-09-18',
+        isTaskForSelectedDate(taskFuture, '2026-09-18') === false,
+        'Future task should not match today'
+      );
+      assert('isTaskForSelectedDate includes future task when viewing 2026-09-19',
+        isTaskForSelectedDate(taskFuture, '2026-09-19') === true,
+        'Future task should match its scheduled date'
+      );
+
+      const taskGenius = {
+        id: 'T156',
+        title: 'ぐるた民ショーケース',
+        bucket: 'genius',
+        scheduledDate: '2026-09-18'
+      };
+      assert('isTaskForSelectedDate excludes genius task from daily view',
+        isTaskForSelectedDate(taskGenius, '2026-09-18') === false,
+        'Genius task must not appear in daily view'
+      );
+
+      const cloneTask = {
+        id: 'st_rec_123',
+        title: 'Morning Routine Clone',
+        bucket: 'today',
+        scheduledDate: '2026-09-18',
+        isRecurringInstance: true
+      };
+      assert('isTaskForSelectedDate excludes auto-cloned recurring instances to prevent duplicates',
+        isTaskForSelectedDate(cloneTask, '2026-09-18') === false,
+        'Cloned recurring instance should be excluded from daily view'
+      );
+
+      // -------------------------------------------------------------
+      // Test 3: hasActivityOnDate (Sidebar Calendar Dots)
+      // -------------------------------------------------------------
+      window.state.tasks = [
+        {
+          id: 'T122',
+          title: 'J PREP TERM C Week3',
+          bucket: 'today',
+          scheduledDate: 'Fri Sep 18 2026 00:00:00 GMT+0900 (日本標準時)'
+        },
+        {
+          id: 'T127',
+          title: 'J PREP TERM B Week5',
+          bucket: 'today',
+          scheduledDate: 'Sat Sep 19 2026 00:00:00 GMT+0900 (日本標準時)'
+        },
+        {
+          id: 'T155',
+          title: 'J PREP TERM C Week11',
+          bucket: 'today',
+          scheduledDate: 'Wed Nov 11 2026 00:00:00 GMT+0900 (日本標準時)'
+        }
+      ];
+
+      assert('hasActivityOnDate returns true for 2026-09-18 with Date string task',
+        hasActivityOnDate('2026-09-18') === true,
+        'Calendar dot should be visible on 2026-09-18'
+      );
+
+      assert('hasActivityOnDate returns true for future date 2026-09-19',
+        hasActivityOnDate('2026-09-19') === true,
+        'Calendar dot should be visible on 2026-09-19'
+      );
+
+      assert('hasActivityOnDate returns true for future date 2026-11-11',
+        hasActivityOnDate('2026-11-11') === true,
+        'Calendar dot should be visible on 2026-11-11'
+      );
+
+      assert('hasActivityOnDate returns false for date with no tasks (e.g. 2026-09-28)',
+        hasActivityOnDate('2026-09-28') === false,
+        'Calendar dot should NOT be visible on empty date'
+      );
+
+      // -------------------------------------------------------------
+      // Test 4: storageService mergeTasksDeep & loadTasks Sanitization
+      // -------------------------------------------------------------
+      const unnormalizedTasks = [
+        { id: 'T201', title: 'Task A', scheduledDate: 'Fri Sep 18 2026 00:00:00 GMT+0900 (日本標準時)' },
+        { id: 'T202', title: 'Task B', scheduledDate: 'Sat Sep 19 2026 00:00:00 GMT+0900 (日本標準時)' }
+      ];
+      const mergedDeep = mergeTasksDeep([], unnormalizedTasks);
+      assert('mergeTasksDeep automatically sanitizes scheduledDate to YYYY-MM-DD',
+        mergedDeep[0].scheduledDate === '2026-09-18' && mergedDeep[1].scheduledDate === '2026-09-19',
+        `Expected YYYY-MM-DD, got [${mergedDeep[0].scheduledDate}, ${mergedDeep[1].scheduledDate}]`
+      );
+
+      // Test loadTasks sanitization via localStorage
+      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([
+        { id: 'T301', title: 'Local Task', scheduledDate: 'Fri Sep 18 2026 00:00:00 GMT+0900 (日本標準時)' }
+      ]));
+      const loaded = loadTasks();
+      assert('loadTasks automatically sanitizes scheduledDate on retrieval',
+        loaded[0].scheduledDate === '2026-09-18',
+        `Expected "2026-09-18", got "${loaded[0].scheduledDate}"`
+      );
+
+      // -------------------------------------------------------------
+      // Test 5: Mobile Engine Date Normalization & Sanitization
+      // -------------------------------------------------------------
+      assert('normalizeMobileDateKey correctly normalizes full JST Date string',
+        normalizeMobileDateKey(jstDateStr) === '2026-09-18',
+        `Expected "2026-09-18", got "${normalizeMobileDateKey(jstDateStr)}"`
+      );
+
+      const mobileSanitized = sanitizeMobileTasks([
+        { id: 'M01', bucket: 'today', scheduledDate: jstDateStr },
+        { id: 'M02', bucket: 'genius', scheduledDate: '2026-09-18' }
+      ]);
+      assert('sanitizeMobileTasks normalizes scheduledDate for today bucket and nullifies for non-today',
+        mobileSanitized[0].scheduledDate === '2026-09-18' && mobileSanitized[1].scheduledDate === null,
+        `Unexpected sanitization output: M01=${mobileSanitized[0].scheduledDate}, M02=${mobileSanitized[1].scheduledDate}`
+      );
+
+    } catch (e) {
+      assert('Global Test Runner Error', false, e.stack || e.message);
+    }
+
+    // Export test summary to window
+    const total = testResults.length;
+    const passed = testResults.filter(r => r.pass).length;
+    const failed = total - passed;
+    window.__TEST_SUMMARY__ = {
+      total,
+      passed,
+      failed,
+      allPassed: failed === 0,
+      results: testResults
+    };
+  </script>
+</body>
+</html>

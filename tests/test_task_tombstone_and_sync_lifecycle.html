@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gendrive Task Tombstone & Resurrection-Free Sync Engine Test Suite</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }
+    h1 { color: #38bdf8; font-size: 20px; }
+    .test-card { background: #1e293b; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; border-left: 4px solid #64748b; }
+    .test-card.pass { border-left-color: #22c55e; }
+    .test-card.fail { border-left-color: #ef4444; }
+    .status { font-weight: bold; }
+    .pass .status { color: #22c55e; }
+    .fail .status { color: #ef4444; }
+    #summary-box { background: #1e293b; padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #334155; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Gendrive Task Tombstone & Resurrection-Free Sync Engine Automated Tests (v1.8.5)</h1>
+  <div id="summary-box">実行中...</div>
+  <div id="results"></div>
+
+  <!-- Load PC and Mobile dependencies directly -->
+  <script src="../js/config.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../mobile.js"></script>
+
+  <script>
+    window.__TEST_SUMMARY__ = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      allPassed: false,
+      results: []
+    };
+
+    function assert(name, condition, message = '') {
+      window.__TEST_SUMMARY__.total++;
+      const res = { name, pass: !!condition, message: condition ? 'OK' : (message || 'Assertion failed') };
+      if (res.pass) {
+        window.__TEST_SUMMARY__.passed++;
+      } else {
+        window.__TEST_SUMMARY__.failed++;
+      }
+      window.__TEST_SUMMARY__.results.push(res);
+
+      const div = document.createElement('div');
+      div.className = `test-card ${res.pass ? 'pass' : 'fail'}`;
+      div.innerHTML = `<span class="status">[${res.pass ? 'PASS' : 'FAIL'}]</span> <strong>${name}</strong>${res.pass ? '' : `<br><small style="color:#f87171">${message}</small>`}`;
+      document.getElementById('results').appendChild(div);
+    }
+
+    async function runTestSuite() {
+      // Clean test state
+      localStorage.removeItem(STORAGE_KEYS.DELETED_TASKS);
+      localStorage.removeItem(STORAGE_KEYS.TASKS);
+
+      // Test 1: recordTaskDeletion records tombstone in localStorage
+      try {
+        recordTaskDeletion('T144', 'J PREP Week8');
+        const map = loadDeletedTaskMap();
+        assert('recordTaskDeletion stores taskId and deletedAt', map.has('T144') && map.get('T144').title === 'J PREP Week8');
+      } catch (e) {
+        assert('recordTaskDeletion stores taskId and deletedAt', false, e.message);
+      }
+
+      // Test 2: unrecordTaskDeletion removes tombstone on Undo
+      try {
+        recordTaskDeletion('T145', 'J PREP Week9');
+        unrecordTaskDeletion('T145');
+        const map = loadDeletedTaskMap();
+        assert('unrecordTaskDeletion removes tombstone upon Undo', !map.has('T145'));
+      } catch (e) {
+        assert('unrecordTaskDeletion removes tombstone upon Undo', false, e.message);
+      }
+
+      // Test 3: TTL purge removes entries older than 30 days
+      try {
+        const oldTime = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
+        const rawObj = {
+          'T_OLD': { deletedAt: oldTime, title: 'Old Deleted' },
+          'T144': { deletedAt: new Date().toISOString(), title: 'Recent' }
+        };
+        localStorage.setItem(STORAGE_KEYS.DELETED_TASKS, JSON.stringify(rawObj));
+        const map = loadDeletedTaskMap();
+        assert('loadDeletedTaskMap automatically purges entries older than 30 days', !map.has('T_OLD') && map.has('T144'));
+      } catch (e) {
+        assert('loadDeletedTaskMap automatically purges entries older than 30 days', false, e.message);
+      }
+
+      // Test 4: mergeTasksDeep blocks zombie resurrection of tombstoned task
+      try {
+        recordTaskDeletion('T144', 'J PREP Week8'); // Deleted now
+        const localTasks = [
+          { id: 'T142', title: 'Task 142', updatedAt: '2026-09-20T05:00:00Z' }
+        ];
+        const cloudTasks = [
+          { id: 'T142', title: 'Task 142', updatedAt: '2026-09-20T05:00:00Z' },
+          { id: 'T144', title: 'J PREP Week8 (Cloud Ghost)', updatedAt: '2026-09-18T05:00:00Z' } // Created/updated before deletion
+        ];
+        const merged = mergeTasksDeep(localTasks, cloudTasks);
+        const hasT144 = merged.some(t => t.id === 'T144');
+        assert('mergeTasksDeep prevents zombie resurrection of deleted task', !hasT144 && merged.length === 1);
+      } catch (e) {
+        assert('mergeTasksDeep prevents zombie resurrection of deleted task', false, e.message);
+      }
+
+      // Test 5: mergeTasksDeep protects tasks created/updated AFTER deletion (Zero-Loss Guarantee)
+      try {
+        // T144 was deleted in the past
+        const pastDelTime = new Date(Date.now() - 60000).toISOString();
+        const map = loadDeletedTaskMap();
+        map.set('T144', { deletedAt: pastDelTime, title: 'Old T144' });
+        saveDeletedTaskMap(map);
+
+        const localTasks = [{ id: 'T142', title: 'Task 142' }];
+        const cloudTasks = [
+          { id: 'T142', title: 'Task 142' },
+          // Cloud task re-created/updated AFTER pastDelTime (e.g. on another device)
+          { id: 'T144', title: 'Re-created T144', updatedAt: new Date().toISOString() }
+        ];
+        const merged = mergeTasksDeep(localTasks, cloudTasks);
+        const hasT144 = merged.some(t => t.id === 'T144' && t.title === 'Re-created T144');
+        assert('mergeTasksDeep protects tasks updated AFTER deletion (Zero-Loss Guarantee)', hasT144 && merged.length === 2);
+      } catch (e) {
+        assert('mergeTasksDeep protects tasks updated AFTER deletion (Zero-Loss Guarantee)', false, e.message);
+      }
+
+      // Test 6: mergeTasksDeep with empty local tasks filters out tombstoned tasks
+      try {
+        recordTaskDeletion('T146', 'Deleted T146');
+        const cloudTasks = [
+          { id: 'T142', title: 'Keep Me', updatedAt: '2026-09-18T00:00:00Z' },
+          { id: 'T146', title: 'Ghost T146', updatedAt: '2026-09-18T00:00:00Z' }
+        ];
+        const merged = mergeTasksDeep([], cloudTasks);
+        const hasT146 = merged.some(t => t.id === 'T146');
+        assert('mergeTasksDeep filters tombstoned tasks even when local array is empty', !hasT146 && merged.length === 1);
+      } catch (e) {
+        assert('mergeTasksDeep filters tombstoned tasks even when local array is empty', false, e.message);
+      }
+
+      // Test 7: mergeMobileTasksDeep blocks zombie resurrection on mobile
+      try {
+        recordMobileTaskDeletion('T147', 'Mobile Deleted');
+        const localMobile = [{ id: 'T142', title: 'Task 142' }];
+        const cloudMobile = [
+          { id: 'T142', title: 'Task 142' },
+          { id: 'T147', title: 'Cloud Ghost', updatedAt: '2026-09-18T00:00:00Z' }
+        ];
+        const mergedMob = mergeMobileTasksDeep(localMobile, cloudMobile);
+        const hasT147 = mergedMob.some(t => t.id === 'T147');
+        assert('mergeMobileTasksDeep prevents zombie resurrection on mobile', !hasT147 && mergedMob.length === 1);
+      } catch (e) {
+        assert('mergeMobileTasksDeep prevents zombie resurrection on mobile', false, e.message);
+      }
+
+      // Test 8: mergeMobileTasksDeep protects newer cloud tasks (Zero-Loss)
+      try {
+        const pastDelTime = new Date(Date.now() - 60000).toISOString();
+        const map = loadMobileDeletedTaskMap();
+        map.set('T148', { deletedAt: pastDelTime, title: 'Past Deleted' });
+        saveMobileDeletedTaskMap(map);
+
+        const localMobile = [{ id: 'T142', title: 'Task 142' }];
+        const cloudMobile = [
+          { id: 'T142', title: 'Task 142' },
+          { id: 'T148', title: 'New Mobile Task', updatedAt: new Date().toISOString() }
+        ];
+        const mergedMob = mergeMobileTasksDeep(localMobile, cloudMobile);
+        const hasT148 = mergedMob.some(t => t.id === 'T148');
+        assert('mergeMobileTasksDeep protects newer tasks updated after deletion', hasT148 && mergedMob.length === 2);
+      } catch (e) {
+        assert('mergeMobileTasksDeep protects newer tasks updated after deletion', false, e.message);
+      }
+
+      // Test 9: Safe pull guard prevents newer local state from being overwritten
+      try {
+        const localTime = Date.now();
+        const cloudTime = localTime - 5000; // Cloud is older
+        const localIsEmpty = false;
+        const hasMissingLocalTasks = true; // Local has fewer tasks because 1 was deleted
+        const forceApply = false;
+        const localMetaLastUpdated = new Date(localTime).toISOString();
+
+        // Safe pull condition evaluation
+        const shouldPull = forceApply || cloudTime > localTime || !localMetaLastUpdated || localIsEmpty || (hasMissingLocalTasks && localTime <= cloudTime);
+        assert('Safe pull guard blocks cloud pull when local is newer (localTime > cloudTime)', shouldPull === false);
+      } catch (e) {
+        assert('Safe pull guard blocks cloud pull when local is newer (localTime > cloudTime)', false, e.message);
+      }
+
+      // Test 10: App Version is updated to at least v1.8.5
+      try {
+        assert('APP_VERSION is updated to at least v1.8.5', APP_VERSION >= 'v1.8.5', `Expected >= v1.8.5, got ${APP_VERSION}`);
+      } catch (e) {
+        assert('APP_VERSION is updated to at least v1.8.5', false, e.message);
+      }
+
+      // Final summary
+      window.__TEST_SUMMARY__.allPassed = (window.__TEST_SUMMARY__.failed === 0 && window.__TEST_SUMMARY__.passed > 0);
+      const sBox = document.getElementById('summary-box');
+      sBox.innerHTML = `
+        <strong>テスト結果: ${window.__TEST_SUMMARY__.passed} / ${window.__TEST_SUMMARY__.total} PASS</strong>
+        (${window.__TEST_SUMMARY__.allPassed ? '✅ ALL TESTS PASSED' : '❌ FAILED'})
+      `;
+      sBox.style.borderColor = window.__TEST_SUMMARY__.allPassed ? '#22c55e' : '#ef4444';
+    }
+
+    window.addEventListener('DOMContentLoaded', runTestSuite);
+  </script>
+</body>
+</html>

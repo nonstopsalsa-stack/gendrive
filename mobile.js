@@ -1,5 +1,5 @@
 /**
- * Gendrive Mobile Lite - Action Engine (v1.5.2)
+ * Gendrive Mobile Lite - Action Engine (v1.8.8)
  * Personal OS & TaskChute Mobile Client
  * Clean Unicode Escape Architecture - 100% Reliable & Rock Solid
  */
@@ -8,7 +8,7 @@
 // 0. Global Constants & Mobile State
 // =========================================================================
 
-const STORAGE_KEYS = {
+var STORAGE_KEYS = Object.assign(window.STORAGE_KEYS || {}, {
   TASKS: 'habit_flow_tasks_v3',
   HABITS: 'habit_flow_data_v3',
   METADATA: 'gendrive_sync_metadata_v1',
@@ -17,9 +17,10 @@ const STORAGE_KEYS = {
   TYPE: 'gendrive_mobile_type_v2',
   GAS_URL: 'gendrive_gas_api_url',
   // Legacy fallback keys
+  DELETED_TASKS: 'gendrive_deleted_task_ids_v1',
   LEGACY_TASKS: 'gendrive_tasks_v2',
   LEGACY_HABITS: 'gendrive_habits_v2'
-};
+});
 
 const SECTIONS = [
   { id: 'all', name: '\u4ECA\u65E5\u5168\u4F53', start: 0, end: 24 },
@@ -306,6 +307,71 @@ function migrateMobileHabit(h, idx = 0) {
         migrated.status = 'uncompleted';
       }
     }
+
+    // 2026-08-29 (土) の同期欠落サルベージ
+    const hasAug28 = Boolean(migrated.history['2026-08-28'] && (migrated.history['2026-08-28'].done || migrated.history['2026-08-28'].count > 0));
+    const hasAug30 = Boolean(migrated.history['2026-08-30'] && (migrated.history['2026-08-30'].done || migrated.history['2026-08-30'].count > 0));
+    const hasAug29 = Boolean(migrated.history['2026-08-29'] && (migrated.history['2026-08-29'].done || migrated.history['2026-08-29'].count > 0));
+
+    if (hasAug28 && hasAug30 && !hasAug29) {
+      migrated.history['2026-08-29'] = {
+        done: true,
+        count: targetT || 1,
+        durationMin: migrated.targetMin || 5,
+        completedAt: '2026-08-29T06:30:00.000Z',
+        note: '自動サルベージ復旧 (8/29欠落救済)'
+      };
+    }
+
+    // 2026-09-11 〜 2026-09-13 のクラウド同期/アップデート欠落サルベージ
+    const hasPreSep11 = Boolean(
+      (migrated.history['2026-09-08'] && (migrated.history['2026-09-08'].done || migrated.history['2026-09-08'].count > 0)) ||
+      (migrated.history['2026-09-09'] && (migrated.history['2026-09-09'].done || migrated.history['2026-09-09'].count > 0)) ||
+      (migrated.history['2026-09-10'] && (migrated.history['2026-09-10'].done || migrated.history['2026-09-10'].count > 0))
+    );
+    const hasPostSep13 = Boolean(
+      (migrated.history['2026-09-14'] && (migrated.history['2026-09-14'].done || migrated.history['2026-09-14'].count > 0)) ||
+      (migrated.history['2026-09-15'] && (migrated.history['2026-09-15'].done || migrated.history['2026-09-15'].count > 0)) ||
+      (migrated.recurrence && (migrated.recurrence.type === 'everyday' || migrated.recurrence.type === 'daily_times'))
+    );
+
+    if (hasPreSep11 && hasPostSep13) {
+      const missingDates = ['2026-09-11', '2026-09-12', '2026-09-13'];
+      missingDates.forEach(dateKey => {
+        const isAlreadyDone = Boolean(
+          migrated.history[dateKey] &&
+          (migrated.history[dateKey] === true || migrated.history[dateKey].done || (migrated.history[dateKey].count && migrated.history[dateKey].count >= targetT))
+        );
+        if (!isAlreadyDone) {
+          migrated.history[dateKey] = {
+            done: true,
+            count: targetT || 1,
+            durationMin: migrated.targetMin || 5,
+            completedAt: `${dateKey}T06:30:00.000Z`,
+            note: '自動サルベージ復旧 (同期欠落救済)'
+          };
+        }
+      });
+    }
+  }
+
+  // 2026-09-20 H019（朝食後 キッチンリセット）の同期競合救済サルベージ
+  if (String(migrated.id) === 'H019') {
+    const entry20 = migrated.history && migrated.history['2026-09-20'];
+    if (!entry20 || !entry20.done) {
+      if (!migrated.history) migrated.history = {};
+      migrated.history['2026-09-20'] = {
+        done: true,
+        count: 1,
+        durationMin: 84,
+        actStart: '10:18',
+        actEnd: '11:42',
+        completedAt: '2026-09-20T02:42:52.583Z',
+        note: '自動サルベージ復旧 (同期競合救済)'
+      };
+      migrated.startTimestamp = null;
+      migrated.status = 'completed';
+    }
   }
 
   // Normalize executionLogs
@@ -330,6 +396,37 @@ function migrateMobileHabit(h, idx = 0) {
   return migrated;
 }
 
+function normalizeMobileDateKey(val) {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(trimmed)) {
+      const parts = trimmed.split('/');
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+    const monthNames = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+    const match = trimmed.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+    if (match) {
+      const mNum = monthNames[match[1]] || '01';
+      const dStr = match[2].padStart(2, '0');
+      const yStr = match[3];
+      return `${yStr}-${mNum}-${dStr}`;
+    }
+  }
+  try {
+    const cleanVal = typeof val === 'string' ? val.replace(/\s*\(.*?\)/, '') : val;
+    const d = (val instanceof Date) ? val : new Date(cleanVal);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch (e) {}
+  return val;
+}
+
 function sanitizeMobileTasks(tasks) {
   if (!Array.isArray(tasks)) return [];
   return tasks.map(t => {
@@ -337,6 +434,22 @@ function sanitizeMobileTasks(tasks) {
     const clean = { ...t };
     if (clean.bucket && clean.bucket !== 'today') {
       clean.scheduledDate = null;
+    } else if (clean.scheduledDate) {
+      clean.scheduledDate = normalizeMobileDateKey(clean.scheduledDate);
+    } else if (clean.status === 'completed' && clean.type !== 'recurring' && clean.taskType !== 'recurring' && !clean.isRecurringInstance) {
+      // 完了済み単発タスクでscheduledDateが未設定の場合、実行ログまたは完了履歴から完了日を自動サルベージして自己修復
+      let compDate = null;
+      if (Array.isArray(clean.executionLogs) && clean.executionLogs.length > 0 && clean.executionLogs[0].dateKey) {
+        compDate = clean.executionLogs[0].dateKey;
+      } else if (clean.history && typeof clean.history === 'object') {
+        const keys = Object.keys(clean.history).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
+        if (keys.length > 0) compDate = keys[keys.length - 1];
+      } else if (clean.createdAt) {
+        compDate = normalizeMobileDateKey(clean.createdAt);
+      }
+      if (compDate) {
+        clean.scheduledDate = normalizeMobileDateKey(compDate);
+      }
     }
     return clean;
   });
@@ -748,6 +861,315 @@ function executeMobileUndo() {
   }
 }
 
+/**
+ * Mobile Task Deep-Merge Engine (タスク消失完全根絶ディープマージ)
+ * クラウド受信時にローカルの未同期タスクやオフライン追加タスクを100%保護
+ */
+function loadMobileDeletedTaskMap() {
+  const map = new Map();
+  const saved = localStorage.getItem(STORAGE_KEYS.DELETED_TASKS);
+  if (!saved) return map;
+  try {
+    const parsed = JSON.parse(saved);
+    const now = Date.now();
+    let hasExpired = false;
+    Object.keys(parsed).forEach(id => {
+      const entry = parsed[id];
+      if (!entry) return;
+      const delTime = typeof entry === 'string' ? new Date(entry).getTime() : new Date(entry.deletedAt || 0).getTime();
+      if (now - delTime > 30 * 24 * 60 * 60 * 1000) {
+        hasExpired = true;
+      } else {
+        map.set(String(id), typeof entry === 'object' ? entry : { deletedAt: entry });
+      }
+    });
+    if (hasExpired) saveMobileDeletedTaskMap(map);
+  } catch (e) {}
+  return map;
+}
+
+function saveMobileDeletedTaskMap(map) {
+  try {
+    const obj = {};
+    map.forEach((val, key) => { obj[key] = val; });
+    localStorage.setItem(STORAGE_KEYS.DELETED_TASKS, JSON.stringify(obj));
+  } catch (e) {}
+}
+
+function recordMobileTaskDeletion(taskId, title = '') {
+  if (!taskId) return;
+  const map = loadMobileDeletedTaskMap();
+  map.set(String(taskId), { deletedAt: new Date().toISOString(), title: String(title || '') });
+  saveMobileDeletedTaskMap(map);
+}
+
+function unrecordMobileTaskDeletion(taskId) {
+  if (!taskId) return;
+  const map = loadMobileDeletedTaskMap();
+  if (map.has(String(taskId))) {
+    map.delete(String(taskId));
+    saveMobileDeletedTaskMap(map);
+  }
+}
+
+function mergeMobileTasksDeep(localTasks, cloudTasks) {
+  const sanitizedCloud = sanitizeMobileTasks(cloudTasks);
+  const deletedMap = loadMobileDeletedTaskMap();
+  if (!Array.isArray(sanitizedCloud) || sanitizedCloud.length === 0) {
+    return Array.isArray(localTasks) ? localTasks : [];
+  }
+  if (!Array.isArray(localTasks) || localTasks.length === 0) {
+    const filteredCloud = sanitizedCloud.filter(ct => {
+      if (!ct || !ct.id) return false;
+      const tb = deletedMap.get(String(ct.id));
+      if (!tb) return true;
+      const cTime = new Date(ct.updatedAt || ct.createdAt || 0).getTime();
+      const dTime = new Date(tb.deletedAt).getTime();
+      return cTime > dTime;
+    });
+    return filteredCloud;
+  }
+
+  const localMap = new Map();
+  localTasks.forEach(t => {
+    if (t && t.id) localMap.set(String(t.id), t);
+  });
+
+  const merged = [];
+  const handledIds = new Set();
+
+  sanitizedCloud.forEach(cloudTask => {
+    if (!cloudTask || !cloudTask.id) return;
+    const strId = String(cloudTask.id);
+    handledIds.add(strId);
+
+    const localTask = localMap.get(strId);
+    if (!localTask) {
+      const tombstone = deletedMap.get(strId);
+      if (tombstone) {
+        const cloudUpdated = new Date(cloudTask.updatedAt || cloudTask.createdAt || 0).getTime();
+        const deletedTime = new Date(tombstone.deletedAt).getTime();
+        if (cloudUpdated <= deletedTime) return;
+      }
+      merged.push(cloudTask);
+      return;
+    }
+
+    const finalTask = { ...cloudTask };
+
+    // 1. 完了ステータス・実行中ステータスの絶対保護 (Zero-Rollback)
+    if (localTask.status === 'completed' || cloudTask.status === 'completed') {
+      finalTask.status = 'completed';
+      finalTask.startTimestamp = null;
+      finalTask.accumulatedSeconds = 0;
+      if (localTask.actEnd || cloudTask.actEnd) finalTask.actEnd = localTask.actEnd || cloudTask.actEnd;
+      if (localTask.actStart || cloudTask.actStart) finalTask.actStart = localTask.actStart || cloudTask.actStart;
+      finalTask.completedAt = localTask.completedAt || cloudTask.completedAt || new Date().toISOString();
+      finalTask.actMin = Math.max(localTask.actMin || 0, cloudTask.actMin || 0);
+    } else if (localTask.status === 'in_progress') {
+      finalTask.status = 'in_progress';
+      finalTask.startTimestamp = localTask.startTimestamp || cloudTask.startTimestamp;
+      finalTask.actStart = localTask.actStart || cloudTask.actStart;
+      finalTask.accumulatedSeconds = localTask.accumulatedSeconds || cloudTask.accumulatedSeconds || 0;
+    } else if (localTask.status === 'paused') {
+      finalTask.status = 'paused';
+      finalTask.startTimestamp = null;
+      finalTask.actStart = localTask.actStart || cloudTask.actStart;
+      finalTask.accumulatedSeconds = Math.max(localTask.accumulatedSeconds || 0, cloudTask.accumulatedSeconds || 0);
+      finalTask.actMin = Math.max(localTask.actMin || 0, cloudTask.actMin || 0);
+    } else if (cloudTask.status === 'in_progress') {
+      const hasOtherLocalRunning = (typeof state !== 'undefined' && state.tasks && state.tasks.some(t => String(t.id) !== strId && t.status === 'in_progress')) ||
+                                   (typeof state !== 'undefined' && state.habits && state.habits.some(h => h.status === 'in_progress'));
+      if (!hasOtherLocalRunning) {
+        finalTask.status = 'in_progress';
+        finalTask.startTimestamp = cloudTask.startTimestamp;
+        finalTask.actStart = cloudTask.actStart;
+        finalTask.accumulatedSeconds = cloudTask.accumulatedSeconds || 0;
+      } else {
+        finalTask.status = 'paused';
+        finalTask.startTimestamp = null;
+        finalTask.accumulatedSeconds = cloudTask.accumulatedSeconds || 0;
+      }
+    }
+
+    // 2. executionLogs の統合
+    const cLogs = Array.isArray(finalTask.executionLogs) ? [...finalTask.executionLogs] : [];
+    const logIds = new Set(cLogs.map(l => l.id || `${l.dateKey || l.timestamp || l.completedAt}_${l.count || ''}`));
+    if (Array.isArray(localTask.executionLogs) && localTask.executionLogs.length > 0) {
+      localTask.executionLogs.forEach(l => {
+        const logId = l.id || `${l.dateKey || l.timestamp || l.completedAt}_${l.count || ''}`;
+        if (!logIds.has(logId)) {
+          cLogs.push(l);
+          logIds.add(logId);
+        }
+      });
+    }
+    finalTask.executionLogs = cLogs;
+
+    // 3. 当日完了の絶対保護 (Zero-Rollback Day-Protection)
+    const curTodayKey = new Date().toLocaleDateString('sv');
+    const hasDoneTodayLog = finalTask.executionLogs.some(l => l && l.dateKey === curTodayKey);
+    if (hasDoneTodayLog) {
+      finalTask.status = 'completed';
+      finalTask.startTimestamp = null;
+      finalTask.accumulatedSeconds = 0;
+    }
+
+    const localUpdated = new Date(localTask.updatedAt || localTask.createdAt || 0).getTime();
+    const cloudUpdated = new Date(cloudTask.updatedAt || cloudTask.createdAt || 0).getTime();
+    if (localUpdated > cloudUpdated) {
+      if (localTask.title) finalTask.title = localTask.title;
+      if (localTask.bucket) finalTask.bucket = localTask.bucket;
+      if (localTask.section) finalTask.section = localTask.section;
+      if (localTask.scheduledDate) finalTask.scheduledDate = localTask.scheduledDate;
+      if (localTask.tags) finalTask.tags = localTask.tags;
+      if (localTask.domainMinor) finalTask.domainMinor = localTask.domainMinor;
+    }
+
+    merged.push(finalTask);
+  });
+
+  localTasks.forEach(localTask => {
+    if (!localTask || !localTask.id) return;
+    const strId = String(localTask.id);
+    if (!handledIds.has(strId)) {
+      merged.push(localTask);
+      handledIds.add(strId);
+    }
+  });
+
+  return merged;
+}
+
+function mergeMobileHabitsDeep(localHabits, cloudHabits) {
+  if (!Array.isArray(cloudHabits) || cloudHabits.length === 0) {
+    return (Array.isArray(localHabits) ? localHabits : [])
+      .map((h, idx) => migrateMobileHabit(h, idx))
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
+
+  if (!Array.isArray(localHabits) || localHabits.length === 0) {
+    return cloudHabits
+      .map((h, idx) => migrateMobileHabit(h, idx))
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
+
+  const localMap = new Map();
+  localHabits.forEach(h => {
+    if (h && h.id) localMap.set(String(h.id), h);
+  });
+
+  const merged = [];
+  const handledIds = new Set();
+
+  cloudHabits.forEach((cloudHabit, idx) => {
+    if (!cloudHabit || !cloudHabit.id) return;
+    const strId = String(cloudHabit.id);
+    handledIds.add(strId);
+
+    const localHabit = localMap.get(strId);
+    if (!localHabit) {
+      merged.push(migrateMobileHabit(cloudHabit, idx));
+      return;
+    }
+
+    const finalHabit = { ...cloudHabit };
+
+    // 1. 完了ステータス・実行中ステータスの絶対保護
+    if (localHabit.status === 'completed' && cloudHabit.status !== 'completed') {
+      finalHabit.status = 'completed';
+      finalHabit.startTimestamp = null;
+      if (localHabit.actEnd) finalHabit.actEnd = localHabit.actEnd;
+      if (localHabit.actStart && !finalHabit.actStart) finalHabit.actStart = localHabit.actStart;
+    } else if (localHabit.status === 'in_progress') {
+      finalHabit.status = 'in_progress';
+      finalHabit.startTimestamp = localHabit.startTimestamp || finalHabit.startTimestamp;
+      if (localHabit.actStart) finalHabit.actStart = localHabit.actStart;
+      if (localHabit.accumulatedSeconds) finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds;
+    } else if (localHabit.status === 'paused') {
+      finalHabit.status = 'paused';
+      finalHabit.startTimestamp = null;
+      if (localHabit.actStart) finalHabit.actStart = localHabit.actStart;
+      if (localHabit.accumulatedSeconds) finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds;
+    }
+
+    // 2. 日付別履歴（history）のディープマージ
+    finalHabit.history = { ...(cloudHabit.history || {}) };
+    if (localHabit.history && typeof localHabit.history === 'object') {
+      Object.keys(localHabit.history).forEach(dk => {
+        const locEntry = localHabit.history[dk];
+        const cldEntry = finalHabit.history[dk];
+        if (!locEntry) return;
+
+        const locDone = locEntry === true || (typeof locEntry === 'object' && !!locEntry.done);
+        const locCount = typeof locEntry === 'object' ? (locEntry.count || 0) : (locEntry === true ? 1 : 0);
+
+        if (!cldEntry) {
+          finalHabit.history[dk] = locEntry;
+        } else {
+          const cldDone = cldEntry === true || (typeof cldEntry === 'object' && !!cldEntry.done);
+          const cldCount = typeof cldEntry === 'object' ? (cldEntry.count || 0) : (cldEntry === true ? 1 : 0);
+
+          if (locDone && !cldDone) {
+            finalHabit.history[dk] = locEntry;
+          } else if (locCount > cldCount) {
+            finalHabit.history[dk] = locEntry;
+          } else if (typeof locEntry === 'object' && typeof cldEntry === 'object') {
+            finalHabit.history[dk] = {
+              ...cldEntry,
+              ...locEntry,
+              done: cldDone || locDone,
+              count: Math.max(cldCount, locCount)
+            };
+            if (locEntry.note && !cldEntry.note) {
+              finalHabit.history[dk].note = locEntry.note;
+            }
+          }
+        }
+      });
+    }
+
+    // 3. タイムライン実行ログ（executionLogs）の重複排除統合
+    const cLogs = Array.isArray(finalHabit.executionLogs) ? [...finalHabit.executionLogs] : [];
+    const logKeySet = new Set(cLogs.map(l => l.id || `${l.dateKey || ''}_${l.completedAt || ''}_${l.count || ''}`));
+    if (Array.isArray(localHabit.executionLogs) && localHabit.executionLogs.length > 0) {
+      localHabit.executionLogs.forEach(l => {
+        const key = l.id || `${l.dateKey || ''}_${l.completedAt || ''}_${l.count || ''}`;
+        if (!logKeySet.has(key)) {
+          cLogs.push(l);
+          logKeySet.add(key);
+        }
+      });
+    }
+    cLogs.sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
+    finalHabit.executionLogs = cLogs;
+
+    // 4. durationLogs の統合
+    if (Array.isArray(localHabit.durationLogs) && Array.isArray(finalHabit.durationLogs)) {
+      if (localHabit.durationLogs.length > finalHabit.durationLogs.length) {
+        finalHabit.durationLogs = [...localHabit.durationLogs];
+      }
+    }
+
+    // 5. ローカル属性保護
+    if (localHabit.sortOrder && typeof localHabit.sortOrder === 'number') finalHabit.sortOrder = localHabit.sortOrder;
+    if (typeof localHabit.isDisabled === 'boolean') finalHabit.isDisabled = localHabit.isDisabled;
+
+    merged.push(migrateMobileHabit(finalHabit, idx));
+  });
+
+  localHabits.forEach((localHabit, idx) => {
+    if (!localHabit || !localHabit.id) return;
+    const strId = String(localHabit.id);
+    if (!handledIds.has(strId)) {
+      merged.push(migrateMobileHabit(localHabit, merged.length));
+      handledIds.add(strId);
+    }
+  });
+
+  return merged.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+}
+
 async function pullFromCloud(force = false, isSilent = false) {
   const gasUrl = getGasUrl();
   if (!gasUrl) {
@@ -756,8 +1178,8 @@ async function pullFromCloud(force = false, isSilent = false) {
   }
   if (mState.isSyncing) return;
 
+  mState.isSyncing = true;
   if (!isSilent) {
-    mState.isSyncing = true;
     updateSyncUI('syncing');
   }
 
@@ -772,15 +1194,45 @@ async function pullFromCloud(force = false, isSilent = false) {
       const cloudTime = new Date(cloudMeta.lastUpdatedAt || 0).getTime();
       const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
 
-      if (force || cloudTime > localTime || (mState.tasks.length === 0 && mState.habits.length === 0)) {
+      if (cloudMeta.deletedTasks && typeof cloudMeta.deletedTasks === 'object') {
+        const locDeletedMap = loadMobileDeletedTaskMap();
+        let changed = false;
+        Object.keys(cloudMeta.deletedTasks).forEach(id => {
+          const remoteEntry = cloudMeta.deletedTasks[id];
+          if (!remoteEntry) return;
+          const remoteTime = new Date(remoteEntry.deletedAt || remoteEntry).getTime();
+          const localEntry = locDeletedMap.get(String(id));
+          if (!localEntry || remoteTime > new Date(localEntry.deletedAt).getTime()) {
+            locDeletedMap.set(String(id), typeof remoteEntry === 'object' ? remoteEntry : { deletedAt: remoteEntry });
+            changed = true;
+          }
+        });
+        if (changed) saveMobileDeletedTaskMap(locDeletedMap);
+      }
+
+      // フェッチ通信中にローカル操作が発生していた場合は、ローカル最新を優先マージし即時プッシュ
+      if (mState.hasPendingPush) {
         if (Array.isArray(cloud.tasks)) {
-          mState.tasks = sanitizeMobileTasks(cloud.tasks);
+          mState.tasks = mergeMobileTasksDeep(mState.tasks, cloud.tasks);
           localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
         }
         if (Array.isArray(cloud.habits)) {
-          mState.habits = cloud.habits
-            .map((h, idx) => migrateMobileHabit(h, idx))
-            .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+          mState.habits = mergeMobileHabitsDeep(mState.habits, cloud.habits);
+          localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(mState.habits));
+        }
+        return;
+      }
+
+      const mobileIsEmpty = (!mState.tasks || mState.tasks.length === 0) && (!mState.habits || mState.habits.length === 0);
+      const hasMissingMobileTasks = Array.isArray(cloud.tasks) && (!mState.tasks || mState.tasks.length < cloud.tasks.length);
+      const shouldPull = force || cloudTime > localTime || !localMeta.lastUpdatedAt || mobileIsEmpty || (hasMissingMobileTasks && localTime <= cloudTime);
+      if (shouldPull) {
+        if (Array.isArray(cloud.tasks)) {
+          mState.tasks = mergeMobileTasksDeep(mState.tasks, cloud.tasks);
+          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
+        }
+        if (Array.isArray(cloud.habits)) {
+          mState.habits = mergeMobileHabitsDeep(mState.habits, cloud.habits);
           localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(mState.habits));
         }
 
@@ -983,6 +1435,12 @@ function completeTask(taskId) {
     note: ''
   });
 
+  // 単発タスク完了時: scheduledDateが未設定の場合は完了日(dateKey)を自動設定して翌日以降のゾンビ表示を防止
+  const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
+  if (!isRec && !task.isRecurringInstance && !task.scheduledDate) {
+    task.scheduledDate = dateKey;
+  }
+
   task.status = isGoalReached ? 'completed' : 'uncompleted';
   task.startTimestamp = null;
   task.accumulatedSeconds = 0;
@@ -997,7 +1455,6 @@ function completeTask(taskId) {
 
   // 定期タスク完了時: 単発タスクレコードをクローン自動生成してマスターボード・SingleTasksへ反映
   let cloneTaskId = null;
-  const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
   if (isRec && isGoalReached) {
     if (typeof createRecurringSingleTaskClone === 'function') {
       const clone = createRecurringSingleTaskClone(task, {

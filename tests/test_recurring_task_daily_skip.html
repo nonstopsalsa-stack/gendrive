@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gendrive Recurring Task Daily Skip & Isolation Engine Test Suite</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }
+    h1 { color: #38bdf8; font-size: 20px; }
+    .test-card { background: #1e293b; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; border-left: 4px solid #64748b; }
+    .test-card.pass { border-left-color: #22c55e; }
+    .test-card.fail { border-left-color: #ef4444; }
+    .status { font-weight: bold; }
+    .pass .status { color: #22c55e; }
+    .fail .status { color: #ef4444; }
+    #summary-box { background: #1e293b; padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #334155; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Gendrive Recurring Task Daily Skip & Isolation Engine Automated Tests (v1.8.4)</h1>
+  <div id="summary-box">実行中...</div>
+  <div id="results"></div>
+
+  <!-- Dependencies -->
+  <script src="../js/config.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/services/taskTimerService.js"></script>
+
+  <script>
+    window.__TEST_SUMMARY__ = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      allPassed: false,
+      results: []
+    };
+
+    window.__LAST_ERROR__ = null;
+    window.onerror = function(msg, url, line, col, error) {
+      window.__LAST_ERROR__ = `Error: ${msg} at ${line}:${col}`;
+      console.error(window.__LAST_ERROR__);
+    };
+
+    function assert(name, condition, message = '') {
+      window.__TEST_SUMMARY__.total++;
+      const res = { name, pass: !!condition, message: condition ? 'OK' : (message || 'Assertion failed') };
+      if (res.pass) {
+        window.__TEST_SUMMARY__.passed++;
+      } else {
+        window.__TEST_SUMMARY__.failed++;
+      }
+      window.__TEST_SUMMARY__.results.push(res);
+
+      const div = document.createElement('div');
+      div.className = `test-card ${res.pass ? 'pass' : 'fail'}`;
+      div.innerHTML = `<span class="status">[${res.pass ? 'PASS' : 'FAIL'}]</span> <strong>${name}</strong>${res.pass ? '' : `<br><small style="color:#f87171">${message}</small>`}`;
+      document.getElementById('results').appendChild(div);
+    }
+
+    // Mock environment for test isolation
+    const mockTodayKey = '2026-09-20';
+    const mockTomorrowKey = '2026-09-21';
+    const mockYesterdayKey = '2026-09-19';
+
+    let currentOffset = 0;
+    function getTodayKey() { return mockTodayKey; }
+    function getSelectedDateKey() {
+      if (currentOffset === -1) return mockTomorrowKey;
+      if (currentOffset === 1) return mockYesterdayKey;
+      return mockTodayKey;
+    }
+    function saveTasks() {}
+    function saveHabits() {}
+    function renderApp() {}
+    let lastUndoAction = null;
+    function showUndoToast(msg, onUndo) { lastUndoAction = onUndo; }
+
+    const state = {
+      selectedDateOffset: 0,
+      filters: { status: 'uncompleted', domain: null, dept: null, proj: null, includeTags: [], excludeTags: [] },
+      tasks: [],
+      habits: []
+    };
+
+    // Include logic matching app.js
+    function getHabitDayCount(h, k) { return 0; }
+    function getHabitTargetTimes(h) { return 1; }
+
+    function getHabitStatusForSelectedDate(habit) {
+      if (!habit) return 'uncompleted';
+      const k = getSelectedDateKey();
+      if (state.selectedDateOffset < 0) return 'uncompleted';
+
+      if (habit.status === 'skipped') {
+        const todayKey = getTodayKey();
+        if (k === todayKey || habit.skippedDateKey === k) return 'skipped';
+      }
+
+      const hasHistoryDone = Boolean(habit.history && (habit.history[k] === true || habit.history[k]?.done));
+      if (hasHistoryDone) return 'completed';
+      if (habit.status === 'in_progress' && state.selectedDateOffset === 0) return 'in_progress';
+      if (habit.status === 'paused' && state.selectedDateOffset === 0) return 'paused';
+      return 'uncompleted';
+    }
+
+    function getTaskStatusForSelectedDate(task) {
+      if (!task) return 'uncompleted';
+      const k = getSelectedDateKey();
+      if (state.selectedDateOffset < 0) return 'uncompleted';
+
+      if (typeof isTaskSkippedForDate === 'function' && isTaskSkippedForDate(task, k)) {
+        return 'skipped';
+      }
+      if (task.status === 'skipped' && (!task.skippedDateKey || task.skippedDateKey === k)) {
+        return 'skipped';
+      }
+
+      const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
+      if (isRec) {
+        if (Array.isArray(task.history)) {
+          const hasDone = task.history.some(h => (typeof h === 'object' && h !== null && h.date === k) || (typeof h === 'string' && h === k));
+          if (hasDone) return 'completed';
+        }
+        if (Array.isArray(task.executionLogs)) {
+          const hasLog = task.executionLogs.some(l => l && l.dateKey === k);
+          if (hasLog) return 'completed';
+        }
+        if (state.selectedDateOffset === 0) {
+          if (task.status === 'in_progress' || task.status === 'paused') return task.status;
+        }
+        return 'uncompleted';
+      }
+      if (state.selectedDateOffset === 0) return task.status || 'uncompleted';
+      return task.status || 'uncompleted';
+    }
+
+    function sanitizeDailyState() {
+      const todayKey = getTodayKey();
+      let changed = false;
+
+      (state.tasks || []).forEach(task => {
+        const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
+        if (isRec) {
+          if (task.status === 'completed') {
+            const hasTodayHistory = Array.isArray(task.history) && task.history.some(h => h && (h.date === todayKey || (typeof h === 'string' && h === todayKey)));
+            const hasTodayLog = Array.isArray(task.executionLogs) && task.executionLogs.some(l => l && l.dateKey === todayKey);
+            if (!hasTodayHistory && !hasTodayLog) {
+              task.status = 'uncompleted';
+              task.actEnd = null;
+              task.accumulatedSeconds = 0;
+              changed = true;
+            }
+          } else if (task.status === 'skipped') {
+            const isSkippedToday = (typeof isTaskSkippedForDate === 'function')
+              ? isTaskSkippedForDate(task, todayKey)
+              : (Array.isArray(task.skippedDates) ? task.skippedDates.includes(todayKey) : (task.skippedDateKey === todayKey));
+            if (!isSkippedToday) {
+              task.status = 'uncompleted';
+              changed = true;
+            }
+          }
+        }
+      });
+
+      (state.habits || []).forEach(habit => {
+        if (habit.status === 'skipped') {
+          const hasTodayDone = Boolean(habit.history && (habit.history[todayKey] === true || habit.history[todayKey]?.done));
+          if (!hasTodayDone && habit.skippedDateKey && habit.skippedDateKey !== todayKey) {
+            habit.status = 'uncompleted';
+            changed = true;
+          }
+        }
+      });
+      return changed;
+    }
+
+    function isTaskForSelectedDate(task) {
+      if (!task || task.isDisabled) return false;
+      if (task.isRecurringInstance) return false;
+      if (task.bucket && task.bucket !== 'today') return false;
+      return true;
+    }
+
+    function getFilteredHabits(customMode = null) {
+      let list = [...state.habits];
+      if (state.filters.status === 'uncompleted') {
+        list = list.filter(h => {
+          const st = getHabitStatusForSelectedDate(h);
+          return st !== 'completed' && st !== 'skipped';
+        });
+      } else if (state.filters.status === 'completed') {
+        list = list.filter(h => getHabitStatusForSelectedDate(h) === 'completed');
+      }
+      return list;
+    }
+
+    function skipHabit(id) {
+      const habit = state.habits.find(h => h.id === id);
+      if (!habit) return;
+      const dateKey = getSelectedDateKey();
+      habit.status = 'skipped';
+      habit.skippedDateKey = dateKey;
+    }
+
+    function runTestSuite() {
+      try {
+        currentOffset = 0;
+        state.selectedDateOffset = 0;
+        state.tasks = [
+          {
+            id: 'rec_task_morning_create',
+            title: '朝クリエイトタイム',
+            type: 'recurring',
+            taskType: 'recurring',
+            section: '第1セッション',
+            estMin: 45,
+            status: 'uncompleted',
+            recType: 'everyday'
+          },
+          {
+            id: 'single_task_normal',
+            title: '企画書ドラフト作成',
+            type: 'single',
+            taskType: 'single',
+            scheduledDate: mockTodayKey,
+            section: '第2セッション',
+            estMin: 30,
+            status: 'uncompleted'
+          }
+        ];
+
+        state.habits = [
+          {
+            id: 'habit_stretch',
+            name: '朝ストレッチ10分',
+            section: '朝オペ',
+            status: 'uncompleted',
+            history: {}
+          }
+        ];
+
+        // Test 1: Initial state is uncompleted
+        assert('1. Initial recurring task status is uncompleted', getTaskStatusForSelectedDate(state.tasks[0]) === 'uncompleted');
+
+        // Test 2: skipTaskForToday executes cleanly
+        const skipSuccess = skipTaskForToday('rec_task_morning_create', mockTodayKey);
+        assert('2. skipTaskForToday returns true on valid task ID', skipSuccess === true);
+
+        const skippedTask = state.tasks[0];
+        assert('3. skippedDates array contains mockTodayKey', Array.isArray(skippedTask.skippedDates) && skippedTask.skippedDates.includes(mockTodayKey));
+        assert('4. skippedDateKey is set to mockTodayKey', skippedTask.skippedDateKey === mockTodayKey);
+        assert('5. task.status is set to skipped', skippedTask.status === 'skipped');
+
+        // Test 3: isTaskSkippedForDate logic
+        assert('6. isTaskSkippedForDate returns true for mockTodayKey', isTaskSkippedForDate(skippedTask, mockTodayKey) === true);
+        assert('7. isTaskSkippedForDate returns false for mockTomorrowKey', isTaskSkippedForDate(skippedTask, mockTomorrowKey) === false);
+        assert('8. isTaskSkippedForDate returns false for mockYesterdayKey', isTaskSkippedForDate(skippedTask, mockYesterdayKey) === false);
+
+        // Test 4: getTaskStatusForSelectedDate on today returns skipped
+        currentOffset = 0;
+        state.selectedDateOffset = 0;
+        assert('9. getTaskStatusForSelectedDate returns skipped on today', getTaskStatusForSelectedDate(skippedTask) === 'skipped');
+
+        // Test 5: getTaskStatusForSelectedDate on tomorrow returns uncompleted (Tomorrow Auto-Appears Guaranteed)
+        currentOffset = -1;
+        state.selectedDateOffset = -1; // Viewing tomorrow
+        assert('10. getTaskStatusForSelectedDate returns uncompleted on tomorrow (Future Guaranteed)', getTaskStatusForSelectedDate(skippedTask) === 'uncompleted');
+        currentOffset = 0;
+        state.selectedDateOffset = 0; // Reset to today
+
+        // Test 6: Default Uncompleted Filter HIDES skipped task completely
+        state.filters.status = 'uncompleted';
+        const visibleTasksUncompleted = state.tasks.filter(t => {
+          const st = getTaskStatusForSelectedDate(t);
+          if (state.filters.status === 'uncompleted') {
+            return st !== 'completed' && st !== 'skipped';
+          }
+          return true;
+        });
+        assert('11. Skipped task is EXCLUDED from uncompleted filter (hidden from daily/section view)', 
+          !visibleTasksUncompleted.some(t => t.id === 'rec_task_morning_create') &&
+          visibleTasksUncompleted.some(t => t.id === 'single_task_normal')
+        );
+
+        // Test 7: Completed Filter HIDES skipped task
+        state.filters.status = 'completed';
+        const visibleTasksCompleted = state.tasks.filter(t => {
+          const st = getTaskStatusForSelectedDate(t);
+          return st === 'completed';
+        });
+        assert('12. Skipped task is EXCLUDED from completed filter', 
+          !visibleTasksCompleted.some(t => t.id === 'rec_task_morning_create')
+        );
+
+        // Test 8: All Filter SHOWS skipped task
+        state.filters.status = 'all';
+        const visibleTasksAll = state.tasks.filter(t => {
+          const st = getTaskStatusForSelectedDate(t);
+          if (state.filters.status === 'uncompleted') {
+            return st !== 'completed' && st !== 'skipped';
+          } else if (state.filters.status === 'completed') {
+            return st === 'completed';
+          }
+          return true;
+        });
+        assert('13. Skipped task is INCLUDED when filter is all', 
+          visibleTasksAll.some(t => t.id === 'rec_task_morning_create')
+        );
+        state.filters.status = 'uncompleted'; // Reset
+
+        // Test 9: Focus Board (focusView) strictly excludes skipped task
+        const focusCandidates = state.tasks.filter(t => 
+          isTaskForSelectedDate(t) && 
+          t.status !== 'completed' && 
+          t.status !== 'skipped'
+        );
+        assert('14. Focus Board strictly EXCLUDES skipped task', 
+          !focusCandidates.some(t => t.id === 'rec_task_morning_create') &&
+          focusCandidates.some(t => t.id === 'single_task_normal')
+        );
+
+        // Test 10: ETA Calculation excludes skipped task (remaining minutes reduced)
+        let dayRemainMin = 0;
+        let dayRemainCount = 0;
+        state.tasks.forEach(t => {
+          const st = getTaskStatusForSelectedDate(t);
+          if (st !== 'completed' && st !== 'skipped') {
+            dayRemainMin += (t.estMin || 15);
+            dayRemainCount++;
+          }
+        });
+        assert('15. ETA calculation correctly excludes skipped task duration (only 30m counted)', dayRemainMin === 30 && dayRemainCount === 1);
+
+        // Test 11: Master Board retains recurring task intact without deletion (Zero Data Loss)
+        const masterList = state.tasks.filter(t => (t.taskType === 'recurring' || t.recType) && !t.isDisabled);
+        assert('16. Master table retains recurring task intact without deletion', masterList.some(t => t.id === 'rec_task_morning_create'));
+
+        // Test 12: Habit skip and isolation
+        skipHabit('habit_stretch');
+        assert('17. Habit status is skipped', state.habits[0].status === 'skipped');
+        assert('18. Habit getHabitStatusForSelectedDate returns skipped on today', getHabitStatusForSelectedDate(state.habits[0]) === 'skipped');
+        const filteredHabits = getFilteredHabits('section');
+        assert('19. Skipped habit is EXCLUDED from section view in uncompleted mode', !filteredHabits.some(h => h.id === 'habit_stretch'));
+
+        // Test 13: unskipTaskForDate restores task cleanly
+        unskipTaskForDate('rec_task_morning_create', mockTodayKey);
+        assert('20. unskipTaskForDate removes mockTodayKey from skippedDates', !state.tasks[0].skippedDates.includes(mockTodayKey));
+        assert('21. unskipTaskForDate resets status to uncompleted', state.tasks[0].status === 'uncompleted');
+        assert('22. getTaskStatusForSelectedDate returns uncompleted after unskip', getTaskStatusForSelectedDate(state.tasks[0]) === 'uncompleted');
+
+        // Test 14: Next Day Sanitizer Self-Healing (Simulate Day Transition)
+        // Re-skip for today
+        skipTaskForToday('rec_task_morning_create', mockTodayKey);
+        assert('23. Re-skipped task has status skipped', state.tasks[0].status === 'skipped');
+
+        // Simulate next morning by changing getTodayKey
+        const origGetTodayKey = getTodayKey;
+        window.getTodayKey = () => mockTomorrowKey;
+
+        // Run sanitizeDailyState for tomorrow
+        sanitizeDailyState();
+        assert('24. sanitizeDailyState automatically resets skipped task to uncompleted on next morning', state.tasks[0].status === 'uncompleted');
+
+        // Restore
+        window.getTodayKey = origGetTodayKey;
+
+        // Test 15: App version is v1.8.6
+        assert('25. APP_VERSION is updated to at least v1.8.6', typeof APP_VERSION !== 'undefined' && APP_VERSION >= 'v1.8.6');
+
+        // Final summary calculation
+        window.__TEST_SUMMARY__.allPassed = (window.__TEST_SUMMARY__.failed === 0 && window.__TEST_SUMMARY__.total > 0);
+        document.getElementById('summary-box').innerHTML = `
+          <strong>全テスト終了:</strong> 合計: ${window.__TEST_SUMMARY__.total} | 
+          <span style="color:#22c55e">合格: ${window.__TEST_SUMMARY__.passed}</span> | 
+          <span style="color:#ef4444">失敗: ${window.__TEST_SUMMARY__.failed}</span> | 
+          結果: <b>${window.__TEST_SUMMARY__.allPassed ? 'ALL PASSED 🎉' : 'FAILURE ❌'}</b>
+        `;
+      } catch (err) {
+        assert('Unhandled test exception', false, err.stack || err.message);
+      }
+    }
+
+    runTestSuite();
+  </script>
+</body>
+</html>

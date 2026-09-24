@@ -583,14 +583,42 @@ function sanitizeDailyState() {
   let changed = false;
 
   (state.tasks || []).forEach(task => {
-    if (task.type === 'recurring' && task.status === 'completed') {
-      const hasTodayHistory = Array.isArray(task.history) && task.history.some(h => h && (h.date === todayKey || (typeof h === 'string' && h === todayKey)));
-      const hasTodayLog = Array.isArray(task.executionLogs) && task.executionLogs.some(l => l && l.dateKey === todayKey);
-      if (!hasTodayHistory && !hasTodayLog) {
+    const isRec = typeof isRecurringTaskItem === 'function' ? isRecurringTaskItem(task) : (task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType));
+    
+    // 翌朝ゴースト実行中サニタイズ: 18時間以上経過した古い未完了タイマーは安全にリセット
+    if (task.status === 'in_progress' || task.status === 'paused') {
+      const isStartedYesterday = task.startTimestamp && (Date.now() - task.startTimestamp > 18 * 60 * 60 * 1000);
+      if (isStartedYesterday) {
         task.status = 'uncompleted';
-        task.actEnd = null;
+        task.startTimestamp = null;
         task.accumulatedSeconds = 0;
+        if (String(state.activeTaskId) === String(task.id)) {
+          state.activeTaskId = null;
+        }
         changed = true;
+      }
+    }
+
+    if (isRec) {
+      if (task.status === 'completed') {
+        const hasTodayHistory = (Array.isArray(task.history) && task.history.some(h => h && (h.date === todayKey || h === todayKey))) ||
+                                (task.history && typeof task.history === 'object' && (task.history[todayKey] === true || task.history[todayKey]?.done));
+        const hasTodayLog = Array.isArray(task.executionLogs) && task.executionLogs.some(l => l && l.dateKey === todayKey);
+        if (!hasTodayHistory && !hasTodayLog) {
+          task.status = 'uncompleted';
+          task.actEnd = null;
+          task.accumulatedSeconds = 0;
+          changed = true;
+        }
+      } else if (task.status === 'skipped') {
+        // 翌朝スキップ自動復元: 当日のスキップ記録がなければuncompletedへ自己修復
+        const isSkippedToday = (typeof isTaskSkippedForDate === 'function')
+          ? isTaskSkippedForDate(task, todayKey)
+          : (Array.isArray(task.skippedDates) ? task.skippedDates.includes(todayKey) : (task.skippedDateKey === todayKey));
+        if (!isSkippedToday) {
+          task.status = 'uncompleted';
+          changed = true;
+        }
       }
     }
   });
@@ -598,6 +626,14 @@ function sanitizeDailyState() {
   (state.habits || []).forEach(habit => {
     const curCount = typeof getHabitDayCount === 'function' ? getHabitDayCount(habit, todayKey) : 0;
     const targetTimes = typeof getHabitTargetTimes === 'function' ? getHabitTargetTimes(habit) : 1;
+
+    if (habit.status === 'skipped') {
+      const hasTodayDone = Boolean(habit.history && (habit.history[todayKey] === true || habit.history[todayKey]?.done));
+      if (!hasTodayDone && habit.skippedDateKey && habit.skippedDateKey !== todayKey) {
+        habit.status = 'uncompleted';
+        changed = true;
+      }
+    }
 
     // 複数回ハビット（targetTimes > 1）の目標未達時の自動自己修復（今朝の誤完了救済）
     if (targetTimes > 1 && curCount < targetTimes) {
@@ -634,8 +670,16 @@ function getHabitStatusForSelectedDate(habit) {
   if (state.selectedDateOffset < 0) {
     return 'uncompleted';
   }
+
+  // 2. Check skipped status
+  if (habit.status === 'skipped') {
+    const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : k;
+    if (k === todayKey || habit.skippedDateKey === k) {
+      return 'skipped';
+    }
+  }
   
-  // 2. Check multi-count progress
+  // 3. Check multi-count progress
   const curCount = getHabitDayCount(habit, k);
   const targetTimes = getHabitTargetTimes(habit);
   if (targetTimes > 1) {
@@ -646,11 +690,11 @@ function getHabitStatusForSelectedDate(habit) {
   }
   if (curCount >= targetTimes && targetTimes > 0) return 'completed';
 
-  // 3. Check history object for exact date completion
+  // 4. Check history object for exact date completion
   const hasHistoryDone = Boolean(habit.history && (habit.history[k] === true || habit.history[k]?.done));
   if (hasHistoryDone) return 'completed';
   
-  // 4. In progress check
+  // 5. In progress check
   if (habit.status === 'in_progress' && state.selectedDateOffset === 0) {
     return 'in_progress';
   }
@@ -658,7 +702,7 @@ function getHabitStatusForSelectedDate(habit) {
     return 'paused';
   }
 
-  // 5. If no history and count is not reached, it's ALWAYS uncompleted
+  // 6. If no history and count is not reached, it's ALWAYS uncompleted
   return 'uncompleted';
 }
 
@@ -671,15 +715,34 @@ function getTaskStatusForSelectedDate(task) {
     return 'uncompleted';
   }
 
-  // 2. Recurring task: Check history array or execution logs for this date
-  if (task.type === 'recurring') {
+  // 2. Check if task is skipped for this date
+  if (typeof isTaskSkippedForDate === 'function' && isTaskSkippedForDate(task, k)) {
+    return 'skipped';
+  }
+  if (task.status === 'skipped' && (!task.skippedDateKey || task.skippedDateKey === k)) {
+    return 'skipped';
+  }
+
+  // 3. Recurring task: Check history array, history object, or execution logs for this date
+  const isRec = typeof isRecurringTaskItem === 'function'
+    ? isRecurringTaskItem(task)
+    : (task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType));
+  if (isRec) {
     if (Array.isArray(task.history)) {
-      const hasDone = task.history.some(h => (typeof h === 'object' && h !== null && h.date === k) || (typeof h === 'string' && h === k));
+      const hasDone = task.history.some(h => (typeof h === 'object' && h !== null && h.date === k && (h.done !== undefined ? h.done : true)) || (typeof h === 'string' && h === k));
       if (hasDone) return 'completed';
+    } else if (task.history && typeof task.history === 'object') {
+      const hEntry = task.history[k];
+      if (hEntry === true || (hEntry && (hEntry.done !== undefined ? hEntry.done : true))) {
+        return 'completed';
+      }
     }
     if (Array.isArray(task.executionLogs)) {
       const hasLog = task.executionLogs.some(l => l && l.dateKey === k);
       if (hasLog) return 'completed';
+    }
+    if (task.status === 'completed') {
+      return 'completed';
     }
     if (state.selectedDateOffset === 0) {
       if (task.status === 'in_progress' || task.status === 'paused') {
@@ -689,12 +752,12 @@ function getTaskStatusForSelectedDate(task) {
     return 'uncompleted';
   }
 
-  // 3. Single task
+  // 4. Single task
   if (state.selectedDateOffset === 0) {
     return task.status || 'uncompleted';
   }
 
-  // 4. Past date: single task scheduled for that date
+  // 5. Past date: single task scheduled for that date
   return task.status || 'uncompleted';
 }
 function isTaskForSelectedDate(task, dateObj = null) {
@@ -726,9 +789,26 @@ function isTaskForSelectedDate(task, dateObj = null) {
 
   // 2. 単発タスク (Single Tasks: bucket === 'today' または 未指定)
   if (task.scheduledDate) {
-    return task.scheduledDate === dateKey;
+    const normDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(task.scheduledDate) : task.scheduledDate;
+    return normDate === dateKey;
   }
-  // 日付未指定の場合は「今日（todayKey）」に表示
+  // scheduledDateが未指定だが完了済みの場合: 完了ログの日付を基準にして該当日のみに表示（今日へのゾンビ流出を完全遮断）
+  if (task.status === 'completed') {
+    let completedDate = null;
+    if (Array.isArray(task.executionLogs) && task.executionLogs.length > 0 && task.executionLogs[0].dateKey) {
+      completedDate = task.executionLogs[0].dateKey;
+    } else if (Array.isArray(task.history) && task.history.length > 0) {
+      const lastH = task.history[task.history.length - 1];
+      completedDate = (typeof lastH === 'object' && lastH !== null) ? lastH.date : (typeof lastH === 'string' ? lastH : null);
+    }
+    if (completedDate) {
+      const normCompDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(completedDate) : completedDate;
+      return normCompDate === dateKey;
+    }
+    // 完了日も不明な完了済みタスクはデイリー画面には表示しない（マスターボード側で管理）
+    return false;
+  }
+  // 日付未指定の未完了タスクは「今日（todayKey）」に表示
   return dateKey === todayKey;
 }
 
@@ -880,6 +960,80 @@ function startHabit(id) {
   const habit = state.habits.find(h => String(h.id) === targetId);
   if (!habit) return;
 
+  // 1. Optimistic Direct DOM Mutation Guard (即時DOM実行中遷移ガード)
+  // 通信遅延や全画面renderApp()の負荷を待たず、1ミリ秒で即座にカードをエメラルドグリーン「● 実行中」へ切り替える
+  try {
+    const cardEl = document.querySelector(`.habit-card[data-id="${targetId}"]`);
+    if (cardEl) {
+      cardEl.classList.remove('paused', 'completed', 'is-timescale-paused', 'dimmed-card');
+      cardEl.classList.add('in-progress', 'is-timescale-active');
+      cardEl.style.setProperty('--timescale-pct', '0%');
+      
+      const pill = cardEl.querySelector('.tc-status-pill');
+      if (pill) {
+        pill.className = 'tc-status-pill in-progress habit-pill clickable-pause';
+        pill.setAttribute('onclick', `event.stopPropagation(); pauseHabit('${targetId}')`);
+        pill.setAttribute('title', 'クリックして一時中断 [P]');
+        pill.textContent = '● 実行中';
+      }
+
+      const actionsDiv = cardEl.querySelector('.habit-actions');
+      if (actionsDiv) {
+        const actionBtn = actionsDiv.querySelector('.btn-habit-action.start, .btn-habit-action.resume, .btn-habit-action.revert');
+        if (actionBtn) {
+          actionBtn.className = 'btn-habit-action done';
+          actionBtn.setAttribute('onclick', `promptCompleteHabit('${targetId}', event)`);
+          actionBtn.removeAttribute('title');
+          actionBtn.textContent = '✓ 完了';
+        }
+      }
+    }
+
+    // 先行タスクのDOM即時中断表示
+    document.querySelectorAll('.task-card.in-progress').forEach(tCard => {
+      const tId = tCard.getAttribute('data-id');
+      tCard.classList.remove('in-progress', 'is-timescale-active');
+      tCard.classList.add('paused', 'is-timescale-paused');
+      const tPill = tCard.querySelector('.tc-status-pill');
+      if (tPill) {
+        tPill.className = 'tc-status-pill paused clickable-resume';
+        tPill.setAttribute('onclick', `event.stopPropagation(); startTask('${tId}')`);
+        tPill.setAttribute('title', 'クリックして作業を再開 [P]');
+        tPill.textContent = '⏸️ 中断中';
+      }
+      const tActionBtn = tCard.querySelector('.btn-task-action.pause, .btn-task-action.done');
+      if (tActionBtn) {
+        tActionBtn.className = 'btn-task-action resume';
+        tActionBtn.setAttribute('onclick', `startTask('${tId}')`);
+        tActionBtn.setAttribute('title', '作業を再開');
+        tActionBtn.textContent = '▶ 再開';
+      }
+    });
+
+    // 先行ハビットのDOM即時中断表示
+    document.querySelectorAll(`.habit-card.in-progress:not([data-id="${targetId}"])`).forEach(hCard => {
+      const hId = hCard.getAttribute('data-id');
+      hCard.classList.remove('in-progress', 'is-timescale-active');
+      hCard.classList.add('paused', 'is-timescale-paused');
+      const hPill = hCard.querySelector('.tc-status-pill');
+      if (hPill) {
+        hPill.className = 'tc-status-pill paused habit-pill clickable-resume';
+        hPill.setAttribute('onclick', `event.stopPropagation(); startHabit('${hId}')`);
+        hPill.setAttribute('title', 'クリックして作業を再開 [P]');
+        hPill.textContent = '⏸️ 中断中';
+      }
+      const hActionBtn = hCard.querySelector('.btn-habit-action.done');
+      if (hActionBtn) {
+        hActionBtn.className = 'btn-habit-action resume';
+        hActionBtn.setAttribute('onclick', `startHabit('${hId}')`);
+        hActionBtn.setAttribute('title', '作業を再開');
+        hActionBtn.textContent = '▶ 再開';
+      }
+    });
+  } catch (domErr) {
+    console.warn('[Optimistic DOM Mutation] Non-fatal error:', domErr);
+  }
+
   // Automatically promote started habit to the top of its section
   moveHabitToTopOfSection(targetId);
 
@@ -903,6 +1057,7 @@ function startHabit(id) {
   habit.actStart = habit.actStart || nowTimeStr;
   habit.startTimestamp = Date.now();
   state.activeHabitId = habit.id;
+  state.activeTaskId = null;
 
   // 実行中タスクがあれば自動中断（完全シングルタスク排他制御）
   if (Array.isArray(state.tasks)) {
@@ -1020,6 +1175,19 @@ function completeHabit(id, userNote = '', userCount = null, userDurationMin = nu
   habit.accumulatedSeconds = 0;
   if (String(state.activeHabitId) === targetId) {
     state.activeHabitId = null;
+  }
+
+  // Optimistic Direct DOM Mutation Guard: 完了操作時に全体再描画や通信待機を挟まず即座にDOMからカードを消去
+  if (isGoalReached) {
+    const cardEls = document.querySelectorAll(`.habit-card[data-id="${targetId}"]`);
+    cardEls.forEach(card => {
+      if (state.filters.status === 'uncompleted') {
+        card.style.transition = 'all 0.2s ease-out';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.95)';
+        setTimeout(() => { if (card.parentNode) card.remove(); }, 200);
+      }
+    });
   }
 
   // UNDO Action Recording
@@ -1238,6 +1406,7 @@ function skipHabit(id) {
   delete habit.history[dateKey];
 
   habit.status = 'skipped';
+  habit.skippedDateKey = dateKey;
   if (String(state.activeHabitId) === targetId) {
     state.activeHabitId = null;
   }
@@ -1278,7 +1447,10 @@ function getFilteredHabits(customMode = null) {
     return [];
   } else if (mode !== 'table') {
     if (state.filters.status === 'uncompleted') {
-      list = list.filter(h => getHabitStatusForSelectedDate(h) !== 'completed');
+      list = list.filter(h => {
+        const st = getHabitStatusForSelectedDate(h);
+        return st !== 'completed' && st !== 'skipped';
+      });
     } else if (state.filters.status === 'completed') {
       list = list.filter(h => getHabitStatusForSelectedDate(h) === 'completed');
     }
@@ -1344,6 +1516,17 @@ function renderApp() {
 }
 
 function updateHeaderAndStatus() {
+  // 翌朝自動ウェイクアップ・サニタイザー（Day-Rollover Auto-Sanitizer）
+  const curTodayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toLocaleDateString('sv');
+  if (state.lastProcessedDate && state.lastProcessedDate !== curTodayKey) {
+    console.log(`[Day-Rollover] Date changed from ${state.lastProcessedDate} to ${curTodayKey}. Running auto-sanitizer...`);
+    state.lastProcessedDate = curTodayKey;
+    if (typeof sanitizeDailyState === 'function') sanitizeDailyState();
+    if (typeof renderApp === 'function') renderApp();
+  } else if (!state.lastProcessedDate) {
+    state.lastProcessedDate = curTodayKey;
+  }
+
   const now = new Date();
   const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
   const timeDisplay = document.getElementById('current-time-display');
@@ -1454,8 +1637,14 @@ function updateHeaderAndStatus() {
     }
   }
 
-  const activeHabit = state.habits.find(h => h.id === state.activeHabitId);
-  const activeTask = state.tasks.find(t => t.id === state.activeTaskId || t.status === 'in_progress');
+  const activeHabit = state.habits.find(h => String(h.id) === String(state.activeHabitId) && h.status === 'in_progress');
+  const activeTask = state.tasks.find(t =>
+    (String(t.id) === String(state.activeTaskId) || t.status === 'in_progress') &&
+    t.status !== 'completed' &&
+    getTaskStatusForSelectedDate(t) !== 'completed' &&
+    t.status !== 'skipped' &&
+    !t.isDisabled
+  );
   const activeNameEl = document.getElementById('active-habit-name');
   if (activeNameEl) {
     if (activeTask && state.selectedDateOffset === 0) {
@@ -2383,6 +2572,47 @@ function deferTask(taskId, targetDateKey, targetBucket = 'today', actionLabel = 
   }
 }
 
+function removeSingleTaskFromBucket(taskId) {
+  const task = (state.tasks || []).find(t => String(t.id) === String(taskId));
+  if (!task) return;
+
+  const prevBucket = task.bucket;
+  const prevScheduledDate = task.scheduledDate;
+
+  task.bucket = 'today';
+  if (!task.scheduledDate) {
+    const logDate = (task.executionLogs && task.executionLogs[0] && task.executionLogs[0].dateKey)
+      || (task.history && task.history[0] && task.history[0].date)
+      || getSelectedDateKey();
+    task.scheduledDate = logDate;
+  }
+
+  saveTasks();
+
+  if (typeof pushUndoAction === 'function') {
+    pushUndoAction({
+      description: `タスク「${task.title}」を箱から外しました`,
+      undo: () => {
+        task.bucket = prevBucket;
+        task.scheduledDate = prevScheduledDate;
+        saveTasks();
+        renderApp();
+      }
+    });
+  }
+
+  if (typeof showCarryoverToast === 'function') {
+    showCarryoverToast(`タスク「${task.title}」を箱から外しました（マスターボードに保持）`);
+  } else if (typeof showToast === 'function') {
+    showToast(`タスク「${task.title}」を箱から外しました（マスターボードに保持）`);
+  }
+
+  renderApp();
+  if (typeof updateSidebarCounters === 'function') {
+    updateSidebarCounters();
+  }
+}
+
 function showContextMenu(e, habitId) {
   e.preventDefault();
   hideAllContextMenus();
@@ -2467,13 +2697,35 @@ function showTaskContextMenu(e, taskId) {
     nextWeekdayLabel.textContent = `次の平日 (${parseInt(m, 10)}/${parseInt(d, 10)}) へ移動`;
   }
 
+  // Toggle "Remove from Bucket" item visibility based on whether task has a bucket
+  const btnRemoveBucket = document.getElementById('ctx-task-remove-bucket');
+  if (btnRemoveBucket) {
+    const hasBucket = task.bucket && task.bucket !== 'today';
+    btnRemoveBucket.style.display = hasBucket ? 'flex' : 'none';
+  }
+
+  // Toggle "Skip Today" / "Unskip Today" visibility
+  const curDateKey = typeof getSelectedDateKey === 'function' ? getSelectedDateKey() : new Date().toISOString().split('T')[0];
+  const isSkipped = (typeof isTaskSkippedForDate === 'function' && isTaskSkippedForDate(task, curDateKey)) || task.status === 'skipped';
+  const btnSkipToday = document.getElementById('ctx-task-skip-today');
+  const btnUnskipToday = document.getElementById('ctx-task-unskip-today');
+  if (btnSkipToday && btnUnskipToday) {
+    if (isSkipped) {
+      btnSkipToday.style.display = 'none';
+      btnUnskipToday.style.display = 'flex';
+    } else {
+      btnSkipToday.style.display = 'flex';
+      btnUnskipToday.style.display = 'none';
+    }
+  }
+
   // Positioning with viewport boundary clamp
   const menu = document.getElementById('task-context-menu');
   if (!menu) return;
 
   menu.classList.add('active');
   const menuWidth = 250;
-  const menuHeight = 280;
+  const menuHeight = 320;
   let x = e.clientX;
   let y = e.clientY;
 
@@ -2671,6 +2923,85 @@ function setupContextMenuHandlers() {
     });
   }
 
+  // 5.5. Remove from Bucket (Restore to Standard Task / today)
+  const btnTaskRemoveBucket = document.getElementById('ctx-task-remove-bucket');
+  if (btnTaskRemoveBucket) {
+    btnTaskRemoveBucket.addEventListener('click', () => {
+      const tid = state.contextMenuTaskId;
+      hideAllContextMenus();
+      if (!tid) return;
+      removeSingleTaskFromBucket(tid);
+    });
+  }
+
+  // 5.6. Skip Task for Today
+  const btnTaskSkip = document.getElementById('ctx-task-skip-today');
+  if (btnTaskSkip) {
+    btnTaskSkip.addEventListener('click', () => {
+      const tid = state.contextMenuTaskId;
+      hideAllContextMenus();
+      if (!tid) return;
+      const task = state.tasks.find(t => String(t.id) === String(tid));
+      if (!task) return;
+      const curDateKey = typeof getSelectedDateKey === 'function' ? getSelectedDateKey() : new Date().toISOString().split('T')[0];
+      const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType);
+      
+      if (typeof skipTaskForToday === 'function') {
+        skipTaskForToday(tid, curDateKey);
+      } else {
+        task.status = 'skipped';
+        task.skippedDateKey = curDateKey;
+        saveTasks();
+        renderApp();
+      }
+
+      const msg = isRec
+        ? `⚡ 定期タスク「${task.title}」を本日はスキップしました (明日また自動表示されます)`
+        : `⚡ タスク「${task.title}」を本日はスキップしました`;
+
+      if (typeof showUndoToast === 'function') {
+        showUndoToast(msg, () => {
+          if (typeof unskipTaskForDate === 'function') {
+            unskipTaskForDate(tid, curDateKey);
+          } else {
+            task.status = 'uncompleted';
+            saveTasks();
+            renderApp();
+          }
+        });
+      }
+    });
+  }
+
+  // 5.7. Unskip Task (Restore to uncompleted)
+  const btnTaskUnskip = document.getElementById('ctx-task-unskip-today');
+  if (btnTaskUnskip) {
+    btnTaskUnskip.addEventListener('click', () => {
+      const tid = state.contextMenuTaskId;
+      hideAllContextMenus();
+      if (!tid) return;
+      const task = state.tasks.find(t => String(t.id) === String(tid));
+      if (!task) return;
+      const curDateKey = typeof getSelectedDateKey === 'function' ? getSelectedDateKey() : new Date().toISOString().split('T')[0];
+      
+      if (typeof unskipTaskForDate === 'function') {
+        unskipTaskForDate(tid, curDateKey);
+      } else {
+        task.status = 'uncompleted';
+        saveTasks();
+        renderApp();
+      }
+
+      if (typeof showUndoToast === 'function') {
+        showUndoToast(`🔄 「${task.title}」のスキップを解除しました`, () => {
+          if (typeof skipTaskForToday === 'function') {
+            skipTaskForToday(tid, curDateKey);
+          }
+        });
+      }
+    });
+  }
+
   // 6. Edit Task Modal
   const btnTaskEdit = document.getElementById('ctx-task-edit');
   if (btnTaskEdit) {
@@ -2690,8 +3021,25 @@ function setupContextMenuHandlers() {
       if (!tid) return;
       const task = state.tasks.find(t => t.id === tid);
       if (task && confirm(`タスク「${task.title}」を完全に削除してもよろしいですか？`)) {
+        const deletedTask = { ...task };
+        if (typeof recordTaskDeletion === 'function') {
+          recordTaskDeletion(tid, task.title);
+        }
         state.tasks = state.tasks.filter(t => t.id !== tid);
         if (state.activeTaskId === tid) state.activeTaskId = null;
+
+        if (typeof pushUndoAction === 'function') {
+          pushUndoAction({
+            description: `タスク「${deletedTask.title}」を削除`,
+            undo: () => {
+              if (typeof unrecordTaskDeletion === 'function') {
+                unrecordTaskDeletion(tid);
+              }
+              state.tasks.push(deletedTask);
+            }
+          });
+        }
+
         saveTasks();
         renderApp();
       }
@@ -3052,16 +3400,35 @@ function setupTaskFormHandlers() {
     });
   });
 
+  // Zero-Collision Unique Task ID Generator with High-Water Mark Protection
+  function generateNextTaskId() {
+    const existingIds = new Set((state.tasks || []).map(t => String(t.id)));
+    let maxIdNum = 0;
+    existingIds.forEach(id => {
+      const match = id.match(/^T(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxIdNum) maxIdNum = num;
+      }
+    });
+
+    const savedHWM = parseInt(localStorage.getItem('gendrive_task_max_id_v1') || '0', 10);
+    let nextNum = Math.max(maxIdNum, isNaN(savedHWM) ? 0 : savedHWM) + 1;
+
+    while (existingIds.has('T' + String(nextNum).padStart(3, '0'))) {
+      nextNum++;
+    }
+
+    localStorage.setItem('gendrive_task_max_id_v1', String(nextNum));
+    return 'T' + String(nextNum).padStart(3, '0');
+  }
+
   // Submit Add Task
   const formAdd = document.getElementById('form-add-task');
   if (formAdd) {
     formAdd.addEventListener('submit', (e) => {
       e.preventDefault();
-      const maxIdNum = state.tasks.reduce((max, t) => {
-        const num = parseInt(t.id.replace('T', ''), 10);
-        return isNaN(num) ? max : Math.max(max, num);
-      }, 0);
-      const newId = 'T' + String(maxIdNum + 1).padStart(3, '0');
+      const newId = generateNextTaskId();
       const title = document.getElementById('add-task-title').value.trim();
       const estMin = parseInt(document.getElementById('add-task-est-min').value, 10) || 15;
       const section = document.getElementById('add-task-section')?.value || state.currentSection || '第2セッション';
@@ -3142,6 +3509,9 @@ function setupTaskFormHandlers() {
       pushUndoAction({
         description: `タスク「${newTask.title}」を追加`,
         undo: () => {
+          if (typeof recordTaskDeletion === 'function') {
+            recordTaskDeletion(newId, newTask.title);
+          }
           state.tasks = state.tasks.filter(t => t.id !== newId);
         }
       });
@@ -3231,12 +3601,18 @@ function setupTaskFormHandlers() {
       const task = state.tasks.find(t => t.id === taskId);
       if (task && confirm(`タスク「${task.title}」を完全に削除してもよろしいですか？`)) {
         const deletedTask = { ...task };
+        if (typeof recordTaskDeletion === 'function') {
+          recordTaskDeletion(taskId, task.title);
+        }
         state.tasks = state.tasks.filter(t => t.id !== taskId);
         if (state.activeTaskId === taskId) state.activeTaskId = null;
 
         pushUndoAction({
           description: `タスク「${deletedTask.title}」を削除`,
           undo: () => {
+            if (typeof unrecordTaskDeletion === 'function') {
+              unrecordTaskDeletion(taskId);
+            }
             state.tasks.push(deletedTask);
           }
         });
@@ -3758,6 +4134,21 @@ try {
 
 safeInit('sanitizeDailyState', sanitizeDailyState);
 safeInit('renderApp', renderApp);
+
+// スリープ復帰時・タブアクティブ時の翌朝日付変更即時チェック（Wakeup Rollover Guard）
+function checkDayRolloverWakeup() {
+  const curTodayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toLocaleDateString('sv');
+  if (state.lastProcessedDate && state.lastProcessedDate !== curTodayKey) {
+    console.log(`[Day-Rollover Wakeup] Running auto-sanitizer for new day: ${curTodayKey}`);
+    state.lastProcessedDate = curTodayKey;
+    if (typeof sanitizeDailyState === 'function') sanitizeDailyState();
+    if (typeof renderApp === 'function') renderApp();
+  }
+}
+window.addEventListener('focus', checkDayRolloverWakeup);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkDayRolloverWakeup();
+});
 
 
 

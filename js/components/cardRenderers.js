@@ -213,8 +213,8 @@ function renderHabitCardHtml(habit, index = 0) {
 
   const curStatus = getHabitStatusForSelectedDate(habit);
   const isCompleted = curStatus === 'completed';
-  const isInProgress = isToday && habit.status === 'in_progress';
-  const isPaused = isToday && habit.status === 'paused';
+  const isInProgress = isToday && habit.status === 'in_progress' && !isCompleted;
+  const isPaused = isToday && habit.status === 'paused' && !isCompleted;
 
   const curCount = getHabitDayCount(habit);
   const targetTimes = getHabitTargetTimes(habit);
@@ -222,16 +222,29 @@ function renderHabitCardHtml(habit, index = 0) {
   const estInfo = getEstimatedDuration(habit, 'habit');
 
   const timescalePct = getHabitTimeProgress(habit);
+  const isSkipped = curStatus === 'skipped';
   let cardClasses = ['habit-card'];
-  if (isInProgress) cardClasses.push('in-progress', 'is-timescale-active');
-  if (isPaused) cardClasses.push('paused', 'is-timescale-paused');
-  if ((isInProgress || isPaused) && timescalePct >= 70) cardClasses.push('is-timescale-warning');
-  if (isCompleted) cardClasses.push('completed');
-  const styleAttr = (isInProgress || isPaused) ? `style="--timescale-pct: ${timescalePct}%;"` : '';
+  if (isCompleted) {
+    cardClasses.push('completed');
+  } else if (isInProgress) {
+    cardClasses.push('in-progress', 'is-timescale-active');
+    if (timescalePct >= 70) cardClasses.push('is-timescale-warning');
+  } else if (isPaused) {
+    cardClasses.push('paused', 'is-timescale-paused');
+    if (timescalePct >= 70) cardClasses.push('is-timescale-warning');
+  }
+  if (isSkipped) cardClasses.push('is-skipped', 'dimmed-card');
+  const styleAttr = (!isCompleted && (isInProgress || isPaused)) ? `style="--timescale-pct: ${timescalePct}%;"` : '';
 
   let timeDisplayHtml = '';
   if (isToday) {
-    if (isInProgress) {
+    if (isCompleted) {
+      const actMin = habit.actMin || estInfo.targetMin;
+      timeDisplayHtml = `
+        <span class="tc-est-badge progress-mode completed-mode">実績/目安: <b>${actMin}分</b> / ${estInfo.targetMin}分</span>
+        <span class="tc-status-pill completed habit-pill">✓ 完了</span>
+      `;
+    } else if (isInProgress) {
       const curElapsedMin = habit.startTimestamp ? Math.max(0, Math.floor((Date.now() - habit.startTimestamp) / 60000)) : 0;
       timeDisplayHtml = `
         <span class="tc-est-badge progress-mode" id="habit-progress-time-${habit.id}">実績/目安: <b>${curElapsedMin}分</b> / ${estInfo.targetMin}分</span>
@@ -243,11 +256,10 @@ function renderHabitCardHtml(habit, index = 0) {
         <span class="tc-est-badge progress-mode">実績/目安: <b>${pausedElapsedMin}分</b> / ${estInfo.targetMin}分</span>
         <button class="tc-status-pill paused habit-pill clickable-resume" onclick="event.stopPropagation(); startHabit('${habit.id}')" title="クリックして作業を再開 [P]">⏸️ 中断中</button>
       `;
-    } else if (isCompleted) {
-      const actMin = habit.actMin || estInfo.targetMin;
+    } else if (isSkipped) {
       timeDisplayHtml = `
-        <span class="tc-est-badge progress-mode completed-mode">実績/目安: <b>${actMin}分</b> / ${estInfo.targetMin}分</span>
-        <span class="tc-status-pill completed habit-pill">✓ 完了</span>
+        <span class="tc-est-badge progress-mode skipped-mode" style="color: var(--text-dim);">本日スキップ (明日自動表示)</span>
+        <span class="tc-status-pill skipped habit-pill" style="background: rgba(148, 163, 184, 0.15); color: var(--text-dim); border: 1px solid rgba(148, 163, 184, 0.3);">⏭️ スキップ</span>
       `;
     } else {
       timeDisplayHtml = `
@@ -277,12 +289,14 @@ function renderHabitCardHtml(habit, index = 0) {
 
   let actionBtnHtml = '';
   if (isToday) {
-    if (isInProgress) {
+    if (isCompleted) {
+      actionBtnHtml = `<button class="btn-habit-action revert" onclick="toggleHabit('${habit.id}')" title="未達成に戻す">↩ 戻す</button>`;
+    } else if (isInProgress) {
       actionBtnHtml = `<button class="btn-habit-action done" onclick="promptCompleteHabit('${habit.id}', event)">✓ 完了</button>`;
     } else if (isPaused) {
       actionBtnHtml = `<button class="btn-habit-action resume" onclick="startHabit('${habit.id}')" title="作業を再開">▶ 再開</button>`;
-    } else if (isCompleted) {
-      actionBtnHtml = `<button class="btn-habit-action revert" onclick="toggleHabit('${habit.id}')" title="未達成に戻す">↩ 戻す</button>`;
+    } else if (isSkipped) {
+      actionBtnHtml = `<button class="btn-habit-action revert" onclick="toggleHabit('${habit.id}')" title="スキップを解除して未達成に戻す">↩ 復活</button>`;
     } else {
       actionBtnHtml = `<button class="btn-habit-action start" onclick="startHabit('${habit.id}')">▶ 開始</button>`;
     }
@@ -345,21 +359,34 @@ function renderTaskCardHtml(task) {
   const isFuture = state.selectedDateOffset < 0;
 
   const curStatus = getTaskStatusForSelectedDate(task);
-  const isCompleted = curStatus === 'completed';
-  const isInProgress = isToday && task.status === 'in_progress';
-  const isPaused = isToday && task.status === 'paused';
+  const isCompleted = curStatus === 'completed' || task.status === 'completed';
+  const isSkipped = !isCompleted && curStatus === 'skipped';
+  const isInProgress = isToday && !isCompleted && task.status === 'in_progress';
+  const isPaused = isToday && !isCompleted && task.status === 'paused';
 
   const timescalePct = getTaskTimeProgress(task);
   let cardClasses = ['task-card'];
-  if (isInProgress) cardClasses.push('in-progress', 'is-timescale-active');
-  if (isPaused) cardClasses.push('paused', 'is-timescale-paused');
-  if ((isInProgress || isPaused) && timescalePct >= 70) cardClasses.push('is-timescale-warning');
-  if (isCompleted) cardClasses.push('completed');
-  const styleAttr = (isInProgress || isPaused) ? `style="--timescale-pct: ${timescalePct}%;"` : '';
+  if (isCompleted) {
+    cardClasses.push('completed');
+  } else if (isInProgress) {
+    cardClasses.push('in-progress', 'is-timescale-active');
+    if (timescalePct >= 70) cardClasses.push('is-timescale-warning');
+  } else if (isPaused) {
+    cardClasses.push('paused', 'is-timescale-paused');
+    if (timescalePct >= 70) cardClasses.push('is-timescale-warning');
+  }
+  if (isSkipped) cardClasses.push('is-skipped', 'dimmed-card');
+  const styleAttr = (!isCompleted && (isInProgress || isPaused)) ? `style="--timescale-pct: ${timescalePct}%;"` : '';
 
   let timeDisplayHtml = '';
   if (isToday) {
-    if (isInProgress) {
+    if (isCompleted) {
+      const actMin = task.actMin || estInfo.targetMin;
+      timeDisplayHtml = `
+        <span class="tc-est-badge progress-mode completed-mode" title="実働時間 (${task.actStart || ''}~${task.actEnd || ''})">実績/予想: <b>${actMin}分</b> / ${estInfo.targetMin}分</span>
+        <span class="tc-status-pill completed">✓ 完了</span>
+      `;
+    } else if (isInProgress) {
       const curElapsedMin = getTaskCurrentElapsedMin(task);
       timeDisplayHtml = `
         <span class="tc-est-badge progress-mode" id="task-progress-time-${task.id}">実績/予想: <b>${curElapsedMin}分</b> / ${estInfo.targetMin}分</span>
@@ -371,11 +398,10 @@ function renderTaskCardHtml(task) {
         <span class="tc-est-badge progress-mode">実績/予想: <b>${pausedElapsedMin}分</b> / ${estInfo.targetMin}分</span>
         <button class="tc-status-pill paused clickable-resume" onclick="event.stopPropagation(); startTask('${task.id}')" title="クリックして作業を再開 [P]">⏸️ 中断中</button>
       `;
-    } else if (isCompleted) {
-      const actMin = task.actMin || estInfo.targetMin;
+    } else if (isSkipped) {
       timeDisplayHtml = `
-        <span class="tc-est-badge progress-mode completed-mode" title="実働時間 (${task.actStart || ''}~${task.actEnd || ''})">実績/予想: <b>${actMin}分</b> / ${estInfo.targetMin}分</span>
-        <span class="tc-status-pill completed">✓ 完了</span>
+        <span class="tc-est-badge progress-mode skipped-mode" style="color: var(--text-dim);">本日スキップ (明日自動表示)</span>
+        <span class="tc-status-pill skipped habit-pill" style="background: rgba(148, 163, 184, 0.15); color: var(--text-dim); border: 1px solid rgba(148, 163, 184, 0.3);">⏭️ スキップ</span>
       `;
     } else {
       timeDisplayHtml = `
@@ -405,12 +431,14 @@ function renderTaskCardHtml(task) {
 
   let actionsHtml = '';
   if (isToday) {
-    if (isInProgress) {
+    if (isCompleted) {
+      actionsHtml = `<button class="btn-task-action revert" onclick="toggleTask('${task.id}')" title="未完了に戻す">↩ 戻す</button>`;
+    } else if (isInProgress) {
       actionsHtml = `<button type="button" class="btn-task-action pause" onclick="pauseTask('${task.id}')" title="\u4E00\u6642\u4E2D\u65AD">\u23F8\uFE0F \u4E2D\u65AD</button><button type="button" class="btn-task-action done" onclick="promptCompleteTask('${task.id}', event)">\u2714\uFE0F \u5B8C\u4E86</button>`;
     } else if (isPaused) {
       actionsHtml = `<button class="btn-task-action resume" onclick="startTask('${task.id}')" title="作業を再開">▶ 再開</button>`;
-    } else if (isCompleted) {
-      actionsHtml = `<button class="btn-task-action revert" onclick="toggleTask('${task.id}')" title="未完了に戻す">↩ 戻す</button>`;
+    } else if (isSkipped) {
+      actionsHtml = `<button class="btn-task-action revert" onclick="unskipTaskForDate('${task.id}')" title="スキップを解除して未完了に戻す">↩ 復活</button>`;
     } else {
       actionsHtml = `<button class="btn-task-action start" onclick="startTask('${task.id}')">▶ 開始</button>`;
     }

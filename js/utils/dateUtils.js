@@ -38,10 +38,20 @@ function normalizeToLocalDateKey(val) {
       const parts = trimmed.split('/');
       return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
     }
+    // Date string format like "Fri Sep 18 2026 00:00:00 GMT+0900 (日本標準時)"
+    const monthNames = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+    const match = trimmed.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+    if (match) {
+      const mNum = monthNames[match[1]] || '01';
+      const dStr = match[2].padStart(2, '0');
+      const yStr = match[3];
+      return `${yStr}-${mNum}-${dStr}`;
+    }
   }
 
   try {
-    const d = (val instanceof Date) ? val : new Date(val);
+    const cleanVal = typeof val === 'string' ? val.replace(/\s*\(.*?\)/, '') : val;
+    const d = (val instanceof Date) ? val : new Date(cleanVal);
     if (!isNaN(d.getTime())) {
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -78,7 +88,8 @@ function detectCurrentSection() {
 // 2. Japanese National Holidays & Business Day Calculations
 // =========================================================================
 
-function getJapaneseHolidayName(date) {
+// 国民の祝日（祝日法第2条に基づく本祝日・非再帰）
+function getJapaneseBaseHolidayName(date) {
   const y = date.getFullYear();
   const m = date.getMonth() + 1; // 1-12
   const d = date.getDate();
@@ -111,23 +122,42 @@ function getJapaneseHolidayName(date) {
     return '秋分の日';
   }
 
-  // 振替休日 (日曜が祝日の場合、月曜以降の最初の平日)
-  if (w >= 1 && w <= 5) {
-    for (let prevOffset = 1; prevOffset <= 3; prevOffset++) {
-      const prev = new Date(y, m - 1, d - prevOffset);
-      if (prev.getDay() === 0 && getJapaneseHolidayName(prev)) {
-        return '振替休日';
-      }
+  return null;
+}
+
+function getJapaneseHolidayName(date) {
+  // 1. 国民の祝日（本祝日）の判定
+  const baseName = getJapaneseBaseHolidayName(date);
+  if (baseName) return baseName;
+
+  const y = date.getFullYear();
+  const m = date.getMonth(); // 0-11
+  const d = date.getDate();
+  const w = date.getDay(); // 0:日 - 6:土
+
+  // 土日は振替休日・国民の休日にはならない
+  if (w === 0 || w === 6) return null;
+
+  // 2. 振替休日 (祝日法第3条第2項: 祝日が日曜の場合、その後の最も近い祝日でない平日)
+  // 直前の連続する祝日期間を遡り、開始日が日曜かつ祝日であるかを判定
+  let checkOffset = 1;
+  while (checkOffset <= 7) {
+    const prev = new Date(y, m, d - checkOffset);
+    const prevBase = getJapaneseBaseHolidayName(prev);
+    if (!prevBase) {
+      break;
     }
+    if (prev.getDay() === 0) {
+      return '振替休日';
+    }
+    checkOffset++;
   }
 
-  // 国民の休日 (祝日に挟まれた平日)
-  if (w >= 1 && w <= 5) {
-    const prev = new Date(y, m - 1, d - 1);
-    const next = new Date(y, m - 1, d + 1);
-    if (getJapaneseHolidayName(prev) && getJapaneseHolidayName(next)) {
-      return '国民の休日';
-    }
+  // 3. 国民の休日 (祝日法第3条第3項: 前日と翌日がともに国民の祝日である平日)
+  const prevDate = new Date(y, m, d - 1);
+  const nextDate = new Date(y, m, d + 1);
+  if (getJapaneseBaseHolidayName(prevDate) && getJapaneseBaseHolidayName(nextDate)) {
+    return '国民の休日';
   }
 
   return null;
