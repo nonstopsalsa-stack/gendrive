@@ -74,7 +74,7 @@ try {
   }
 
   // Version check
-  assert("Version check: APP_VERSION is v1.9.3", typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v1.9.3', typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined');
+  assert("Version check: APP_VERSION is v1.9.4", typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v1.9.4', typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined');
 
   // ========================================================
   // Step 1: sanitizeDailyState() tests
@@ -113,12 +113,35 @@ try {
     const target2 = state.tasks.find(t => t.id === 'T_NORMAL_PAUSED');
     assert("Step 1-B: Normal recent paused task is NOT reset", target2 && target2.status === 'paused', target2 ? target2.status : 'not found');
 
-    // Cleanup
+    // Cleanup tasks
     state.tasks = state.tasks.filter(t => t.id !== 'T_ORPHAN_TEST' && t.id !== 'T_NORMAL_PAUSED');
+
+    // Test 1-C: Habit orphan paused & abnormal accumulatedSeconds (e.g. 2724 min) should be reset to uncompleted
+    const orphanHabit = {
+      id: 'H_ORPHAN_TEST',
+      title: 'Water Test Habit',
+      status: 'paused',
+      startTimestamp: null,
+      accumulatedSeconds: 163440, // 2724 min
+      history: {},
+      executionLogs: []
+    };
+    state.habits.push(orphanHabit);
+    state.activeHabitId = 'H_ORPHAN_TEST';
+
+    sanitizeDailyState();
+
+    const targetH1 = state.habits.find(h => h.id === 'H_ORPHAN_TEST');
+    assert("Step 1-C: Orphan paused habit resets status to uncompleted", targetH1 && targetH1.status === 'uncompleted', targetH1 ? targetH1.status : 'not found');
+    assert("Step 1-C: Orphan paused habit resets accumulatedSeconds to 0", targetH1 && targetH1.accumulatedSeconds === 0, targetH1 ? targetH1.accumulatedSeconds : 'none');
+    assert("Step 1-C: Orphan paused habit clears activeHabitId", state.activeHabitId === null, state.activeHabitId);
+
+    // Cleanup habit
+    state.habits = state.habits.filter(h => h.id !== 'H_ORPHAN_TEST');
   }
 
   // ========================================================
-  // Step 2: mergeTasksDeep() tests
+  // Step 2: mergeTasksDeep() & mergeHabitsDeep() tests
   // ========================================================
   if (typeof mergeTasksDeep === 'function') {
     // Test 2-A: Local orphan paused vs Cloud uncompleted -> Cloud wins (uncompleted)
@@ -140,6 +163,16 @@ try {
     assert("Step 2-C: Non-orphan local paused preserves paused status", merged3[0].status === 'paused', merged3[0] ? merged3[0].status : 'none');
   } else {
     assert("Step 2: mergeTasksDeep exists", false, "mergeTasksDeep is not defined");
+  }
+
+  if (typeof mergeHabitsDeep === 'function') {
+    // Test 2-D: Habit orphan local paused yields to cloud uncompleted
+    const localH = [{ id: 'H_MERGE_1', title: 'Habit 1', status: 'paused', startTimestamp: null, accumulatedSeconds: 0 }];
+    const cloudH = [{ id: 'H_MERGE_1', title: 'Habit 1', status: 'uncompleted' }];
+    const mergedH = mergeHabitsDeep(localH, cloudH);
+    assert("Step 2-D: Orphan local paused habit yields to cloud uncompleted", mergedH[0].status === 'uncompleted', mergedH[0] ? mergedH[0].status : 'none');
+  } else {
+    assert("Step 2: mergeHabitsDeep exists", false, "mergeHabitsDeep is not defined");
   }
 
   // ========================================================
@@ -233,6 +266,20 @@ try {
     }
   } else {
     assert("Step 4-C: renderTaskPresetsCards exists", false, "renderTaskPresetsCards not defined");
+  }
+
+  // ========================================================
+  // Step 4-D: restoreStandardPresets() practical preset expansion
+  // ========================================================
+  if (typeof restoreStandardPresets === 'function') {
+    state.taskPresets = [{ id: 'p_custom', title: 'Custom Preset' }];
+    restoreStandardPresets();
+    assert("Step 4-D: restoreStandardPresets expanded presets beyond original 6", state.taskPresets.length >= 11, 'Length: ' + state.taskPresets.length);
+    const hasHouseReset = state.taskPresets.some(p => p.id === 'preset_house_reset');
+    const hasBreak = state.taskPresets.some(p => p.id === 'preset_gs_break');
+    assert("Step 4-D: restoreStandardPresets contains house reset and GS break", hasHouseReset && hasBreak);
+  } else {
+    assert("Step 4-D: restoreStandardPresets exists", false, "restoreStandardPresets not defined");
   }
 
   return tests;

@@ -626,6 +626,24 @@ function sanitizeDailyState() {
   });
 
   (state.habits || []).forEach(habit => {
+    // 翌朝ゴースト実行中・中断中サニタイズ: 18時間以上経過、または本日開始されていない orphan な paused/in_progress ハビットを安全に uncompleted へ初期化
+    if (habit.status === 'in_progress' || habit.status === 'paused') {
+      const isStartedYesterday = habit.startTimestamp && (Date.now() - habit.startTimestamp > 18 * 60 * 60 * 1000);
+      const isOrphanPaused = habit.status === 'paused' && !habit.startTimestamp;
+      const isAbnormalDuration = (habit.accumulatedSeconds || 0) > 12 * 60 * 60; // 12時間以上の異常積算
+      if (isStartedYesterday || isOrphanPaused || isAbnormalDuration) {
+        habit.status = 'uncompleted';
+        habit.startTimestamp = null;
+        habit.accumulatedSeconds = 0;
+        habit.actStart = null;
+        habit.actEnd = null;
+        if (String(state.activeHabitId) === String(habit.id)) {
+          state.activeHabitId = null;
+        }
+        changed = true;
+      }
+    }
+
     const curCount = typeof getHabitDayCount === 'function' ? getHabitDayCount(habit, todayKey) : 0;
     const targetTimes = typeof getHabitTargetTimes === 'function' ? getHabitTargetTimes(habit) : 1;
 

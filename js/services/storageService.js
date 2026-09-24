@@ -1075,10 +1075,19 @@ function mergeHabitsDeep(localHabits, cloudHabits) {
       if (localHabit.actStart || cloudHabit.actStart) finalHabit.actStart = localHabit.actStart || cloudHabit.actStart;
       if (localHabit.accumulatedSeconds || cloudHabit.accumulatedSeconds) finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds || cloudHabit.accumulatedSeconds;
     } else if (localHabit.status === 'paused') {
-      finalHabit.status = 'paused';
-      finalHabit.startTimestamp = null;
-      if (localHabit.actStart || cloudHabit.actStart) finalHabit.actStart = localHabit.actStart || cloudHabit.actStart;
-      finalHabit.accumulatedSeconds = Math.max(localHabit.accumulatedSeconds || 0, cloudHabit.accumulatedSeconds || 0);
+      // ローカルで中断中の場合、古いクラウドのin_progressで勝手に再開（ゾンビ復活）させない
+      // [FIX] ただし、startTimestampのないorphan pausedはクラウドのuncompleted/completedを優先
+      const isOrphanLocalPaused = !localHabit.startTimestamp && !localHabit.accumulatedSeconds;
+      if (isOrphanLocalPaused && (cloudHabit.status === 'uncompleted' || cloudHabit.status === 'completed')) {
+        finalHabit.status = cloudHabit.status;
+        finalHabit.startTimestamp = null;
+        finalHabit.accumulatedSeconds = 0;
+      } else {
+        finalHabit.status = 'paused';
+        finalHabit.startTimestamp = null;
+        if (localHabit.actStart || cloudHabit.actStart) finalHabit.actStart = localHabit.actStart || cloudHabit.actStart;
+        finalHabit.accumulatedSeconds = Math.max(localHabit.accumulatedSeconds || 0, cloudHabit.accumulatedSeconds || 0);
+      }
     } else if (cloudHabit.status === 'in_progress') {
       const hasOtherLocalRunning = (typeof state !== 'undefined' && state.tasks && state.tasks.some(t => t.status === 'in_progress')) ||
                                    (typeof state !== 'undefined' && state.habits && state.habits.some(h => String(h.id) !== strId && h.status === 'in_progress')) ||

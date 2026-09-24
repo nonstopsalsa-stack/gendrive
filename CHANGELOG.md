@@ -2,6 +2,19 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.4] - 2026-09-24
+### Fixed & Protected
+- **Habit Ghost Reset Sanitizer & Practical Presets Restoration Engine**:
+  1. **翌朝ゴースト中断ハビット完全自動リセット (`sanitizeDailyState`)**:
+     - `state.habits` に対する翌朝サニタイザーを新設。`startTimestamp` が `null` の orphan paused ハビット、18時間以上経過したハビット、および12時間以上の異常積算秒数（数日前から引きずった 2724分 等）を持つ中断中ハビットを検知し、起動時・翌朝に安全に `uncompleted` へ完全リセット（累積秒数0、タイマー初期化、`activeHabitId` 解除）。手動修正不要でリロード時に即時修復。
+  2. **クラウドマージにおけるハビット paused 過剰保護の適正化 (`mergeHabitsDeep`)**:
+     - タスクと同様に、開始時間・積算時間のない orphan な paused ハビットについて、クラウド側が `uncompleted` または `completed` の場合はクラウド側ステータスを優先。ハビットのゴースト中断残留を根絶。
+  3. **定番実用プリセット（全11選）の拡充とワンクリック一括復元機能 (`taskPresetsService.js` / `sampleData.js` / `index.html`)**:
+     - ユーザーの過去実行実績から判明した実用プリセット（「⚡ 家事リセット系 割り込みタスク」「⚡ GS休憩」「⚡ 買い物」「⚡ シャワー/風呂」「⚡ ポスト確認」）を `DEFAULT_TASK_PRESETS` に正式統合。
+     - プリセットモーダル内に「🌟 実用プリセット復元」ボタンを新設し、初期サンプル状態からワンクリックで愛用の実用プリセット群を一括復元・拡充できるセーフティネットを配備。
+  4. **バージョン管理とキャッシュバスターの統一 (`v1.9.4`)**:
+     - `js/config.js`, `index.html`, `mobile.html` のバージョン表記および全スクリプトタグ・CSSクエリパラメータを `?v=1.9.4` に更新。
+
 ## [v1.9.3] - 2026-09-24
 ### Fixed & Protected
 - **Daily Reset Sanitizer, Rollover Recursion Guard & Presets Snapshot Defense Engine**:

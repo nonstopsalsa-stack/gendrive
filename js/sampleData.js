@@ -661,6 +661,76 @@ const DEFAULT_TASK_PRESETS = [
     deptMinor: '総務部',
     projMajor: 'プライベート',
     projMinor: '生活基盤'
+  },
+  {
+    id: 'preset_house_reset',
+    icon: '⚡',
+    title: '家事リセット系 割り込みタスク（洗濯、キッチン、掃除機がけ等）',
+    estMin: 15,
+    label: 'p3',
+    frog: 2,
+    domainMajor: 'PN3',
+    domainMinor: '家事',
+    deptMajor: '制作本部',
+    deptMinor: '総務部',
+    projMajor: 'プライベート',
+    projMinor: '生活基盤'
+  },
+  {
+    id: 'preset_gs_break',
+    icon: '⚡',
+    title: 'GS休憩',
+    estMin: 15,
+    label: 'p4',
+    frog: 1,
+    domainMajor: 'PN4',
+    domainMinor: 'GS',
+    deptMajor: '制作本部',
+    deptMinor: '総務部',
+    projMajor: 'プライベート',
+    projMinor: '生活基盤'
+  },
+  {
+    id: 'preset_shopping',
+    icon: '⚡',
+    title: '買い物',
+    estMin: 25,
+    label: 'p3',
+    frog: 2,
+    domainMajor: 'PN3',
+    domainMinor: '家事',
+    deptMajor: '制作本部',
+    deptMinor: '総務部',
+    projMajor: 'プライベート',
+    projMinor: '生活基盤'
+  },
+  {
+    id: 'preset_bath',
+    icon: '⚡',
+    title: 'シャワー/風呂',
+    estMin: 15,
+    label: 'p3',
+    frog: 1,
+    domainMajor: 'PN3',
+    domainMinor: '健康管理',
+    deptMajor: '制作本部',
+    deptMinor: '総務部',
+    projMajor: 'プライベート',
+    projMinor: '生活基盤'
+  },
+  {
+    id: 'preset_post',
+    icon: '⚡',
+    title: 'ポスト確認',
+    estMin: 15,
+    label: 'p3',
+    frog: 1,
+    domainMajor: 'PN3',
+    domainMinor: '家事',
+    deptMajor: '制作本部',
+    deptMinor: '総務部',
+    projMajor: 'プライベート',
+    projMinor: '生活基盤'
   }
 ];
 

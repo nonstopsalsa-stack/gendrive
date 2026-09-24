@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Shippori+Mincho:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.9.3">
+  <link rel="stylesheet" href="style.css?v=1.9.4">
   <style>
     /* =========================================================================
        Master Tables Scrollbar Overrides: Completely hide ALL native scrollbars
@@ -2989,6 +2989,7 @@
             <h3>プリセットタスク (ワンクリック即時追加・開始)</h3>
           </div>
           <div class="modal-header-actions">
+            <button type="button" class="btn-subtle" id="btn-restore-standard-presets" style="font-size: 11.5px; padding: 5px 12px; gap: 6px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; cursor: pointer;" title="定番実用プリセット（家事リセット、GS休憩、買い物、シャワー、ポスト確認等）を一括追加・復元">🌟 実用プリセット復元</button>
             <button type="button" class="btn-primary" id="btn-toggle-add-preset" style="font-size: 11.5px; padding: 5px 12px; gap: 6px;">➕ 新規プリセット作成 <span class="kbd-sub">N</span></button>
             <button type="button" class="modal-close" id="btn-close-task-presets">✕</button>
           </div>
@@ -3495,32 +3496,32 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=1.9.3"></script>
-  <script src="js/services/profileMasterService.js?v=1.9.3"></script>
-  <script src="js/sampleData.js?v=1.9.3"></script>
-  <script src="js/utils/dateUtils.js?v=1.9.3"></script>
-  <script src="js/engine/recurrenceEngine.js?v=1.9.3"></script>
-  <script src="js/engine/statsEngine.js?v=1.9.3"></script>
-  <script src="js/engine/matrixEngine.js?v=1.9.3"></script>
-  <script src="js/engine/carryoverEngine.js?v=1.9.3"></script>
-  <script src="js/engine/keyboardShortcuts.js?v=1.9.3"></script>
-  <script src="js/services/undoService.js?v=1.9.3"></script>
-  <script src="js/services/storageService.js?v=1.9.3"></script>
-  <script src="js/services/resumeNoteService.js?v=1.9.3"></script>
-  <script src="js/services/taskCloneHelper.js?v=1.9.3"></script>
-  <script src="js/services/taskTimerService.js?v=1.9.3"></script>
-  <script src="js/components/cardRenderers.js?v=1.9.3"></script>
-  <script src="js/components/modalService.js?v=1.9.3"></script>
-  <script src="js/components/taskPresetsService.js?v=1.9.3"></script>
-  <script src="js/components/dragAndDropService.js?v=1.9.3"></script>
-  <script src="js/views/calendarView.js?v=1.9.3"></script>
-  <script src="js/views/sectionView.js?v=1.9.3"></script>
-  <script src="js/views/focusView.js?v=1.9.3"></script>
-  <script src="js/views/allView.js?v=1.9.3"></script>
-  <script src="js/views/tableView.js?v=1.9.3"></script>
-  <script src="js/views/bucketView.js?v=1.9.3"></script>
-  <script src="js/views/goalsView.js?v=1.9.3"></script>
-  <script src="js/views/timerView.js?v=1.9.3"></script>
-  <script src="app.js?v=1.9.3"></script>
+  <script src="js/config.js?v=1.9.4"></script>
+  <script src="js/services/profileMasterService.js?v=1.9.4"></script>
+  <script src="js/sampleData.js?v=1.9.4"></script>
+  <script src="js/utils/dateUtils.js?v=1.9.4"></script>
+  <script src="js/engine/recurrenceEngine.js?v=1.9.4"></script>
+  <script src="js/engine/statsEngine.js?v=1.9.4"></script>
+  <script src="js/engine/matrixEngine.js?v=1.9.4"></script>
+  <script src="js/engine/carryoverEngine.js?v=1.9.4"></script>
+  <script src="js/engine/keyboardShortcuts.js?v=1.9.4"></script>
+  <script src="js/services/undoService.js?v=1.9.4"></script>
+  <script src="js/services/storageService.js?v=1.9.4"></script>
+  <script src="js/services/resumeNoteService.js?v=1.9.4"></script>
+  <script src="js/services/taskCloneHelper.js?v=1.9.4"></script>
+  <script src="js/services/taskTimerService.js?v=1.9.4"></script>
+  <script src="js/components/cardRenderers.js?v=1.9.4"></script>
+  <script src="js/components/modalService.js?v=1.9.4"></script>
+  <script src="js/components/taskPresetsService.js?v=1.9.4"></script>
+  <script src="js/components/dragAndDropService.js?v=1.9.4"></script>
+  <script src="js/views/calendarView.js?v=1.9.4"></script>
+  <script src="js/views/sectionView.js?v=1.9.4"></script>
+  <script src="js/views/focusView.js?v=1.9.4"></script>
+  <script src="js/views/allView.js?v=1.9.4"></script>
+  <script src="js/views/tableView.js?v=1.9.4"></script>
+  <script src="js/views/bucketView.js?v=1.9.4"></script>
+  <script src="js/views/goalsView.js?v=1.9.4"></script>
+  <script src="js/views/timerView.js?v=1.9.4"></script>
+  <script src="app.js?v=1.9.4"></script>
 </body>
 </html>
