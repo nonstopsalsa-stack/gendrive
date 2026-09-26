@@ -39,80 +39,27 @@ $sw = Get-Content 'sw.js' -Encoding UTF8 -Raw
 $hasSwVer = $sw.Contains("CACHE_NAME = 'gendrive-lite-v1915';")
 Assert-Test "4. sw.js cache name is v1915" $hasSwVer
 
-# 2. Extract and test dummy sanitization logic
+# 2. Verify Zero Ad-hoc String Blacklists in Codebase (対症療法ハードコード排除検証)
 $storageJs = Get-Content 'js/services/storageService.js' -Encoding UTF8 -Raw
 $mobileJs = Get-Content 'mobile.js' -Encoding UTF8 -Raw
 
-$hasStorageDummyLogic = $storageJs.Contains("function isDummyTask") -and $storageJs.Contains("function isDummyHabit") -and $storageJs.Contains("function sanitizeTasksDummyFilter")
-Assert-Test "5. storageService.js contains dummy detection and filter functions" $hasStorageDummyLogic
+$hasStorageBlacklist = ($storageJs.Contains("B社") -or $storageJs.Contains("J PREP") -or $storageJs.Contains("Emulate Real Data"))
+Assert-Test "5. storageService.js contains ZERO ad-hoc string blacklists" (-not $hasStorageBlacklist)
 
-$hasMobileDummyLogic = $mobileJs.Contains("function isMobileDummyTask") -and $mobileJs.Contains("function isMobileDummyHabit") -and $mobileJs.Contains("function sanitizeMobileTasksDummy")
-Assert-Test "6. mobile.js contains mobile dummy detection and filter functions" $hasMobileDummyLogic
+$hasMobileBlacklist = ($mobileJs.Contains("B社") -or $mobileJs.Contains("J PREP") -or $mobileJs.Contains("Emulate Real Data"))
+Assert-Test "6. mobile.js contains ZERO ad-hoc string blacklists" (-not $hasMobileBlacklist)
+
+$hasStorageSchemaValidation = $storageJs.Contains("function isValidTask") -and $storageJs.Contains("function isValidHabit")
+Assert-Test "7. storageService.js implements clean structural schema validation" $hasStorageSchemaValidation
+
+$hasMobileSchemaValidation = $mobileJs.Contains("function isValidMobileTask") -and $mobileJs.Contains("function isValidMobileHabit")
+Assert-Test "8. mobile.js implements clean structural schema validation" $hasMobileSchemaValidation
 
 $hasStorageInterceptor = $storageJs.Contains("Test mode active. Push to production GAS URL blocked.")
-Assert-Test "7. storageService.js contains production test guard interceptor" $hasStorageInterceptor
+Assert-Test "9. storageService.js contains production test guard interceptor" $hasStorageInterceptor
 
 $hasMobileInterceptor = $mobileJs.Contains("Test mode active. Push to production GAS URL blocked.")
-Assert-Test "8. mobile.js contains mobile production test guard interceptor" $hasMobileInterceptor
-
-# 3. Direct logic pattern assertion
-function Test-IsDummyTask($t) {
-    if (-not $t) { return $false }
-    $title = [string]$t.title
-    $id = [string]$t.id
-    if ($title -like "*Emulate Real Data*" -or $title -like "*With Some Detailed Description To Emulate Real Data*") {
-        return $true
-    }
-    if ($id -match "^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$" -and $title -like "Task Title Number *") {
-        return $true
-    }
-    if ($id -in @('T001', 'T002', 'T003', 'T005', 'T006', 'T007', 'T008', 'T009', 'T010')) {
-        return $true
-    }
-    if ($title.IndexOf("B社") -ge 0) { return $true }
-    if ($title.IndexOf("J PREP") -ge 0) { return $true }
-    return $false
-}
-
-function Test-IsDummyHabit($h) {
-    if (-not $h) { return $false }
-    $name = [string]$h.name
-    if ($name -like "*Emulating Daily Routine*") {
-        return $true
-    }
-    if ($h.id -match "^H([1-9]|[1-4][0-9]|50)$" -and $name -like "Habit Name *") {
-        return $true
-    }
-    return $false
-}
-
-$sampleBTask = [pscustomobject]@{ id = 'T003'; title = 'B Company Client Task' }
-$sampleJPrepTask = [pscustomobject]@{ id = 'T193'; title = 'J PREP 2026 / TERM B / WEEK 6' }
-$dummyT1 = [pscustomobject]@{ id = 'T1'; title = 'Task Title Number 1 With Some Detailed Description To Emulate Real Data' }
-$realT = [pscustomobject]@{ id = 'T206'; title = 'Real User Production Ongoing Task' }
-
-$dummyH1 = [pscustomobject]@{ id = 'H1'; name = 'Habit Name 1 Emulating Daily Routine' }
-$realH = [pscustomobject]@{ id = 'H069'; name = 'Real User Production Habit Toothbrush' }
-
-$patternCheckT = (Test-IsDummyTask $dummyT1) -and (Test-IsDummyTask $sampleBTask) -and (Test-IsDummyTask $sampleJPrepTask) -and (-not (Test-IsDummyTask $realT))
-Assert-Test "9. Sample & obsolete task detection (T1, T003, JPrep flagged, T206 kept)" $patternCheckT
-
-$patternCheckH = (Test-IsDummyHabit $dummyH1) -and (-not (Test-IsDummyHabit $realH))
-Assert-Test "10. Dummy habit pattern detection accuracy (H1 flagged, H069 kept)" $patternCheckH
-
-$filterTasks = @()
-foreach ($item in @($dummyT1, $sampleBTask, $sampleJPrepTask, $realT)) {
-    if (-not (Test-IsDummyTask $item)) { $filterTasks += $item }
-}
-$tOk = ($filterTasks.Count -eq 1 -and $filterTasks[0].id -eq 'T206')
-Assert-Test "11. Filter purges all sample/obsolete tasks and keeps real task" $tOk "Remaining: $($filterTasks.Count)"
-
-$filterHabits = @()
-foreach ($hItem in @($dummyH1, $realH)) {
-    if (-not (Test-IsDummyHabit $hItem)) { $filterHabits += $hItem }
-}
-$hOk = ($filterHabits.Count -eq 1 -and $filterHabits[0].id -eq 'H069')
-Assert-Test "12. Filter purges all dummy habits and keeps real habit" $hOk "Remaining: $($filterHabits.Count)"
+Assert-Test "10. mobile.js contains mobile production test guard interceptor" $hasMobileInterceptor
 
 # 4. Live GAS Verification (Read-Only GET)
 $gasUrl = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec'
@@ -130,19 +77,21 @@ foreach ($gt in $gasRes.data.tasks) {
 $gasRealT = $gasRes.data.tasks.Count
 $gasRealH = $gasRes.data.habits.Count
 
-Assert-Test "13. Live GAS cloud: Dummy tasks count is 0" ($gasDummyT -eq 0) "Found: $gasDummyT"
-Assert-Test "14. Live GAS cloud: Dummy habits count is 0" ($gasDummyH -eq 0) "Found: $gasDummyH"
-Assert-Test "15. Live GAS cloud: B Company sample task count is 0" ($gasBCompany -eq 0) "Found: $gasBCompany"
-Assert-Test "16. Live GAS cloud: J PREP obsolete task count is 0" ($gasJPrep -eq 0) "Found: $gasJPrep"
-Assert-Test "17. Live GAS cloud: Real tasks preserved (>= 150)" ($gasRealT -ge 150) "Actual: $gasRealT tasks"
-Assert-Test "18. Live GAS cloud: Real habits preserved (>= 90)" ($gasRealH -ge 90) "Actual: $gasRealH habits"
+Assert-Test "11. Live GAS cloud: Dummy tasks count is 0" ($gasDummyT -eq 0) "Found: $gasDummyT"
+Assert-Test "12. Live GAS cloud: Dummy habits count is 0" ($gasDummyH -eq 0) "Found: $gasDummyH"
+Assert-Test "13. Live GAS cloud: B Company sample task count is 0" ($gasBCompany -eq 0) "Found: $gasBCompany"
+Assert-Test "14. Live GAS cloud: J PREP obsolete task count is 0" ($gasJPrep -eq 0) "Found: $gasJPrep"
+Assert-Test "15. Live GAS cloud: Real tasks preserved (>= 150)" ($gasRealT -ge 150) "Actual: $gasRealT tasks"
+Assert-Test "16. Live GAS cloud: Real habits preserved (>= 90)" ($gasRealH -ge 90) "Actual: $gasRealH habits"
 
-# 5. Core Directives Verification
+# 5. Core Directives Verification (Project & Global)
 $hasAgentRules = Test-Path '.agent/rules/antigravity_core_directives.md'
 $hasGeminiRules = Test-Path 'GEMINI.md'
 $hasAgentsRules = Test-Path 'AGENTS.md'
 $hasClaudeRules = Test-Path 'CLAUDE.md'
-Assert-Test "17. Core Directives exist across all AI rule files" ($hasAgentRules -and $hasGeminiRules -and $hasAgentsRules -and $hasClaudeRules)
+$hasGlobalRules = Test-Path "C:\Users\nonst\.gemini\config\rules\antigravity_core_directives.md"
+Assert-Test "17. Core Directives exist in all project rule files" ($hasAgentRules -and $hasGeminiRules -and $hasAgentsRules -and $hasClaudeRules)
+Assert-Test "18. Core Directives exist in global machine configuration rules" $hasGlobalRules
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "Test Summary: Passed: $passCount, Failed: $failCount" -ForegroundColor $(if ($failCount -eq 0) { "Green" } else { "Red" })
