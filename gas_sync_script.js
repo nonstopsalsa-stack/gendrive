@@ -138,6 +138,21 @@ function doPost(e) {
 
     // A. プロパティストアに完全なJSONを高速保存（ミリ秒アクセス用）
     const props = PropertiesService.getScriptProperties();
+    const existingRaw = props.getProperty('GENDRIVE_FULL_DATA');
+    if (existingRaw) {
+      try {
+        const existingData = JSON.parse(existingRaw);
+        if ((!payload.taskPresets || payload.taskPresets.length === 0) && existingData.taskPresets && existingData.taskPresets.length > 0) {
+          payload.taskPresets = existingData.taskPresets;
+        }
+        if ((!payload.goals || Object.keys(payload.goals).length === 0) && existingData.goals) {
+          payload.goals = existingData.goals;
+        }
+        if ((!payload.manifesto || !payload.manifesto.body) && existingData.manifesto) {
+          payload.manifesto = existingData.manifesto;
+        }
+      } catch (mergeErr) {}
+    }
     props.setProperty('GENDRIVE_FULL_DATA', JSON.stringify(payload));
 
     // B. スプレッドシートの各シートへ行単位で反映（人間用バックアップ＆可視化）

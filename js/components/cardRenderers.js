@@ -213,8 +213,12 @@ function renderHabitCardHtml(habit, index = 0) {
 
   const curStatus = getHabitStatusForSelectedDate(habit);
   const isCompleted = curStatus === 'completed';
-  const isInProgress = isToday && habit.status === 'in_progress' && !isCompleted;
-  const isPaused = isToday && habit.status === 'paused' && !isCompleted;
+  const todayKeyStr = typeof getTodayKey === 'function' ? getTodayKey() : null;
+  const habitStartKey = habit.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(habit.startTimestamp)) : null) : null;
+  const isPastTimerHabit = Boolean(habitStartKey && todayKeyStr && habitStartKey !== todayKeyStr);
+
+  const isInProgress = isToday && habit.status === 'in_progress' && !isCompleted && !isPastTimerHabit;
+  const isPaused = isToday && habit.status === 'paused' && !isCompleted && !isPastTimerHabit;
 
   const curCount = getHabitDayCount(habit);
   const targetTimes = getHabitTargetTimes(habit);
@@ -361,8 +365,12 @@ function renderTaskCardHtml(task) {
   const curStatus = getTaskStatusForSelectedDate(task);
   const isCompleted = curStatus === 'completed' || task.status === 'completed';
   const isSkipped = !isCompleted && curStatus === 'skipped';
-  const isInProgress = isToday && !isCompleted && task.status === 'in_progress';
-  const isPaused = isToday && !isCompleted && task.status === 'paused';
+  const todayKeyStr = typeof getTodayKey === 'function' ? getTodayKey() : null;
+  const taskStartKey = task.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(task.startTimestamp)) : null) : null;
+  const isPastTimerTask = Boolean(taskStartKey && todayKeyStr && taskStartKey !== todayKeyStr);
+
+  const isInProgress = isToday && !isCompleted && task.status === 'in_progress' && !isPastTimerTask;
+  const isPaused = isToday && !isCompleted && task.status === 'paused' && !isPastTimerTask;
 
   const timescalePct = getTaskTimeProgress(task);
   let cardClasses = ['task-card'];

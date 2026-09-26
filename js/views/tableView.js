@@ -1002,7 +1002,7 @@ function renderTableView() {
     }
   } catch(e) {}
 
-  const curSubtab = state.masterSubtab || 'habits';
+  const curSubtab = state.masterSubtab || 'analytics';
 
   // Toggle subviews
   if (habitsView) habitsView.classList.toggle('hidden', curSubtab !== 'habits');
@@ -2138,12 +2138,36 @@ function getHabitCurrentStreak(habit) {
   const isTodayDone = isDoneOnDate(todayKey);
 
   let startOffset = isTodayDone ? 0 : 1;
+  let graceUsed = 0;
+  const maxGrace = 1; // 1日猶予 (同期ラグ・日付フリーズ・単日記録漏れによる即時0日化を永久防止)
 
   for (let i = startOffset; i < 365; i++) {
     const key = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : todayKey;
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+
+    // スケジュール対象日チェック（平日限定ハビットが土日や月曜朝に0日になる不具合を完全防止）
+    const isScheduled = typeof isHabitScheduledForDate === 'function'
+      ? isHabitScheduledForDate(habit, d)
+      : true;
+
+    if (!isScheduled) {
+      // スケジュール対象外の日はストリークを壊さずに安全にスキップ
+      continue;
+    }
+
     if (isDoneOnDate(key)) {
       streak++;
     } else {
+      // スケジュール日なのに未完了の場合:
+      // すでにストリークがあり、かつ1日前が完了していれば1日猶予を適用
+      if (streak > 0 && graceUsed < maxGrace) {
+        const prevKey = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i + 1) : null;
+        if (prevKey && isDoneOnDate(prevKey)) {
+          graceUsed++;
+          continue;
+        }
+      }
       break;
     }
   }
@@ -2217,12 +2241,32 @@ function getTaskCurrentStreak(task) {
   const isTodayDone = isTaskDoneOnDate(task, todayKey);
 
   let startOffset = isTodayDone ? 0 : 1;
+  let graceUsed = 0;
+  const maxGrace = 1;
 
   for (let i = startOffset; i < 365; i++) {
     const key = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : todayKey;
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+
+    const isScheduled = typeof isTaskScheduledForDate === 'function'
+      ? isTaskScheduledForDate(task, d)
+      : true;
+
+    if (!isScheduled) {
+      continue;
+    }
+
     if (isTaskDoneOnDate(task, key)) {
       streak++;
     } else {
+      if (streak > 0 && graceUsed < maxGrace) {
+        const prevKey = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i + 1) : null;
+        if (prevKey && isTaskDoneOnDate(task, prevKey)) {
+          graceUsed++;
+          continue;
+        }
+      }
       break;
     }
   }

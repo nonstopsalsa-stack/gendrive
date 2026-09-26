@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Shippori+Mincho:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.9.4">
+  <link rel="stylesheet" href="style.css?v=1.9.11">
   <style>
     /* =========================================================================
        Master Tables Scrollbar Overrides: Completely hide ALL native scrollbars
@@ -104,7 +104,7 @@
           <span class="logo-badge">ACTION ENGINE</span>
         </div>
 
-        <div class="version-badge" id="app-version-badge" onclick="openReleaseNotesModal()" title="バージョン v1.5.7 (クリックで更新履歴表示)">v1.5.7</div>
+        <div class="version-badge" id="app-version-badge" onclick="openReleaseNotesModal()" title="バージョン v1.9.11 (クリックで更新履歴表示)">v1.9.11</div>
 
         <!-- Date Navigation Bar -->
         <div class="date-nav-bar">
@@ -588,12 +588,11 @@
         <section class="view-container" id="view-table">
           <div class="table-top-control-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap;">
             <div class="table-tab-switch" style="margin-bottom: 0;">
-              <button class="table-subtab active" data-subtab="habits" id="subtab-habits" onclick="switchMasterSubtab('habits')">🌿 定期ハビット一覧 (習慣マスター)</button>
-              <button class="table-subtab" data-subtab="analytics" id="subtab-analytics" onclick="switchMasterSubtab('analytics')">📈 継続スコアボード (3d/7d/30d/90d)</button>
-              <button class="table-subtab" data-subtab="tasks" id="subtab-tasks" onclick="switchMasterSubtab('tasks')">🎯 定期タスク一覧 (定期配信マスター)</button>
-              <button class="table-subtab" data-subtab="single_tasks" id="subtab-single-tasks" onclick="switchMasterSubtab('single_tasks')">📋 単発タスク一覧 (全履歴・予定)</button>
-              <button class="table-subtab" data-subtab="profiles" id="subtab-profiles" onclick="switchMasterSubtab('profiles')">⚙️ プロファイル設定 (ドメイン・部門・PJ)</button>
-
+              <button class="table-subtab active" data-subtab="analytics" id="subtab-analytics" onclick="switchMasterSubtab('analytics')">📈 継続スコアボード</button>
+              <button class="table-subtab" data-subtab="habits" id="subtab-habits" onclick="switchMasterSubtab('habits')">🌿 定期ハビット一覧</button>
+              <button class="table-subtab" data-subtab="tasks" id="subtab-tasks" onclick="switchMasterSubtab('tasks')">🎯 定期タスク一覧</button>
+              <button class="table-subtab" data-subtab="single_tasks" id="subtab-single-tasks" onclick="switchMasterSubtab('single_tasks')">📋 単発タスク一覧</button>
+              <button class="table-subtab" data-subtab="profiles" id="subtab-profiles" onclick="switchMasterSubtab('profiles')">⚙️ プロファイル設定</button>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
               <span class="table-hint-badge" style="font-size: 11px; color: var(--primary); background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3); padding: 4px 10px; border-radius: 20px;">
@@ -623,7 +622,7 @@
           </div>
 
           <!-- 4-A. Habits Master Table -->
-          <div class="master-subview" id="master-habits-view">
+          <div class="master-subview hidden" id="master-habits-view">
             <div class="table-control-header">
               <div class="table-title-area">
                 <h2>🌿 ハビット管理台帳（全項目一括エディット）</h2>
@@ -756,7 +755,7 @@
           </div>
 
           <!-- 4-D. Habits & Recurring Tasks Analytics Scoreboard -->
-          <div class="master-subview hidden" id="master-analytics-view">
+          <div class="master-subview" id="master-analytics-view">
             <div class="table-control-header">
               <div class="table-title-area">
                 <h2>📈 習慣・定期 継続スコアボード（3日 / 週 / 30日 / 90日 達成度 & ストリーク一覧）</h2>
@@ -3496,32 +3495,32 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=1.9.5"></script>
-  <script src="js/services/profileMasterService.js?v=1.9.5"></script>
-  <script src="js/sampleData.js?v=1.9.5"></script>
-  <script src="js/utils/dateUtils.js?v=1.9.5"></script>
-  <script src="js/engine/recurrenceEngine.js?v=1.9.5"></script>
-  <script src="js/engine/statsEngine.js?v=1.9.5"></script>
-  <script src="js/engine/matrixEngine.js?v=1.9.5"></script>
-  <script src="js/engine/carryoverEngine.js?v=1.9.5"></script>
-  <script src="js/engine/keyboardShortcuts.js?v=1.9.5"></script>
-  <script src="js/services/undoService.js?v=1.9.5"></script>
-  <script src="js/services/storageService.js?v=1.9.5"></script>
-  <script src="js/services/resumeNoteService.js?v=1.9.5"></script>
-  <script src="js/services/taskCloneHelper.js?v=1.9.5"></script>
-  <script src="js/services/taskTimerService.js?v=1.9.5"></script>
-  <script src="js/components/cardRenderers.js?v=1.9.5"></script>
-  <script src="js/components/modalService.js?v=1.9.5"></script>
-  <script src="js/components/taskPresetsService.js?v=1.9.5"></script>
-  <script src="js/components/dragAndDropService.js?v=1.9.5"></script>
-  <script src="js/views/calendarView.js?v=1.9.5"></script>
-  <script src="js/views/sectionView.js?v=1.9.5"></script>
-  <script src="js/views/focusView.js?v=1.9.5"></script>
-  <script src="js/views/allView.js?v=1.9.5"></script>
-  <script src="js/views/tableView.js?v=1.9.5"></script>
-  <script src="js/views/bucketView.js?v=1.9.5"></script>
-  <script src="js/views/goalsView.js?v=1.9.5"></script>
-  <script src="js/views/timerView.js?v=1.9.5"></script>
-  <script src="app.js?v=1.9.5"></script>
+  <script src="js/config.js?v=1.9.11"></script>
+  <script src="js/services/profileMasterService.js?v=1.9.11"></script>
+  <script src="js/sampleData.js?v=1.9.11"></script>
+  <script src="js/utils/dateUtils.js?v=1.9.11"></script>
+  <script src="js/engine/recurrenceEngine.js?v=1.9.11"></script>
+  <script src="js/engine/statsEngine.js?v=1.9.11"></script>
+  <script src="js/engine/matrixEngine.js?v=1.9.11"></script>
+  <script src="js/engine/carryoverEngine.js?v=1.9.11"></script>
+  <script src="js/engine/keyboardShortcuts.js?v=1.9.11"></script>
+  <script src="js/services/undoService.js?v=1.9.11"></script>
+  <script src="js/services/storageService.js?v=1.9.11"></script>
+  <script src="js/services/resumeNoteService.js?v=1.9.11"></script>
+  <script src="js/services/taskCloneHelper.js?v=1.9.11"></script>
+  <script src="js/services/taskTimerService.js?v=1.9.11"></script>
+  <script src="js/components/cardRenderers.js?v=1.9.11"></script>
+  <script src="js/components/modalService.js?v=1.9.11"></script>
+  <script src="js/components/taskPresetsService.js?v=1.9.11"></script>
+  <script src="js/components/dragAndDropService.js?v=1.9.11"></script>
+  <script src="js/views/calendarView.js?v=1.9.11"></script>
+  <script src="js/views/sectionView.js?v=1.9.11"></script>
+  <script src="js/views/focusView.js?v=1.9.11"></script>
+  <script src="js/views/allView.js?v=1.9.11"></script>
+  <script src="js/views/tableView.js?v=1.9.11"></script>
+  <script src="js/views/bucketView.js?v=1.9.11"></script>
+  <script src="js/views/goalsView.js?v=1.9.11"></script>
+  <script src="js/views/timerView.js?v=1.9.11"></script>
+  <script src="app.js?v=1.9.11"></script>
 </body>
 </html>

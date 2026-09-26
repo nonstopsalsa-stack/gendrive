@@ -109,7 +109,7 @@ let state = {
   currentMode: 'section', // 'section' | 'focus' | 'all' | 'table' | 'bucket' | 'goals'
   currentBucketFilter: null, // { type: 'bucket' | 'label', id: string }
   viewType: 'all', // 'all' | 'task' | 'habit'
-  masterSubtab: 'habits', // 'habits' | 'tasks'
+  masterSubtab: 'analytics', // 'analytics' | 'habits' | 'tasks' | 'single_tasks' | 'profiles'
   filters: {
     status: 'uncompleted',
     domain: null,
@@ -585,15 +585,19 @@ function sanitizeDailyState() {
   (state.tasks || []).forEach(task => {
     const isRec = typeof isRecurringTaskItem === 'function' ? isRecurringTaskItem(task) : (task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType));
     
-    // 翌朝ゴースト実行中サニタイズ: 18時間以上経過した古い未完了タイマーは安全にリセット
+    // 翌朝ゴースト実行中・中断中サニタイズ: 前日以前に開始されたタイマー、orphanなタイマー、12時間以上の異常経過を安全にuncompletedへ初期化
     if (task.status === 'in_progress' || task.status === 'paused') {
-      const isStartedYesterday = task.startTimestamp && (Date.now() - task.startTimestamp > 18 * 60 * 60 * 1000);
-      // [FIX①] startTimestampがnullの paused タスク（orphan paused）も翌朝リセット対象にする
-      const isOrphanPaused = task.status === 'paused' && !task.startTimestamp;
-      if (isStartedYesterday || isOrphanPaused) {
+      const startKey = task.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(task.startTimestamp)) : null) : null;
+      const isFromDifferentDay = Boolean(startKey && startKey !== todayKey);
+      const isOrphan = !task.startTimestamp;
+      const isOverdue = task.startTimestamp && (Date.now() - task.startTimestamp > 12 * 60 * 60 * 1000);
+      const isAbnormalDuration = (task.accumulatedSeconds || 0) > 12 * 60 * 60;
+      if (isFromDifferentDay || isOrphan || isOverdue || isAbnormalDuration) {
         task.status = 'uncompleted';
         task.startTimestamp = null;
         task.accumulatedSeconds = 0;
+        task.actStart = null;
+        task.actEnd = null;
         if (String(state.activeTaskId) === String(task.id)) {
           state.activeTaskId = null;
         }
@@ -626,12 +630,14 @@ function sanitizeDailyState() {
   });
 
   (state.habits || []).forEach(habit => {
-    // 翌朝ゴースト実行中・中断中サニタイズ: 18時間以上経過、または本日開始されていない orphan な paused/in_progress ハビットを安全に uncompleted へ初期化
+    // 翌朝ゴースト実行中・中断中サニタイズ: 前日以前に開始されたタイマー、orphanなタイマー、12時間以上の異常経過を安全にuncompletedへ初期化
     if (habit.status === 'in_progress' || habit.status === 'paused') {
-      const isStartedYesterday = habit.startTimestamp && (Date.now() - habit.startTimestamp > 18 * 60 * 60 * 1000);
-      const isOrphanPaused = habit.status === 'paused' && !habit.startTimestamp;
+      const startKey = habit.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(habit.startTimestamp)) : null) : null;
+      const isFromDifferentDay = Boolean(startKey && startKey !== todayKey);
+      const isOrphan = !habit.startTimestamp;
+      const isOverdue = habit.startTimestamp && (Date.now() - habit.startTimestamp > 12 * 60 * 60 * 1000);
       const isAbnormalDuration = (habit.accumulatedSeconds || 0) > 12 * 60 * 60; // 12時間以上の異常積算
-      if (isStartedYesterday || isOrphanPaused || isAbnormalDuration) {
+      if (isFromDifferentDay || isOrphan || isOverdue || isAbnormalDuration) {
         habit.status = 'uncompleted';
         habit.startTimestamp = null;
         habit.accumulatedSeconds = 0;
@@ -1657,7 +1663,13 @@ function updateHeaderAndStatus() {
     }
   }
 
-  const activeHabit = state.habits.find(h => String(h.id) === String(state.activeHabitId) && h.status === 'in_progress');
+  const activeHabit = state.habits.find(h =>
+    (String(h.id) === String(state.activeHabitId) || h.status === 'in_progress') &&
+    h.status !== 'completed' &&
+    getHabitStatusForSelectedDate(h) !== 'completed' &&
+    h.status !== 'skipped' &&
+    !h.isDisabled
+  );
   const activeTask = state.tasks.find(t =>
     (String(t.id) === String(state.activeTaskId) || t.status === 'in_progress') &&
     t.status !== 'completed' &&
@@ -2240,7 +2252,7 @@ function prevSection() {
 
 
 
-function setMode(mode) {
+function setMode(mode, isReverse = false) {
   // Reset manual sidebar overrides on mode switch
   document.body.classList.remove('sidebar-force-open', 'sidebar-collapsed');
 
@@ -2259,18 +2271,16 @@ function setMode(mode) {
       return;
     }
     if (mode === 'table') {
-      // 4: Cycle Habits (1) ➔ Analytics Scoreboard (2) ➔ Recurring Tasks (3) ➔ Single Tasks (4) ➔ Habits (1)
-      if (state.masterSubtab === 'habits') {
-        state.masterSubtab = 'analytics';
-      } else if (state.masterSubtab === 'analytics') {
-        state.masterSubtab = 'tasks';
-      } else if (state.masterSubtab === 'tasks' || state.masterSubtab === 'recurring_tasks') {
-        state.masterSubtab = 'single_tasks';
-      } else if (state.masterSubtab === 'single_tasks') {
-        state.masterSubtab = 'profiles';
+      // 4: Cycle Analytics Scoreboard (1) ⇄ Habits (2) ⇄ Recurring Tasks (3) ⇄ Single Tasks (4) ⇄ Profiles (5) (Reverse with Shift+4)
+      const subtabs = ['analytics', 'habits', 'tasks', 'single_tasks', 'profiles'];
+      let currentIndex = subtabs.indexOf(state.masterSubtab);
+      if (currentIndex === -1) currentIndex = 0;
+      if (isReverse) {
+        currentIndex = (currentIndex - 1 + subtabs.length) % subtabs.length;
       } else {
-        state.masterSubtab = 'habits';
+        currentIndex = (currentIndex + 1) % subtabs.length;
       }
+      state.masterSubtab = subtabs[currentIndex];
       clearTableSelection();
       renderTableView();
       setTimeout(() => {
@@ -2290,6 +2300,9 @@ function setMode(mode) {
   }
 
   // Switching to new mode
+  if (mode === 'table') {
+    state.masterSubtab = 'analytics'; // 他ボードから4で入ったときは必ず「継続スコアボード」が一番最初に開く
+  }
   const isEnteringFocus = (state.currentMode !== 'focus' && mode === 'focus');
   if (state.currentMode !== mode && state.currentMode !== 'timer') {
     state.previousMode = state.currentMode;

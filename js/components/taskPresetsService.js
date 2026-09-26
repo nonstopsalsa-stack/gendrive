@@ -3,7 +3,7 @@
  * 哲生 (AI Company OS & Personal OS Engine)
  */
 
-const MAX_TASK_PRESETS = 20;
+var MAX_TASK_PRESETS = (typeof MAX_TASK_PRESETS !== 'undefined') ? MAX_TASK_PRESETS : 20;
 const PRESET_SHORTCUT_KEYS = [
   '1', '2', '3', '4', '5',
   '6', '7', '8', '9', '0',
@@ -521,33 +521,20 @@ function setupTaskPresetsHandlers() {
   const preProjMaj = document.getElementById('select-preset-proj-major');
   if (preProjMaj) preProjMaj.addEventListener('change', () => updateMinorSelectOptions('select-preset-proj-major', 'select-preset-proj-minor', PROJECTS_DATA));
 
-  const btnRestoreStd = document.getElementById('btn-restore-standard-presets');
-  if (btnRestoreStd) {
-    btnRestoreStd.addEventListener('click', restoreStandardPresets);
-  }
 }
 
 function restoreStandardPresets() {
   if (!confirm('⚡ 定番の実用プリセット（家事リセット、GS休憩、買い物、シャワー/風呂、ポスト確認など）を一括追加／復元しますか？')) {
     return;
   }
-  const currentPresets = Array.isArray(state.taskPresets) ? [...state.taskPresets] : [];
-  const existingTitles = new Set(currentPresets.map(p => (p.title || '').trim()));
-  
-  let addedCount = 0;
-  (DEFAULT_TASK_PRESETS || []).forEach(defPreset => {
-    if (!existingTitles.has((defPreset.title || '').trim())) {
-      if (currentPresets.length < MAX_TASK_PRESETS) {
-        currentPresets.push({ ...defPreset });
-        existingTitles.add(defPreset.title.trim());
-        addedCount++;
-      }
-    }
-  });
+  const prevCount = (state.taskPresets || []).length;
+  state.taskPresets = (typeof mergeTaskPresetsDeep === 'function')
+    ? mergeTaskPresetsDeep(state.taskPresets, DEFAULT_TASK_PRESETS)
+    : [...(state.taskPresets || []), ...(DEFAULT_TASK_PRESETS || [])];
+  const addedCount = state.taskPresets.length - prevCount;
 
-  state.taskPresets = currentPresets;
   if (typeof saveTaskPresets === 'function') saveTaskPresets();
   renderTaskPresetsCards();
-  alert(`✨ ${addedCount}件の実用プリセットを反映・復元しました！`);
+  alert(`✨ ${addedCount > 0 ? addedCount + '件の実用プリセットを反映・復元しました！' : '全ての実用プリセットが既に登録・最新化されています！'}`);
 }
 

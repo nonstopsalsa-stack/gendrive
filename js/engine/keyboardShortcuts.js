@@ -149,9 +149,9 @@ function setupKeyboardShortcuts() {
             if (typeof setMode === 'function') setMode('all');
             return;
           }
-          if (e.key === '4') {
+          if (e.key === '4' || e.key === '$' || (e.code === 'Digit4' && e.shiftKey)) {
             e.preventDefault();
-            if (typeof setMode === 'function') setMode('table');
+            if (typeof setMode === 'function') setMode('table', e.shiftKey);
             return;
           }
           if (e.key === '5') {
@@ -294,7 +294,9 @@ function setupKeyboardShortcuts() {
         if (typeof setMode === 'function') setMode('all');
         break;
       case '4':
-        if (typeof setMode === 'function') setMode('table');
+      case '$':
+        e.preventDefault();
+        if (typeof setMode === 'function') setMode('table', e.shiftKey || e.key === '$');
         break;
       case '5':
         if (typeof setMode === 'function') setMode('goals');
