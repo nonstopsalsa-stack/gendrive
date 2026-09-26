@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.9.13';
-const APP_VERSION_NAME = 'Zero-Rollback Cloud Sync & Non-blocking Latency Engine';
+const APP_VERSION = 'v1.9.14';
+const APP_VERSION_NAME = 'Local-First Irreversible Architecture & Batch Sync Engine';
 var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
 
 var MAX_TASK_PRESETS = 20;

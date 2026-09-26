@@ -16,12 +16,17 @@ var STORAGE_KEYS = Object.assign(window.STORAGE_KEYS || {}, {
   METADATA: 'gendrive_sync_metadata_v1',
   SNAPSHOTS: 'gendrive_snapshots_v1',
   DAILY_HABIT_ORDER: 'gendrive_daily_habit_order_v1',
-  DELETED_TASKS: 'gendrive_deleted_task_ids_v1'
+  DELETED_TASKS: 'gendrive_deleted_task_ids_v1',
+  DELETED_HABITS: 'gendrive_deleted_habit_ids_v1'
 });
 
 let cloudSyncTimeout = null;
 let isSyncing = false;
 let hasPendingPush = false;
+let isLocalDirty = false; // 逆流防止弁フラグ (ローカル未送信変更あり)
+let lastAutoBackupTime = 0;
+let lastKnownTasksStateMap = new Map();
+let lastKnownHabitsStateMap = new Map();
 
 // =========================================================================
 // 0. Multi-Generation Local Auto-Backup Engine (10-Snapshot Rollback System)
@@ -135,6 +140,11 @@ function updateVaultSyncUI(isActive, filename = 'gendrive_backup.json') {
 }
 
 function createAutoBackupSnapshot() {
+  const now = Date.now();
+  if (now - lastAutoBackupTime < 1500) {
+    return; // スロットリング: 短時間連続操作中の多重バックアップ作成を防止
+  }
+  lastAutoBackupTime = now;
   try {
     const rawSnapshots = localStorage.getItem(STORAGE_KEYS.SNAPSHOTS);
     let snapshots = rawSnapshots ? JSON.parse(rawSnapshots) : [];
@@ -522,6 +532,70 @@ function unrecordTaskDeletion(taskId) {
   }
 }
 
+// =========================================================================
+// Habit Tombstone (削除済みハビット台帳) - ゾンビ復活完全遮断
+// =========================================================================
+
+function loadDeletedHabitMap() {
+  const map = new Map();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_HABITS);
+    if (!raw) return map;
+    const parsed = JSON.parse(raw);
+    const now = Date.now();
+    const RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+    let hasExpired = false;
+
+    Object.keys(parsed).forEach(id => {
+      const entry = parsed[id];
+      const dTime = new Date(entry.deletedAt || entry).getTime();
+      if (now - dTime > RETENTION_MS) {
+        hasExpired = true;
+      } else {
+        map.set(String(id), typeof entry === 'object' ? entry : { deletedAt: entry });
+      }
+    });
+    if (hasExpired) {
+      saveDeletedHabitMap(map);
+    }
+  } catch (e) {
+    console.error('Failed to parse deleted habits tombstone:', e);
+  }
+  return map;
+}
+
+function saveDeletedHabitMap(map) {
+  try {
+    const obj = {};
+    map.forEach((val, key) => {
+      obj[key] = val;
+    });
+    localStorage.setItem(STORAGE_KEYS.DELETED_HABITS, JSON.stringify(obj));
+  } catch (e) {
+    console.error('Failed to save deleted habits tombstone:', e);
+  }
+}
+
+function recordHabitDeletion(habitId, name = '') {
+  if (!habitId) return;
+  const map = loadDeletedHabitMap();
+  map.set(String(habitId), {
+    deletedAt: new Date().toISOString(),
+    name: String(name || '')
+  });
+  saveDeletedHabitMap(map);
+  isLocalDirty = true;
+}
+
+function unrecordHabitDeletion(habitId) {
+  if (!habitId) return;
+  const map = loadDeletedHabitMap();
+  if (map.has(String(habitId))) {
+    map.delete(String(habitId));
+    saveDeletedHabitMap(map);
+  }
+}
+
 /**
  * Task Deep-Merge Engine (タスク消失完全根絶ディープマージ)
  * クラウド受信時にローカルの未同期タスクやオフライン追加タスクを100%保護
@@ -596,6 +670,29 @@ function mergeTasksDeep(localTasks, cloudTasks) {
       finalTask.actMin = localTask.actMin || 0;
       finalTask.completedAt = localTask.completedAt;
       finalTask._localUpdatedAt = localTask._localUpdatedAt;
+
+      // 移動・修正・インライン編集された全属性も100%ローカル最優先採用
+      if (localTask.title !== undefined) finalTask.title = localTask.title;
+      if (localTask.bucket !== undefined) finalTask.bucket = localTask.bucket;
+      if (localTask.section !== undefined) finalTask.section = localTask.section;
+      if (localTask.scheduledDate !== undefined) finalTask.scheduledDate = localTask.scheduledDate;
+      if (localTask.timingType !== undefined) finalTask.timingType = localTask.timingType;
+      if (localTask.displayType !== undefined) finalTask.displayType = localTask.displayType;
+      if (localTask.priority !== undefined) finalTask.priority = localTask.priority;
+      if (localTask.tags !== undefined) finalTask.tags = localTask.tags;
+      if (localTask.domainMinor !== undefined) finalTask.domainMinor = localTask.domainMinor;
+      if (localTask.domainMajor !== undefined) finalTask.domainMajor = localTask.domainMajor;
+      if (localTask.deptMinor !== undefined) finalTask.deptMinor = localTask.deptMinor;
+      if (localTask.deptMajor !== undefined) finalTask.deptMajor = localTask.deptMajor;
+      if (localTask.projMinor !== undefined) finalTask.projMinor = localTask.projMinor;
+      if (localTask.projMajor !== undefined) finalTask.projMajor = localTask.projMajor;
+      if (localTask.notes !== undefined) finalTask.notes = localTask.notes;
+      if (localTask.subtasks !== undefined) finalTask.subtasks = localTask.subtasks;
+      if (localTask.obsidianUri !== undefined) finalTask.obsidianUri = localTask.obsidianUri;
+      if (typeof localTask.isDisabled === 'boolean') finalTask.isDisabled = localTask.isDisabled;
+      if (localTask.matrix) finalTask.matrix = localTask.matrix;
+      if (localTask.estMin !== undefined) finalTask.estMin = localTask.estMin;
+      if (localTask.sortOrder !== undefined) finalTask.sortOrder = localTask.sortOrder;
     } else if (localTask.status === 'completed' || cloudTask.status === 'completed') {
       finalTask.status = 'completed';
       finalTask.startTimestamp = null;
@@ -808,8 +905,46 @@ function loadTasks() {
 }
 
 function saveTasks(skipCloudSync = false) {
+  const nowMs = Date.now();
+  const nowIso = new Date().toISOString();
+
+  if (Array.isArray(state.tasks)) {
+    state.tasks.forEach(t => {
+      if (!t || !t.id) return;
+      const strId = String(t.id);
+      const snapshot = JSON.stringify({
+        title: t.title,
+        status: t.status,
+        section: t.section,
+        scheduledDate: t.scheduledDate,
+        timingType: t.timingType,
+        displayType: t.displayType,
+        bucket: t.bucket,
+        priority: t.priority,
+        tags: t.tags,
+        notes: t.notes,
+        isDisabled: t.isDisabled,
+        sortOrder: t.sortOrder,
+        domainMinor: t.domainMinor,
+        projMinor: t.projMinor,
+        matrix: t.matrix,
+        startTimestamp: t.startTimestamp,
+        accumulatedSeconds: t.accumulatedSeconds
+      });
+
+      const prevSnapshot = lastKnownTasksStateMap.get(strId);
+      if (!prevSnapshot || prevSnapshot !== snapshot) {
+        // 変更または新規作成を自動検知: 不可逆押印 (Zero-Rollback Auto-Stamp)
+        t._localUpdatedAt = nowMs;
+        t.updatedAt = nowIso;
+        lastKnownTasksStateMap.set(strId, snapshot);
+      }
+    });
+  }
+
   localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
-  updateSyncMetadata({ lastUpdatedDevice: 'PC' });
+  isLocalDirty = true; // 逆流完全防止弁フラグ (未送信のローカル変更あり)
+  updateSyncMetadata({ lastUpdatedDevice: 'PC', lastUpdatedAt: nowIso });
   createAutoBackupSnapshot();
   if (typeof updateSidebarBadges === 'function') {
     updateSidebarBadges();
@@ -1217,6 +1352,8 @@ function loadHabits() {
  * 古いクラウドデータ（in_progress / uncompleted）による巻き戻し・上書きを100%遮断する。
  */
 function mergeHabitsDeep(localHabits, cloudHabits) {
+  const deletedHabitMap = typeof loadDeletedHabitMap === 'function' ? loadDeletedHabitMap() : new Map();
+
   if (!Array.isArray(cloudHabits) || cloudHabits.length === 0) {
     return (Array.isArray(localHabits) ? localHabits : [])
       .map((h, idx) => migrateHabit(h, idx))
@@ -1224,7 +1361,15 @@ function mergeHabitsDeep(localHabits, cloudHabits) {
   }
 
   if (!Array.isArray(localHabits) || localHabits.length === 0) {
-    return cloudHabits
+    const filteredCloud = cloudHabits.filter(ch => {
+      if (!ch || !ch.id) return false;
+      const tb = deletedHabitMap.get(String(ch.id));
+      if (!tb) return true;
+      const cTime = new Date(ch.updatedAt || ch.createdAt || 0).getTime();
+      const dTime = new Date(tb.deletedAt).getTime();
+      return cTime > dTime;
+    });
+    return filteredCloud
       .map((h, idx) => migrateHabit(h, idx))
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }
@@ -1244,6 +1389,15 @@ function mergeHabitsDeep(localHabits, cloudHabits) {
 
     const localHabit = localMap.get(strId);
     if (!localHabit) {
+      // 1. Tombstone判定: ローカルで意図して削除されたハビットのゾンビ復活を完全遮断
+      const tombstone = deletedHabitMap.get(strId);
+      if (tombstone) {
+        const cloudUpdated = new Date(cloudHabit.updatedAt || cloudHabit.createdAt || 0).getTime();
+        const deletedTime = new Date(tombstone.deletedAt).getTime();
+        if (cloudUpdated <= deletedTime) {
+          return; // 削除済みハビットを完全破棄
+        }
+      }
       merged.push(migrateHabit(cloudHabit, idx));
       return;
     }
@@ -1260,6 +1414,29 @@ function mergeHabitsDeep(localHabits, cloudHabits) {
       finalHabit.actStart = localHabit.actStart;
       finalHabit.actEnd = localHabit.actEnd;
       finalHabit._localUpdatedAt = localHabit._localUpdatedAt;
+
+      // 移動・修正・インライン編集された全属性も100%ローカル最優先採用
+      if (localHabit.name !== undefined) finalHabit.name = localHabit.name;
+      if (localHabit.section !== undefined) finalHabit.section = localHabit.section;
+      if (localHabit.displayType !== undefined) finalHabit.displayType = localHabit.displayType;
+      if (localHabit.timingType !== undefined) finalHabit.timingType = localHabit.timingType;
+      if (localHabit.customStart !== undefined) finalHabit.customStart = localHabit.customStart;
+      if (localHabit.customEnd !== undefined) finalHabit.customEnd = localHabit.customEnd;
+      if (localHabit.targetMin !== undefined) finalHabit.targetMin = localHabit.targetMin;
+      if (localHabit.frequency !== undefined) finalHabit.frequency = localHabit.frequency;
+      if (localHabit.recType !== undefined) finalHabit.recType = localHabit.recType;
+      if (localHabit.recurrence !== undefined) finalHabit.recurrence = localHabit.recurrence;
+      if (localHabit.category !== undefined) finalHabit.category = localHabit.category;
+      if (localHabit.domain !== undefined) finalHabit.domain = localHabit.domain;
+      if (localHabit.domainMinor !== undefined) finalHabit.domainMinor = localHabit.domainMinor;
+      if (localHabit.dept !== undefined) finalHabit.dept = localHabit.dept;
+      if (localHabit.deptMinor !== undefined) finalHabit.deptMinor = localHabit.deptMinor;
+      if (localHabit.proj !== undefined) finalHabit.proj = localHabit.proj;
+      if (localHabit.projMinor !== undefined) finalHabit.projMinor = localHabit.projMinor;
+      if (localHabit.tags !== undefined) finalHabit.tags = localHabit.tags;
+      if (localHabit.notes !== undefined) finalHabit.notes = localHabit.notes;
+      if (typeof localHabit.isDisabled === 'boolean') finalHabit.isDisabled = localHabit.isDisabled;
+      if (localHabit.sortOrder !== undefined) finalHabit.sortOrder = localHabit.sortOrder;
     } else if (localHabit.status === 'completed' || cloudHabit.status === 'completed') {
       finalHabit.status = 'completed';
       finalHabit.startTimestamp = null;
@@ -1407,14 +1584,54 @@ function mergeHabitsDeep(localHabits, cloudHabits) {
 }
 
 function saveHabits(skipCloudSync = false) {
+  const nowMs = Date.now();
+  const nowIso = new Date().toISOString();
+
   if (Array.isArray(state.habits)) {
     // 実行時配列の最新並び順（moveHabitToTopOfSection等）を尊重し、現在の順序で連続したsortOrderを再採番
     state.habits.forEach((h, idx) => {
       h.sortOrder = idx + 1;
+      if (!h || !h.id) return;
+      const strId = String(h.id);
+      const snapshot = JSON.stringify({
+        name: h.name,
+        status: h.status,
+        section: h.section,
+        displayType: h.displayType,
+        timingType: h.timingType,
+        customStart: h.customStart,
+        customEnd: h.customEnd,
+        targetMin: h.targetMin,
+        frequency: h.frequency,
+        recType: h.recType,
+        category: h.category,
+        domain: h.domain,
+        domainMinor: h.domainMinor,
+        dept: h.dept,
+        deptMinor: h.deptMinor,
+        proj: h.proj,
+        projMinor: h.projMinor,
+        tags: h.tags,
+        notes: h.notes,
+        isDisabled: h.isDisabled,
+        sortOrder: h.sortOrder,
+        startTimestamp: h.startTimestamp,
+        accumulatedSeconds: h.accumulatedSeconds
+      });
+
+      const prevSnapshot = lastKnownHabitsStateMap.get(strId);
+      if (!prevSnapshot || prevSnapshot !== snapshot) {
+        // 変更または新規作成を自動検知: 不可逆押印 (Zero-Rollback Auto-Stamp)
+        h._localUpdatedAt = nowMs;
+        h.updatedAt = nowIso;
+        lastKnownHabitsStateMap.set(strId, snapshot);
+      }
     });
   }
+
   localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
-  updateSyncMetadata({ lastUpdatedDevice: 'PC' });
+  isLocalDirty = true; // 逆流完全防止弁フラグ (未送信のローカル変更あり)
+  updateSyncMetadata({ lastUpdatedDevice: 'PC', lastUpdatedAt: nowIso });
   createAutoBackupSnapshot();
   updateSyncStatus('local');
   if (!skipCloudSync) {
@@ -1476,19 +1693,20 @@ function triggerCloudSync() {
   if (!gasUrl) return;
 
   if (isSyncing) {
-    // If currently syncing, mark that a newer local state is pending push
+    // 送信中の場合は次回バッチ送信フラグを立てる
     hasPendingPush = true;
     return;
   }
 
   if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
+  // インテリジェント・バッチ同期 (1500ms デバウンス): 短時間の連続操作を1本のリクエストに集約
   cloudSyncTimeout = setTimeout(() => {
     pushDataToCloud();
-  }, 300); // 300ms instant push
+  }, 1500);
 }
 
-// Fetch with AbortController Timeout to prevent hanging/blocking
-async function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
+// Fetch with AbortController Timeout to prevent hanging/blocking (20s timeout for realistic GAS payload)
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -1518,6 +1736,10 @@ async function pushDataToCloud() {
     const deletedTasksObj = {};
     deletedMap.forEach((v, k) => { deletedTasksObj[k] = v; });
 
+    const deletedHabitMap = typeof loadDeletedHabitMap === 'function' ? loadDeletedHabitMap() : new Map();
+    const deletedHabitsObj = {};
+    deletedHabitMap.forEach((v, k) => { deletedHabitsObj[k] = v; });
+
     const payload = {
       tasks: state.tasks,
       habits: state.habits,
@@ -1526,7 +1748,8 @@ async function pushDataToCloud() {
       taskPresets: mergeTaskPresetsDeep(state.taskPresets, []),
       metadata: {
         ...meta,
-        deletedTasks: deletedTasksObj
+        deletedTasks: deletedTasksObj,
+        deletedHabits: deletedHabitsObj
       }
     };
 
@@ -1536,7 +1759,7 @@ async function pushDataToCloud() {
         'Content-Type': 'text/plain;charset=utf-8'
       },
       body: JSON.stringify(payload)
-    }, 6000);
+    }, 20000);
 
     let isSuccess = false;
     try {
@@ -1557,6 +1780,7 @@ async function pushDataToCloud() {
     }
 
     if (isSuccess) {
+      isLocalDirty = false; // クラウド送信成功: ダーティ解除 (最新状態同期完了)
       updateSyncStatus('cloud_success');
     } else {
       updateSyncStatus('cloud_error');
@@ -1566,7 +1790,7 @@ async function pushDataToCloud() {
     updateSyncStatus('offline');
   } finally {
     isSyncing = false;
-    // If subsequent changes happened during this push, immediately send latest snapshot
+    // 送信中に新たなローカル操作があった場合、100ms後に最新スナップショットを再送
     if (hasPendingPush) {
       hasPendingPush = false;
       setTimeout(() => {
@@ -1580,13 +1804,21 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
   const gasUrl = getGasApiUrl();
   if (!gasUrl || isSyncing) return;
 
+  // 【逆流完全防止弁 (Stale Pull Barrier)】
+  // ローカルに未送信の変更がある間は、過去のクラウドデータで画面を上書きしない！
+  if (isLocalDirty && !forceApply) {
+    if (!isSilent) console.log('[Sync] Pending local changes exist (isLocalDirty = true). Cloud pull skipped to prevent overwrite.');
+    triggerCloudSync(); // プルではなく、最新ローカルデータのプッシュを促す
+    return;
+  }
+
   isSyncing = true;
   if (!isSilent) {
     updateSyncStatus('syncing');
   }
 
   try {
-    const response = await fetchWithTimeout(`${gasUrl}?t=${Date.now()}`, { credentials: 'omit' }, 6000);
+    const response = await fetchWithTimeout(`${gasUrl}?t=${Date.now()}`, { credentials: 'omit' }, 20000);
     const resJson = await response.json();
 
     if (resJson.status === 'success' && resJson.data) {
@@ -1594,7 +1826,7 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
       const cloudMeta = cloudData.metadata || {};
       const localMeta = getSyncMetadata();
 
-      // クラウド側の Tombstone をローカル台帳へ安全に合流
+      // クラウド側のタスク Tombstone をローカル台帳へ合流
       if (cloudMeta.deletedTasks && typeof cloudMeta.deletedTasks === 'object') {
         const locDeletedMap = loadDeletedTaskMap();
         let changed = false;
@@ -1610,6 +1842,25 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
         });
         if (changed) {
           saveDeletedTaskMap(locDeletedMap);
+        }
+      }
+
+      // クラウド側のハビット Tombstone をローカル台帳へ合流
+      if (cloudMeta.deletedHabits && typeof cloudMeta.deletedHabits === 'object') {
+        const locDeletedHabitMap = loadDeletedHabitMap();
+        let habitChanged = false;
+        Object.keys(cloudMeta.deletedHabits).forEach(id => {
+          const remoteEntry = cloudMeta.deletedHabits[id];
+          if (!remoteEntry) return;
+          const remoteTime = new Date(remoteEntry.deletedAt || remoteEntry).getTime();
+          const localEntry = locDeletedHabitMap.get(String(id));
+          if (!localEntry || remoteTime > new Date(localEntry.deletedAt).getTime()) {
+            locDeletedHabitMap.set(String(id), typeof remoteEntry === 'object' ? remoteEntry : { deletedAt: remoteEntry });
+            habitChanged = true;
+          }
+        });
+        if (habitChanged) {
+          saveDeletedHabitMap(locDeletedHabitMap);
         }
       }
 

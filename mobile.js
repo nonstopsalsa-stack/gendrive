@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive Mobile Lite - Action Engine (v1.8.8)
  * Personal OS & TaskChute Mobile Client
  * Clean Unicode Escape Architecture - 100% Reliable & Rock Solid
@@ -19,8 +19,8 @@ var STORAGE_KEYS = Object.assign(window.STORAGE_KEYS || {}, {
   PRESETS: 'habit_flow_task_presets_v1',
   GOALS: 'habit_flow_goals_v1',
   MANIFESTO: 'habit_flow_manifesto_v1',
-  // Legacy fallback keys
   DELETED_TASKS: 'gendrive_deleted_task_ids_v1',
+  DELETED_HABITS: 'gendrive_deleted_habit_ids_v1',
   LEGACY_TASKS: 'gendrive_tasks_v2',
   LEGACY_HABITS: 'gendrive_habits_v2'
 });
@@ -48,8 +48,12 @@ const mState = {
   selectedDateOffset: 0,
   showCompletedAccordion: false,
   isSyncing: false,
-  hasPendingPush: false
+  hasPendingPush: false,
+  isLocalDirty: false
 };
+
+let mTasksStateMap = new Map();
+let mHabitsStateMap = new Map();
 
 let syncTimeout = null;
 let activeTimerInterval = null;
@@ -599,28 +603,86 @@ function loadLocalData() {
 
   if (runningTask && runningHabit) {
     // 実行中が2重にある場合はタスク優先
-    runninghabit.status = 'paused'; habit._localUpdatedAt = Date.now(); t._localUpdatedAt = Date.now();
+    runningHabit.status = 'paused';
+    runningHabit._localUpdatedAt = Date.now();
     mState.activeHabitId = null;
   }
 }
 
 function saveLocalTasks(instant = true) {
+  const nowMs = Date.now();
+  const nowIso = new Date().toISOString();
+
+  if (Array.isArray(mState.tasks)) {
+    mState.tasks.forEach(t => {
+      if (!t || !t.id) return;
+      const strId = String(t.id);
+      const snapshot = JSON.stringify({
+        title: t.title,
+        status: t.status,
+        section: t.section,
+        scheduledDate: t.scheduledDate,
+        timingType: t.timingType,
+        bucket: t.bucket,
+        priority: t.priority,
+        tags: t.tags,
+        notes: t.notes,
+        isDisabled: t.isDisabled,
+        startTimestamp: t.startTimestamp,
+        accumulatedSeconds: t.accumulatedSeconds
+      });
+      const prev = mTasksStateMap.get(strId);
+      if (!prev || prev !== snapshot) {
+        t._localUpdatedAt = nowMs;
+        t.updatedAt = nowIso;
+        mTasksStateMap.set(strId, snapshot);
+      }
+    });
+  }
+
   localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
-  updateMetadata({ lastUpdatedDevice: 'MOBILE' });
+  mState.isLocalDirty = true;
+  updateMetadata({ lastUpdatedDevice: 'MOBILE', lastUpdatedAt: nowIso });
   if (instant) pushToCloud();
   else triggerCloudPush();
 }
 
 function saveLocalHabits(instant = true) {
+  const nowMs = Date.now();
+  const nowIso = new Date().toISOString();
+
   if (Array.isArray(mState.habits)) {
     mState.habits.forEach((h, idx) => {
       if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
         h.sortOrder = idx + 1;
       }
+      if (!h || !h.id) return;
+      const strId = String(h.id);
+      const snapshot = JSON.stringify({
+        name: h.name,
+        status: h.status,
+        section: h.section,
+        displayType: h.displayType,
+        customStart: h.customStart,
+        customEnd: h.customEnd,
+        targetMin: h.targetMin,
+        notes: h.notes,
+        isDisabled: h.isDisabled,
+        sortOrder: h.sortOrder,
+        startTimestamp: h.startTimestamp,
+        accumulatedSeconds: h.accumulatedSeconds
+      });
+      const prev = mHabitsStateMap.get(strId);
+      if (!prev || prev !== snapshot) {
+        h._localUpdatedAt = nowMs;
+        h.updatedAt = nowIso;
+        mHabitsStateMap.set(strId, snapshot);
+      }
     });
   }
   localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(mState.habits));
-  updateMetadata({ lastUpdatedDevice: 'MOBILE' });
+  mState.isLocalDirty = true;
+  updateMetadata({ lastUpdatedDevice: 'MOBILE', lastUpdatedAt: nowIso });
   if (instant) pushToCloud();
   else triggerCloudPush();
 }
@@ -887,9 +949,21 @@ async function pushToCloud() {
   updateSyncUI('syncing');
 
   const meta = updateMetadata({ lastUpdatedDevice: 'MOBILE' });
+  const deletedTaskMap = typeof loadMobileDeletedTaskMap === 'function' ? loadMobileDeletedTaskMap() : new Map();
+  const deletedTasksObj = {};
+  deletedTaskMap.forEach((v, k) => { deletedTasksObj[k] = v; });
+
+  const deletedHabitMap = typeof loadMobileDeletedHabitMap === 'function' ? loadMobileDeletedHabitMap() : new Map();
+  const deletedHabitsObj = {};
+  deletedHabitMap.forEach((v, k) => { deletedHabitsObj[k] = v; });
+
   const payload = {
     action: 'saveAllData',
-    metadata: meta,
+    metadata: {
+      ...meta,
+      deletedTasks: deletedTasksObj,
+      deletedHabits: deletedHabitsObj
+    },
     tasks: mState.tasks,
     habits: mState.habits,
     goals: mState.goals || {},
@@ -902,7 +976,7 @@ async function pushToCloud() {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload),
-      timeout: 8000
+      timeout: 20000
     });
 
     let isSuccess = false;
@@ -919,6 +993,7 @@ async function pushToCloud() {
     }
 
     if (isSuccess) {
+      mState.isLocalDirty = false;
       updateSyncUI('success');
     } else {
       updateSyncUI('error');
@@ -1011,6 +1086,54 @@ function unrecordMobileTaskDeletion(taskId) {
   if (map.has(String(taskId))) {
     map.delete(String(taskId));
     saveMobileDeletedTaskMap(map);
+  }
+}
+
+function loadMobileDeletedHabitMap() {
+  const map = new Map();
+  const saved = localStorage.getItem(STORAGE_KEYS.DELETED_HABITS);
+  if (!saved) return map;
+  try {
+    const parsed = JSON.parse(saved);
+    const now = Date.now();
+    let hasExpired = false;
+    Object.keys(parsed).forEach(id => {
+      const entry = parsed[id];
+      if (!entry) return;
+      const delTime = typeof entry === 'string' ? new Date(entry).getTime() : new Date(entry.deletedAt || 0).getTime();
+      if (now - delTime > 60 * 24 * 60 * 60 * 1000) {
+        hasExpired = true;
+      } else {
+        map.set(String(id), typeof entry === 'object' ? entry : { deletedAt: entry });
+      }
+    });
+    if (hasExpired) saveMobileDeletedHabitMap(map);
+  } catch (e) {}
+  return map;
+}
+
+function saveMobileDeletedHabitMap(map) {
+  try {
+    const obj = {};
+    map.forEach((val, key) => { obj[key] = val; });
+    localStorage.setItem(STORAGE_KEYS.DELETED_HABITS, JSON.stringify(obj));
+  } catch (e) {}
+}
+
+function recordMobileHabitDeletion(habitId, name = '') {
+  if (!habitId) return;
+  const map = loadMobileDeletedHabitMap();
+  map.set(String(habitId), { deletedAt: new Date().toISOString(), name: String(name || '') });
+  saveMobileDeletedHabitMap(map);
+  mState.isLocalDirty = true;
+}
+
+function unrecordMobileHabitDeletion(habitId) {
+  if (!habitId) return;
+  const map = loadMobileDeletedHabitMap();
+  if (map.has(String(habitId))) {
+    map.delete(String(habitId));
+    saveMobileDeletedHabitMap(map);
   }
 }
 
@@ -1154,6 +1277,8 @@ function mergeMobileTasksDeep(localTasks, cloudTasks) {
 }
 
 function mergeMobileHabitsDeep(localHabits, cloudHabits) {
+  const deletedHabitMap = typeof loadMobileDeletedHabitMap === 'function' ? loadMobileDeletedHabitMap() : new Map();
+
   if (!Array.isArray(cloudHabits) || cloudHabits.length === 0) {
     return (Array.isArray(localHabits) ? localHabits : [])
       .map((h, idx) => migrateMobileHabit(h, idx))
@@ -1161,7 +1286,15 @@ function mergeMobileHabitsDeep(localHabits, cloudHabits) {
   }
 
   if (!Array.isArray(localHabits) || localHabits.length === 0) {
-    return cloudHabits
+    const filteredCloud = cloudHabits.filter(ch => {
+      if (!ch || !ch.id) return false;
+      const tb = deletedHabitMap.get(String(ch.id));
+      if (!tb) return true;
+      const cTime = new Date(ch.updatedAt || ch.createdAt || 0).getTime();
+      const dTime = new Date(tb.deletedAt).getTime();
+      return cTime > dTime;
+    });
+    return filteredCloud
       .map((h, idx) => migrateMobileHabit(h, idx))
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }
@@ -1181,14 +1314,40 @@ function mergeMobileHabitsDeep(localHabits, cloudHabits) {
 
     const localHabit = localMap.get(strId);
     if (!localHabit) {
+      const tombstone = deletedHabitMap.get(strId);
+      if (tombstone) {
+        const cloudUpdated = new Date(cloudHabit.updatedAt || cloudHabit.createdAt || 0).getTime();
+        const deletedTime = new Date(tombstone.deletedAt).getTime();
+        if (cloudUpdated <= deletedTime) {
+          return; // 削除済みハビット破棄
+        }
+      }
       merged.push(migrateMobileHabit(cloudHabit, idx));
       return;
     }
 
     const finalHabit = { ...cloudHabit };
 
-    // 1. 完了ステータス・実行中ステータスの絶対保護
-    if (localHabit.status === 'completed' && cloudHabit.status !== 'completed') {
+    // 0. 直近ローカル操作（_localUpdatedAt: 120秒以内）の絶対優先保護
+    const isRecentLocalHabit = localHabit._localUpdatedAt && (Date.now() - localHabit._localUpdatedAt < 120000);
+    if (isRecentLocalHabit) {
+      finalHabit.status = localHabit.status;
+      finalHabit.startTimestamp = localHabit.startTimestamp;
+      finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds || 0;
+      finalHabit.actStart = localHabit.actStart;
+      finalHabit.actEnd = localHabit.actEnd;
+      finalHabit._localUpdatedAt = localHabit._localUpdatedAt;
+
+      if (localHabit.name !== undefined) finalHabit.name = localHabit.name;
+      if (localHabit.section !== undefined) finalHabit.section = localHabit.section;
+      if (localHabit.displayType !== undefined) finalHabit.displayType = localHabit.displayType;
+      if (localHabit.customStart !== undefined) finalHabit.customStart = localHabit.customStart;
+      if (localHabit.customEnd !== undefined) finalHabit.customEnd = localHabit.customEnd;
+      if (localHabit.targetMin !== undefined) finalHabit.targetMin = localHabit.targetMin;
+      if (localHabit.notes !== undefined) finalHabit.notes = localHabit.notes;
+      if (typeof localHabit.isDisabled === 'boolean') finalHabit.isDisabled = localHabit.isDisabled;
+      if (localHabit.sortOrder !== undefined) finalHabit.sortOrder = localHabit.sortOrder;
+    } else if (localHabit.status === 'completed' && cloudHabit.status !== 'completed') {
       finalHabit.status = 'completed';
       finalHabit.startTimestamp = null;
       if (localHabit.actEnd) finalHabit.actEnd = localHabit.actEnd;
@@ -1199,7 +1358,8 @@ function mergeMobileHabitsDeep(localHabits, cloudHabits) {
       if (localHabit.actStart) finalHabit.actStart = localHabit.actStart;
       if (localHabit.accumulatedSeconds) finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds;
     } else if (localHabit.status === 'paused') {
-      finalhabit.status = 'paused'; habit._localUpdatedAt = Date.now(); t._localUpdatedAt = Date.now();
+      finalHabit.status = 'paused';
+      finalHabit._localUpdatedAt = localHabit._localUpdatedAt || Date.now();
       finalHabit.startTimestamp = null;
       if (localHabit.actStart) finalHabit.actStart = localHabit.actStart;
       if (localHabit.accumulatedSeconds) finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds;
@@ -1290,13 +1450,19 @@ async function pullFromCloud(force = false, isSilent = false) {
   }
   if (mState.isSyncing) return;
 
+  // 【逆流完全防止弁】未送信のローカル変更がある間は、過去データでの上書きを完全遮断
+  if (mState.isLocalDirty && !force) {
+    triggerCloudPush();
+    return;
+  }
+
   mState.isSyncing = true;
   if (!isSilent) {
     updateSyncUI('syncing');
   }
 
   try {
-    const res = await fetchWithTimeout(`${gasUrl}?t=${Date.now()}`, { timeout: 8000 });
+    const res = await fetchWithTimeout(`${gasUrl}?t=${Date.now()}`, { timeout: 20000 });
     const data = await res.json();
     if (data.status === 'success' && data.data) {
       const cloud = data.data;
@@ -1320,6 +1486,22 @@ async function pullFromCloud(force = false, isSilent = false) {
           }
         });
         if (changed) saveMobileDeletedTaskMap(locDeletedMap);
+      }
+
+      if (cloudMeta.deletedHabits && typeof cloudMeta.deletedHabits === 'object') {
+        const locDeletedHabitMap = loadMobileDeletedHabitMap();
+        let habitChanged = false;
+        Object.keys(cloudMeta.deletedHabits).forEach(id => {
+          const remoteEntry = cloudMeta.deletedHabits[id];
+          if (!remoteEntry) return;
+          const remoteTime = new Date(remoteEntry.deletedAt || remoteEntry).getTime();
+          const localEntry = locDeletedHabitMap.get(String(id));
+          if (!localEntry || remoteTime > new Date(localEntry.deletedAt).getTime()) {
+            locDeletedHabitMap.set(String(id), typeof remoteEntry === 'object' ? remoteEntry : { deletedAt: remoteEntry });
+            habitChanged = true;
+          }
+        });
+        if (habitChanged) saveMobileDeletedHabitMap(locDeletedHabitMap);
       }
 
       // フェッチ通信中にローカル操作が発生していた場合は、ローカル最新を優先マージし即時プッシュ
@@ -2469,6 +2651,7 @@ function handleQuickAddTask(e) {
     closeQuickAddModal();
     renderMobileApp();
     showMobileUndoToast(`\uD83C\uDF3F \u300C${title}\u300D\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F`, () => {
+      recordMobileHabitDeletion(newHabit.id, newHabit.name);
       mState.habits = mState.habits.filter(h => h.id !== newHabit.id);
       saveLocalHabits();
       renderMobileApp();

@@ -1,6 +1,24 @@
-﻿# CHANGELOG - Gendrive
+# CHANGELOG - Gendrive
 
 All notable changes to Gendrive project will be documented in this file.
+
+## [v1.9.14] - 2026-09-27
+### Fixed & Hardened (Local-First Irreversible Architecture & Batch Sync Engine)
+- **Local-First Irreversible Architecture & Batch Sync Engine (ローカル絶対主権アーキテクチャ＆ゼロロールバック・バッチ同期エンジン)**:
+  1. **保存ゲートウェイでの自動・不可逆押印 (`saveTasks` / `saveHabits`)**:
+     - UI側の各操作関数での手動タイムスタンプ付与をやめ、最深部の保存関数において差分検知により変更されたアイテムに `_localUpdatedAt` および `updatedAt` を 100% 自動一括押印。
+     - インライン編集、ドラッグ＆ドロップ移動、セクション変更、一括操作など、あらゆるUI操作が確実に最新として保護され、人為的な押印漏れによるロールバックを物理的に根絶。
+  2. **逆流完全防止弁 (Stale Pull Barrier: `isLocalDirty`)**:
+     - ローカルに未送信の変更がある間は、15秒定期ハートビートや画面フォーカス復帰によるクラウドからのプル上書きを 100% 完全遮断。
+     - クラウドへの送信が完了するまで過去のデータで画面を上書きしないため、ネットワーク遅延や通信エラー時でもローカルの最新状態が絶対に破壊されない。
+  3. **ハビット削除台帳（Tombstone）の新設 (`gendrive_deleted_habit_ids_v1`)**:
+     - これまで存在しなかったハビット用の削除台帳を新設し、削除したハビットがクラウドからゾンビ復活する現象を完全に遮断。
+     - `mergeHabitsDeep` において直近ローカル操作ハビットの全属性（名前、セクション、時間種別、目標分、タグ等）を 100% ローカル優先で採用。
+  4. **インテリジェント・バッチ同期エンジン (1500ms デバウンス & 20秒タイムアウト)**:
+     - デバウンスを 1500ms（1.5秒）に最適化し、短時間の連続大量操作（タスク完了・移動・削除等）を1本のリクエストに集約。
+     - 実データ通信に合わせタイムアウトを 20秒 に緩和。UIスレッドはノンブロッキングで 0.001秒 の即時応答を維持。
+  5. **スマホ版（`mobile.js`）への完全同期適用**:
+     - モバイル版にも同様にハビットTombstone、`isLocalDirty` 逆流防止弁、`mergeMobileHabitsDeep` の対称化、およびタイポの完全修正を実施。
 
 ## [v1.9.13] - 2026-09-26
 ### Fixed & Hardened (Zero-Rollback Cloud Sync & Non-blocking Latency Engine)

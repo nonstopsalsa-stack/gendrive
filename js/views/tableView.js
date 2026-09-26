@@ -585,6 +585,9 @@ function deleteSingleItem(id, type, event) {
     const h = state.habits.find(item => String(item.id) === strId);
     if (!h) return;
     if (confirm(`🌿 ハビット「${h.name}」を削除しますか？`)) {
+      if (typeof recordHabitDeletion === 'function') {
+        recordHabitDeletion(strId, h.name);
+      }
       state.habits = state.habits.filter(item => String(item.id) !== strId);
       state.selectedTableItemIds.delete(strId);
       saveHabits();
@@ -2035,6 +2038,13 @@ function applyBulkDelete() {
   }
 
   const targetIds = state.selectedTableItemIds;
+  if (typeof recordHabitDeletion === 'function') {
+    state.habits.forEach(h => {
+      if (h && targetIds.has(String(h.id))) {
+        recordHabitDeletion(h.id, h.name);
+      }
+    });
+  }
   state.habits = state.habits.filter(h => !targetIds.has(String(h.id)));
   if (typeof recordTaskDeletion === 'function') {
     state.tasks.forEach(t => {
