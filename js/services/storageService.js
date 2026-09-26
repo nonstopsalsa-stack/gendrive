@@ -596,6 +596,44 @@ function unrecordHabitDeletion(habitId) {
   }
 }
 
+// =========================================================================
+// Dummy Data Auto-Purge Sanitizer & Production Test Guard
+// =========================================================================
+
+function isDummyTask(t) {
+  if (!t || typeof t !== 'object') return false;
+  const title = String(t.title || '');
+  if (title.includes('Emulate Real Data') || title.includes('With Some Detailed Description To Emulate Real Data')) {
+    return true;
+  }
+  if (/^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$/.test(String(t.id || '')) && title.startsWith('Task Title Number ')) {
+    return true;
+  }
+  return false;
+}
+
+function isDummyHabit(h) {
+  if (!h || typeof h !== 'object') return false;
+  const name = String(h.name || '');
+  if (name.includes('Emulating Daily Routine')) {
+    return true;
+  }
+  if (/^H([1-9]|[1-4][0-9]|50)$/.test(String(h.id || '')) && name.startsWith('Habit Name ')) {
+    return true;
+  }
+  return false;
+}
+
+function sanitizeTasksDummyFilter(tasks) {
+  if (!Array.isArray(tasks)) return [];
+  return tasks.filter(t => !isDummyTask(t));
+}
+
+function sanitizeHabitsDummyFilter(habits) {
+  if (!Array.isArray(habits)) return [];
+  return habits.filter(h => !isDummyHabit(h));
+}
+
 /**
  * Task Deep-Merge Engine (タスク消失完全根絶ディープマージ)
  * クラウド受信時にローカルの未同期タスクやオフライン追加タスクを100%保護
@@ -603,6 +641,9 @@ function unrecordHabitDeletion(habitId) {
  * Tombstone（墓石台帳）により、削除済みタスクのゾンビ復活を完全遮断
  */
 function mergeTasksDeep(localTasks, cloudTasks) {
+  localTasks = sanitizeTasksDummyFilter(localTasks);
+  cloudTasks = sanitizeTasksDummyFilter(cloudTasks);
+
   if (!Array.isArray(cloudTasks) || cloudTasks.length === 0) {
     return sanitizeTasksDates(Array.isArray(localTasks) ? localTasks : []);
   }
@@ -870,7 +911,7 @@ function loadTasks() {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        list = parsed;
+        list = sanitizeTasksDummyFilter(parsed);
       }
     } catch (e) {
       console.error('Failed to parse saved tasks:', e);
@@ -1317,7 +1358,7 @@ function loadHabits() {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        habits = parsed;
+        habits = sanitizeHabitsDummyFilter(parsed);
       }
     } catch (e) {
       console.error(e);
@@ -1352,6 +1393,9 @@ function loadHabits() {
  * 古いクラウドデータ（in_progress / uncompleted）による巻き戻し・上書きを100%遮断する。
  */
 function mergeHabitsDeep(localHabits, cloudHabits) {
+  localHabits = sanitizeHabitsDummyFilter(localHabits);
+  cloudHabits = sanitizeHabitsDummyFilter(cloudHabits);
+
   const deletedHabitMap = typeof loadDeletedHabitMap === 'function' ? loadDeletedHabitMap() : new Map();
 
   if (!Array.isArray(cloudHabits) || cloudHabits.length === 0) {
@@ -1722,6 +1766,19 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
 async function pushDataToCloud() {
   const gasUrl = getGasApiUrl();
   if (!gasUrl) return;
+
+  // テスト環境下で本番GAS URLを誤って叩くことを物理遮断する安全ガード
+  if (typeof window !== 'undefined' && window.__GENDRIVE_TEST_MODE__ === true) {
+    if (gasUrl.includes('script.google.com')) {
+      console.warn('[Safety Interceptor] Test mode active. Push to production GAS URL blocked.');
+      return;
+    }
+  }
+
+  // 送信前にダミーデータを完全にパージ
+  state.tasks = sanitizeTasksDummyFilter(state.tasks);
+  state.habits = sanitizeHabitsDummyFilter(state.habits);
+
   if (isSyncing) {
     hasPendingPush = true;
     return;

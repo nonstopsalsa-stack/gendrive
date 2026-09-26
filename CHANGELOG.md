@@ -2,6 +2,19 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.15] - 2026-09-27
+### Fixed & Hardened (Dummy Purge & Production Safety Interceptor Engine)
+- **Dummy Purge & Production Safety Interceptor Engine (ダミーデータ完全パージ＆本番保護・恒久指示防壁エンジン)**:
+  1. **ダミーデータ完全自動検知・パージサニタイザー (`isDummyTask` / `isDummyHabit`)**:
+     - `storageService.js` および `mobile.js` にダミーデータ（`Emulate Real Data`, `Emulating Daily Routine` 等）の自動検知・不可逆排除フィルターを配備。
+     - `loadTasks`, `loadHabits`, `mergeTasksDeep`, `mergeHabitsDeep`, `pullDataFromCloud`, `pushDataToCloud` の全経路で強制フィルタリングを実行し、画面・LocalStorage・GAS クラウドの全層からダミーデータを完全にパージ。
+  2. **本番環境誤爆防止インターセプター (`window.__GENDRIVE_TEST_MODE__`)**:
+     - テスト環境下で本番GAS URLへの送信が発生した場合、通信を物理的に遮断して警告を発する安全ガードを配備。
+  3. **本番GASデータの完全復元・クリーンアップ**:
+     - クラウド（GAS / スプレッドシート）上のダミーデータ250件を完全に消去し、本来の正規タスク245件・ハビット100件を完全復元。
+  4. **Antigravity 恒久指示書・根本ルールの制定**:
+     - `.agent/rules/antigravity_core_directives.md`, `GEMINI.md`, `AGENTS.md`, `CLAUDE.md` に「本番エンドポイントへのダミーデータ送信絶対禁止」「確認要求に対する多角的・物理的検証の義務」「フォアグラウンド実行の義務」を明文化。
+
 ## [v1.9.14] - 2026-09-27
 ### Fixed & Hardened (Local-First Irreversible Architecture & Batch Sync Engine)
 - **Local-First Irreversible Architecture & Batch Sync Engine (ローカル絶対主権アーキテクチャ＆ゼロロールバック・バッチ同期エンジン)**:

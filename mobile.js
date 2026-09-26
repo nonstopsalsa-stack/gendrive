@@ -556,6 +556,40 @@ function sanitizeMobileTasks(tasks) {
 // 3. Local Storage & Data Retrieval Engine
 // =========================================================================
 
+function isMobileDummyTask(t) {
+  if (!t || typeof t !== 'object') return false;
+  const title = String(t.title || '');
+  if (title.includes('Emulate Real Data') || title.includes('With Some Detailed Description To Emulate Real Data')) {
+    return true;
+  }
+  if (/^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$/.test(String(t.id || '')) && title.startsWith('Task Title Number ')) {
+    return true;
+  }
+  return false;
+}
+
+function isMobileDummyHabit(h) {
+  if (!h || typeof h !== 'object') return false;
+  const name = String(h.name || '');
+  if (name.includes('Emulating Daily Routine')) {
+    return true;
+  }
+  if (/^H([1-9]|[1-4][0-9]|50)$/.test(String(h.id || '')) && name.startsWith('Habit Name ')) {
+    return true;
+  }
+  return false;
+}
+
+function sanitizeMobileTasksDummy(tasks) {
+  if (!Array.isArray(tasks)) return [];
+  return tasks.filter(t => !isMobileDummyTask(t));
+}
+
+function sanitizeMobileHabitsDummy(habits) {
+  if (!Array.isArray(habits)) return [];
+  return habits.filter(h => !isMobileDummyHabit(h));
+}
+
 function loadLocalData() {
   let savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
   if (!savedTasks && STORAGE_KEYS.LEGACY_TASKS) {
@@ -564,7 +598,7 @@ function loadLocalData() {
       localStorage.setItem(STORAGE_KEYS.TASKS, savedTasks);
     }
   }
-  mState.tasks = savedTasks ? sanitizeMobileTasks(JSON.parse(savedTasks)) : [];
+  mState.tasks = savedTasks ? sanitizeMobileTasksDummy(sanitizeMobileTasks(JSON.parse(savedTasks))) : [];
 
   let savedHabits = localStorage.getItem(STORAGE_KEYS.HABITS);
   if (!savedHabits && STORAGE_KEYS.LEGACY_HABITS) {
@@ -577,7 +611,7 @@ function loadLocalData() {
     try {
       const parsed = JSON.parse(savedHabits);
       mState.habits = Array.isArray(parsed)
-        ? parsed.map((h, idx) => migrateMobileHabit(h, idx)).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+        ? sanitizeMobileHabitsDummy(parsed).map((h, idx) => migrateMobileHabit(h, idx)).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
         : [];
     } catch (e) {
       mState.habits = [];
@@ -922,7 +956,7 @@ function triggerCloudPush() {
 }
 
 async function fetchWithTimeout(resource, options = {}) {
-  const { timeout = 8000 } = options;
+  const { timeout = 20000 } = options;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
@@ -944,6 +978,18 @@ async function pushToCloud() {
     if (mState.isSyncing) mState.hasPendingPush = true;
     return;
   }
+
+  // テスト環境下で本番GAS URLを誤って叩くことを物理遮断する安全ガード
+  if (typeof window !== 'undefined' && window.__GENDRIVE_TEST_MODE__ === true) {
+    if (gasUrl.includes('script.google.com')) {
+      console.warn('[Safety Interceptor] Test mode active. Push to production GAS URL blocked.');
+      return;
+    }
+  }
+
+  // 送信前にダミーデータを完全にパージ
+  mState.tasks = sanitizeMobileTasksDummy(mState.tasks);
+  mState.habits = sanitizeMobileHabitsDummy(mState.habits);
 
   mState.isSyncing = true;
   updateSyncUI('syncing');
@@ -1138,6 +1184,8 @@ function unrecordMobileHabitDeletion(habitId) {
 }
 
 function mergeMobileTasksDeep(localTasks, cloudTasks) {
+  localTasks = sanitizeMobileTasksDummy(localTasks);
+  cloudTasks = sanitizeMobileTasksDummy(cloudTasks);
   const sanitizedCloud = sanitizeMobileTasks(cloudTasks);
   const deletedMap = loadMobileDeletedTaskMap();
   if (!Array.isArray(sanitizedCloud) || sanitizedCloud.length === 0) {
@@ -1197,7 +1245,8 @@ function mergeMobileTasksDeep(localTasks, cloudTasks) {
       finalTask.actStart = localTask.actStart || cloudTask.actStart;
       finalTask.accumulatedSeconds = localTask.accumulatedSeconds || cloudTask.accumulatedSeconds || 0;
     } else if (localTask.status === 'paused') {
-      finaltask.status = 'paused'; task._localUpdatedAt = Date.now();
+      finalTask.status = 'paused';
+      finalTask._localUpdatedAt = Date.now();
       finalTask.startTimestamp = null;
       finalTask.actStart = localTask.actStart || cloudTask.actStart;
       finalTask.accumulatedSeconds = Math.max(localTask.accumulatedSeconds || 0, cloudTask.accumulatedSeconds || 0);
@@ -1277,6 +1326,8 @@ function mergeMobileTasksDeep(localTasks, cloudTasks) {
 }
 
 function mergeMobileHabitsDeep(localHabits, cloudHabits) {
+  localHabits = sanitizeMobileHabitsDummy(localHabits);
+  cloudHabits = sanitizeMobileHabitsDummy(cloudHabits);
   const deletedHabitMap = typeof loadMobileDeletedHabitMap === 'function' ? loadMobileDeletedHabitMap() : new Map();
 
   if (!Array.isArray(cloudHabits) || cloudHabits.length === 0) {
