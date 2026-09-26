@@ -558,13 +558,39 @@ function sanitizeMobileTasks(tasks) {
 
 function isMobileDummyTask(t) {
   if (!t || typeof t !== 'object') return false;
+  const id = String(t.id || '');
   const title = String(t.title || '');
+
+  // 1. テストダミーデータ
   if (title.includes('Emulate Real Data') || title.includes('With Some Detailed Description To Emulate Real Data')) {
     return true;
   }
-  if (/^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$/.test(String(t.id || '')) && title.startsWith('Task Title Number ')) {
+  if (/^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$/.test(id) && title.startsWith('Task Title Number ')) {
     return true;
   }
+
+  // 2. 初期サンプルタスクの混入排除（T004のAmazonまとめ発注は正規利用されているため除外）
+  if (['T001', 'T002', 'T003', 'T005', 'T006', 'T007', 'T008', 'T009', 'T010'].includes(id)) {
+    return true;
+  }
+  if (title.includes('B社クライアントとの進捗確認')) {
+    return true;
+  }
+  if (title.includes('今日の最重要タスク・提案書ドラフトの作成') || title.includes('最重要カエル撃退・未読メール')) {
+    return true;
+  }
+  if (title.includes('夕食の買い出し・食材ストック確認') || title.includes('今日の勝ち3つ振り返り＆明日タスク')) {
+    return true;
+  }
+  if (title.includes('来期に向けた新規AIサービス企画') || title.includes('新規クライアント向けキックオフ資料') || title.includes('全自動動画生成AIパイプライン')) {
+    return true;
+  }
+
+  // 3. 過去バックアップ由来の古いJ PREPタスク（WEEK 5, WEEK 6等）の混入排除
+  if (title.includes('J PREP') && (title.includes('WEEK') || title.includes('Week'))) {
+    return true;
+  }
+
   return false;
 }
 
@@ -598,7 +624,19 @@ function loadLocalData() {
       localStorage.setItem(STORAGE_KEYS.TASKS, savedTasks);
     }
   }
-  mState.tasks = savedTasks ? sanitizeMobileTasksDummy(sanitizeMobileTasks(JSON.parse(savedTasks))) : [];
+  if (savedTasks) {
+    try {
+      const parsedTasks = JSON.parse(savedTasks);
+      mState.tasks = sanitizeMobileTasksDummy(sanitizeMobileTasks(parsedTasks));
+      if (mState.tasks.length !== parsedTasks.length) {
+        localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(mState.tasks));
+      }
+    } catch (e) {
+      mState.tasks = [];
+    }
+  } else {
+    mState.tasks = [];
+  }
 
   let savedHabits = localStorage.getItem(STORAGE_KEYS.HABITS);
   if (!savedHabits && STORAGE_KEYS.LEGACY_HABITS) {

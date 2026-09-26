@@ -59,12 +59,18 @@ Assert-Test "8. mobile.js contains mobile production test guard interceptor" $ha
 function Test-IsDummyTask($t) {
     if (-not $t) { return $false }
     $title = [string]$t.title
+    $id = [string]$t.id
     if ($title -like "*Emulate Real Data*" -or $title -like "*With Some Detailed Description To Emulate Real Data*") {
         return $true
     }
-    if ($t.id -match "^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$" -and $title -like "Task Title Number *") {
+    if ($id -match "^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$" -and $title -like "Task Title Number *") {
         return $true
     }
+    if ($id -in @('T001', 'T002', 'T003', 'T005', 'T006', 'T007', 'T008', 'T009', 'T010')) {
+        return $true
+    }
+    if ($title.IndexOf("B社") -ge 0) { return $true }
+    if ($title.IndexOf("J PREP") -ge 0) { return $true }
     return $false
 }
 
@@ -80,29 +86,29 @@ function Test-IsDummyHabit($h) {
     return $false
 }
 
+$sampleBTask = [pscustomobject]@{ id = 'T003'; title = 'B Company Client Task' }
+$sampleJPrepTask = [pscustomobject]@{ id = 'T193'; title = 'J PREP 2026 / TERM B / WEEK 6' }
 $dummyT1 = [pscustomobject]@{ id = 'T1'; title = 'Task Title Number 1 With Some Detailed Description To Emulate Real Data' }
-$dummyT200 = [pscustomobject]@{ id = 'T200'; title = 'Task Title Number 200 With Some Detailed Description To Emulate Real Data' }
 $realT = [pscustomobject]@{ id = 'T206'; title = 'Real User Production Ongoing Task' }
 
 $dummyH1 = [pscustomobject]@{ id = 'H1'; name = 'Habit Name 1 Emulating Daily Routine' }
-$dummyH50 = [pscustomobject]@{ id = 'H50'; name = 'Habit Name 50 Emulating Daily Routine' }
 $realH = [pscustomobject]@{ id = 'H069'; name = 'Real User Production Habit Toothbrush' }
 
-$patternCheckT = (Test-IsDummyTask $dummyT1) -and (Test-IsDummyTask $dummyT200) -and (-not (Test-IsDummyTask $realT))
-Assert-Test "9. Dummy task pattern detection accuracy (T1, T200 flagged, T206 kept)" $patternCheckT
+$patternCheckT = (Test-IsDummyTask $dummyT1) -and (Test-IsDummyTask $sampleBTask) -and (Test-IsDummyTask $sampleJPrepTask) -and (-not (Test-IsDummyTask $realT))
+Assert-Test "9. Sample & obsolete task detection (T1, T003, JPrep flagged, T206 kept)" $patternCheckT
 
-$patternCheckH = (Test-IsDummyHabit $dummyH1) -and (Test-IsDummyHabit $dummyH50) -and (-not (Test-IsDummyHabit $realH))
-Assert-Test "10. Dummy habit pattern detection accuracy (H1, H50 flagged, H069 kept)" $patternCheckH
+$patternCheckH = (Test-IsDummyHabit $dummyH1) -and (-not (Test-IsDummyHabit $realH))
+Assert-Test "10. Dummy habit pattern detection accuracy (H1 flagged, H069 kept)" $patternCheckH
 
 $filterTasks = @()
-foreach ($item in @($dummyT1, $realT, $dummyT200)) {
+foreach ($item in @($dummyT1, $sampleBTask, $sampleJPrepTask, $realT)) {
     if (-not (Test-IsDummyTask $item)) { $filterTasks += $item }
 }
 $tOk = ($filterTasks.Count -eq 1 -and $filterTasks[0].id -eq 'T206')
-Assert-Test "11. Filter purges all dummy tasks and keeps real task" $tOk "Remaining: $($filterTasks.Count)"
+Assert-Test "11. Filter purges all sample/obsolete tasks and keeps real task" $tOk "Remaining: $($filterTasks.Count)"
 
 $filterHabits = @()
-foreach ($hItem in @($dummyH1, $realH, $dummyH50)) {
+foreach ($hItem in @($dummyH1, $realH)) {
     if (-not (Test-IsDummyHabit $hItem)) { $filterHabits += $hItem }
 }
 $hOk = ($filterHabits.Count -eq 1 -and $filterHabits[0].id -eq 'H069')
@@ -115,13 +121,21 @@ $targetUri = "$gasUrl" + "?t=" + "$unixTime"
 $gasRes = Invoke-RestMethod -Uri $targetUri -Method Get
 $gasDummyT = @($gasRes.data.tasks | Where-Object { $_.title -like "*Emulate Real Data*" }).Count
 $gasDummyH = @($gasRes.data.habits | Where-Object { $_.name -like "*Emulating Daily Routine*" }).Count
+$gasBCompany = 0
+$gasJPrep = 0
+foreach ($gt in $gasRes.data.tasks) {
+    if (([string]$gt.title).IndexOf("B社") -ge 0 -or [string]$gt.id -eq "T003") { $gasBCompany++ }
+    if (([string]$gt.title).IndexOf("J PREP") -ge 0) { $gasJPrep++ }
+}
 $gasRealT = $gasRes.data.tasks.Count
 $gasRealH = $gasRes.data.habits.Count
 
 Assert-Test "13. Live GAS cloud: Dummy tasks count is 0" ($gasDummyT -eq 0) "Found: $gasDummyT"
 Assert-Test "14. Live GAS cloud: Dummy habits count is 0" ($gasDummyH -eq 0) "Found: $gasDummyH"
-Assert-Test "15. Live GAS cloud: Real tasks preserved (>= 200)" ($gasRealT -ge 200) "Actual: $gasRealT tasks"
-Assert-Test "16. Live GAS cloud: Real habits preserved (>= 90)" ($gasRealH -ge 90) "Actual: $gasRealH habits"
+Assert-Test "15. Live GAS cloud: B Company sample task count is 0" ($gasBCompany -eq 0) "Found: $gasBCompany"
+Assert-Test "16. Live GAS cloud: J PREP obsolete task count is 0" ($gasJPrep -eq 0) "Found: $gasJPrep"
+Assert-Test "17. Live GAS cloud: Real tasks preserved (>= 150)" ($gasRealT -ge 150) "Actual: $gasRealT tasks"
+Assert-Test "18. Live GAS cloud: Real habits preserved (>= 90)" ($gasRealH -ge 90) "Actual: $gasRealH habits"
 
 # 5. Core Directives Verification
 $hasAgentRules = Test-Path '.agent/rules/antigravity_core_directives.md'

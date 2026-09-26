@@ -602,13 +602,39 @@ function unrecordHabitDeletion(habitId) {
 
 function isDummyTask(t) {
   if (!t || typeof t !== 'object') return false;
+  const id = String(t.id || '');
   const title = String(t.title || '');
+
+  // 1. テストダミーデータ
   if (title.includes('Emulate Real Data') || title.includes('With Some Detailed Description To Emulate Real Data')) {
     return true;
   }
-  if (/^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$/.test(String(t.id || '')) && title.startsWith('Task Title Number ')) {
+  if (/^T([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$/.test(id) && title.startsWith('Task Title Number ')) {
     return true;
   }
+
+  // 2. 初期サンプルタスクの混入排除（T004のAmazonまとめ発注は正規利用されているため除外）
+  if (['T001', 'T002', 'T003', 'T005', 'T006', 'T007', 'T008', 'T009', 'T010'].includes(id)) {
+    return true;
+  }
+  if (title.includes('B社クライアントとの進捗確認')) {
+    return true;
+  }
+  if (title.includes('今日の最重要タスク・提案書ドラフトの作成') || title.includes('最重要カエル撃退・未読メール')) {
+    return true;
+  }
+  if (title.includes('夕食の買い出し・食材ストック確認') || title.includes('今日の勝ち3つ振り返り＆明日タスク')) {
+    return true;
+  }
+  if (title.includes('来期に向けた新規AIサービス企画') || title.includes('新規クライアント向けキックオフ資料') || title.includes('全自動動画生成AIパイプライン')) {
+    return true;
+  }
+
+  // 3. 過去バックアップ由来の古いJ PREPタスク（WEEK 5, WEEK 6等）の混入排除
+  if (title.includes('J PREP') && (title.includes('WEEK') || title.includes('Week'))) {
+    return true;
+  }
+
   return false;
 }
 
@@ -912,6 +938,16 @@ function loadTasks() {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
         list = sanitizeTasksDummyFilter(parsed);
+        // 除外されたサンプル・過去タスクをTombstoneへ登録して再復活を阻止
+        if (list.length !== parsed.length) {
+          const keptIds = new Set(list.map(t => String(t.id)));
+          parsed.forEach(pt => {
+            if (pt && pt.id && !keptIds.has(String(pt.id))) {
+              recordTaskDeletion(pt.id, pt.title);
+            }
+          });
+          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(list));
+        }
       }
     } catch (e) {
       console.error('Failed to parse saved tasks:', e);
