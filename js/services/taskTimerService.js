@@ -118,10 +118,12 @@ function startTask(taskId) {
       t.status = 'in_progress';
       t.actStart = t.actStart || nowTimeStr;
       t.startTimestamp = Date.now();
+      t._localUpdatedAt = Date.now();
       state.activeTaskId = targetId;
       state.activeHabitId = null;
     } else if (t.status === 'in_progress') {
       t.status = 'paused';
+      t._localUpdatedAt = Date.now();
       if (t.startTimestamp) {
         const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - t.startTimestamp) / 1000));
         t.accumulatedSeconds = (t.accumulatedSeconds || (t.actMin ? t.actMin * 60 : 0)) + sessionElapsedSec;
@@ -137,6 +139,7 @@ function startTask(taskId) {
     state.habits.forEach(h => {
       if (h.status === 'in_progress') {
         h.status = 'paused';
+        h._localUpdatedAt = Date.now();
         if (h.startTimestamp) {
           const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - h.startTimestamp) / 1000));
           h.accumulatedSeconds = (h.accumulatedSeconds || (h.actMin ? h.actMin * 60 : 0)) + sessionElapsedSec;
@@ -167,6 +170,7 @@ function pauseTask(taskId) {
   if (!task || task.status !== 'in_progress') return;
 
   task.status = 'paused';
+  task._localUpdatedAt = Date.now();
   if (task.startTimestamp) {
     const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));
     task.accumulatedSeconds = (task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0)) + sessionElapsedSec;
@@ -193,6 +197,7 @@ function completeTask(taskId, userNote, userDurationMin) {
   const now = new Date();
   const nowTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
   task.actEnd = nowTimeStr;
+  task._localUpdatedAt = Date.now();
   
   if (task.startTimestamp) {
     const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));

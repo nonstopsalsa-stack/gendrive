@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Habit Flow - Core Logic & Keyboard Engine
  * Fully customized for 哲生 (AI Company OS & Personal OS Engine)
  * Enhanced with 3-Way Timing Selector (Anytime / Section / Custom Range)
@@ -586,7 +586,7 @@ function sanitizeDailyState() {
     const isRec = typeof isRecurringTaskItem === 'function' ? isRecurringTaskItem(task) : (task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType));
     
     // 翌朝ゴースト実行中・中断中サニタイズ: 前日以前に開始されたタイマー、orphanなタイマー、12時間以上の異常経過を安全にuncompletedへ初期化
-    if (task.status === 'in_progress' || task.status === 'paused') {
+    if (task._localUpdatedAt && Date.now() - task._localUpdatedAt < 120000) return; if (task.status === 'in_progress' || task.status === 'paused') {
       const startKey = task.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(task.startTimestamp)) : null) : null;
       const isFromDifferentDay = Boolean(startKey && startKey !== todayKey);
       const isOrphan = !task.startTimestamp;
@@ -631,7 +631,7 @@ function sanitizeDailyState() {
 
   (state.habits || []).forEach(habit => {
     // 翌朝ゴースト実行中・中断中サニタイズ: 前日以前に開始されたタイマー、orphanなタイマー、12時間以上の異常経過を安全にuncompletedへ初期化
-    if (habit.status === 'in_progress' || habit.status === 'paused') {
+    if (habit._localUpdatedAt && Date.now() - habit._localUpdatedAt < 120000) return; if (habit.status === 'in_progress' || habit.status === 'paused') {
       const startKey = habit.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(habit.startTimestamp)) : null) : null;
       const isFromDifferentDay = Boolean(startKey && startKey !== todayKey);
       const isOrphan = !habit.startTimestamp;
@@ -771,7 +771,7 @@ function getTaskStatusForSelectedDate(task) {
       return 'completed';
     }
     if (state.selectedDateOffset === 0) {
-      if (task.status === 'in_progress' || task.status === 'paused') {
+      if (task._localUpdatedAt && Date.now() - task._localUpdatedAt < 120000) return; if (task.status === 'in_progress' || task.status === 'paused') {
         return task.status;
       }
     }
@@ -871,12 +871,18 @@ function isHabitInCurrentTimeWindow(habit, targetSectionName = null) {
 
     const isToday = state.selectedDateOffset === 0;
 
-    // A. 今日かつリアルタイム動作時（現在時刻によるジャストタイム動的判定）
-    // 11:00前は非表示、11:00〜12:00の間のみ出現・表示、12:00以降は非表示
     if (isToday) {
-      // 実行中または中断中のハビットは、時間が過ぎても作業継続のため非表示にしない
-      if (habit.status === 'in_progress' || habit.status === 'paused') {
+      if (habit.status === 'in_progress' || habit.status === 'paused' || habit.status === 'completed') {
         return true;
+      }
+      const secStart = sectionConfig.start;
+      const secEnd = sectionConfig.end;
+      if (secStart <= secEnd) {
+        if (habitStart <= habitEnd) {
+          if (habitStart < secEnd && habitEnd > secStart) return true;
+        } else {
+          if (habitStart < secEnd || habitEnd > secStart) return true;
+        }
       }
 
       const now = new Date();
@@ -1081,7 +1087,7 @@ function startHabit(id) {
   if (habit.status !== 'paused') { habit.accumulatedSeconds = 0; habit.actMin = 0; }
   habit.status = 'in_progress';
   habit.actStart = habit.actStart || nowTimeStr;
-  habit.startTimestamp = Date.now();
+  habit.startTimestamp = Date.now(); habit._localUpdatedAt = Date.now();
   state.activeHabitId = habit.id;
   state.activeTaskId = null;
 
@@ -1113,7 +1119,7 @@ function pauseHabit(id) {
   const habit = state.habits.find(h => String(h.id) === targetId);
   if (!habit || habit.status !== 'in_progress') return;
 
-  habit.status = 'paused';
+  habit.status = 'paused'; habit._localUpdatedAt = Date.now();
   if (habit.startTimestamp) {
     const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - habit.startTimestamp) / 1000));
     habit.accumulatedSeconds = (habit.accumulatedSeconds || (habit.actMin ? habit.actMin * 60 : 0)) + sessionElapsedSec;
@@ -1169,7 +1175,7 @@ function completeHabit(id, userNote = '', userCount = null, userDurationMin = nu
   const prevStatus = habit.status;
 
   const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  habit.actEnd = nowTimeStr;
+  habit.actEnd = nowTimeStr; habit._localUpdatedAt = Date.now();
 
   const historyEntry = {
     done: isGoalReached,

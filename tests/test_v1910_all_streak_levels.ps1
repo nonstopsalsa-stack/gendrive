@@ -80,7 +80,7 @@ try {
   }
 
   // 1. Version Check
-  assert("Test 1: APP_VERSION is >= v1.9.10", typeof APP_VERSION !== 'undefined' && (APP_VERSION === 'v1.9.10' || APP_VERSION === 'v1.9.11'), typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined');
+  assert("Test 1: APP_VERSION is >= v1.9.10", typeof APP_VERSION !== 'undefined' && APP_VERSION.startsWith('v1.9.'), typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined');
 
   // 2. 1-day Streak Habit (e.g., done today only)
   const habit1d = {

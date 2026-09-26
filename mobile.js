@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive Mobile Lite - Action Engine (v1.8.8)
  * Personal OS & TaskChute Mobile Client
  * Clean Unicode Escape Architecture - 100% Reliable & Rock Solid
@@ -599,7 +599,7 @@ function loadLocalData() {
 
   if (runningTask && runningHabit) {
     // 実行中が2重にある場合はタスク優先
-    runningHabit.status = 'paused';
+    runninghabit.status = 'paused'; habit._localUpdatedAt = Date.now(); t._localUpdatedAt = Date.now();
     mState.activeHabitId = null;
   }
 }
@@ -1074,7 +1074,7 @@ function mergeMobileTasksDeep(localTasks, cloudTasks) {
       finalTask.actStart = localTask.actStart || cloudTask.actStart;
       finalTask.accumulatedSeconds = localTask.accumulatedSeconds || cloudTask.accumulatedSeconds || 0;
     } else if (localTask.status === 'paused') {
-      finalTask.status = 'paused';
+      finaltask.status = 'paused'; task._localUpdatedAt = Date.now();
       finalTask.startTimestamp = null;
       finalTask.actStart = localTask.actStart || cloudTask.actStart;
       finalTask.accumulatedSeconds = Math.max(localTask.accumulatedSeconds || 0, cloudTask.accumulatedSeconds || 0);
@@ -1097,7 +1097,7 @@ function mergeMobileTasksDeep(localTasks, cloudTasks) {
           finalTask.actStart = cloudTask.actStart;
           finalTask.accumulatedSeconds = cloudTask.accumulatedSeconds || 0;
         } else {
-          finalTask.status = 'paused';
+          finaltask.status = 'paused'; task._localUpdatedAt = Date.now();
           finalTask.startTimestamp = null;
           finalTask.accumulatedSeconds = cloudTask.accumulatedSeconds || 0;
         }
@@ -1199,7 +1199,7 @@ function mergeMobileHabitsDeep(localHabits, cloudHabits) {
       if (localHabit.actStart) finalHabit.actStart = localHabit.actStart;
       if (localHabit.accumulatedSeconds) finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds;
     } else if (localHabit.status === 'paused') {
-      finalHabit.status = 'paused';
+      finalhabit.status = 'paused'; habit._localUpdatedAt = Date.now(); t._localUpdatedAt = Date.now();
       finalHabit.startTimestamp = null;
       if (localHabit.actStart) finalHabit.actStart = localHabit.actStart;
       if (localHabit.accumulatedSeconds) finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds;
@@ -1451,9 +1451,9 @@ function startTask(taskId) {
     if (String(t.id) === String(taskId)) {
       t.status = 'in_progress';
       t.actStart = t.actStart || nowTimeStr;
-      t.startTimestamp = Date.now();
+      t.startTimestamp = Date.now(); t._localUpdatedAt = Date.now();
     } else if (t.status === 'in_progress') {
-      t.status = 'paused';
+      t.status = 'paused'; t._localUpdatedAt = Date.now();
       if (t.startTimestamp) {
         const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - t.startTimestamp) / 1000));
         t.accumulatedSeconds = (t.accumulatedSeconds || (t.actMin ? t.actMin * 60 : 0)) + sessionElapsedSec;
@@ -1468,7 +1468,7 @@ function startTask(taskId) {
   if (Array.isArray(mState.habits)) {
     mState.habits.forEach(h => {
       if (h.status === 'in_progress') {
-        h.status = 'paused';
+        h.status = 'paused'; h._localUpdatedAt = Date.now();
         if (h.startTimestamp) {
           const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - h.startTimestamp) / 1000));
           h.accumulatedSeconds = (h.accumulatedSeconds || (h.actMin ? h.actMin * 60 : 0)) + sessionElapsedSec;
@@ -1497,7 +1497,7 @@ function pauseTask(taskId) {
   const task = mState.tasks.find(t => String(t.id) === String(taskId));
   if (!task || task.status !== 'in_progress') return;
 
-  task.status = 'paused';
+  task.status = 'paused'; task._localUpdatedAt = Date.now();
   if (task.startTimestamp) {
     const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));
     task.accumulatedSeconds = (task.accumulatedSeconds || (task.actMin ? task.actMin * 60 : 0)) + sessionElapsedSec;
@@ -1521,7 +1521,7 @@ function completeTask(taskId) {
 
   const now = new Date();
   const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  task.actEnd = nowTimeStr;
+  task.actEnd = nowTimeStr; task._localUpdatedAt = Date.now();
 
   if (task.startTimestamp) {
     const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - task.startTimestamp) / 1000));
@@ -1659,10 +1659,10 @@ function startHabit(habitId) {
     if (String(h.id) === String(habitId)) {
       h.status = 'in_progress';
       h.actStart = h.actStart || nowTimeStr;
-      h.startTimestamp = Date.now();
+      h.startTimestamp = Date.now(); h._localUpdatedAt = Date.now();
       mState.activeHabitId = h.id;
     } else if (h.status === 'in_progress') {
-      h.status = 'paused';
+      h.status = 'paused'; h._localUpdatedAt = Date.now();
       if (h.startTimestamp) {
         const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - h.startTimestamp) / 1000));
         h.accumulatedSeconds = (h.accumulatedSeconds || (h.actMin ? h.actMin * 60 : 0)) + sessionElapsedSec;
@@ -1677,7 +1677,7 @@ function startHabit(habitId) {
     let taskPaused = false;
     mState.tasks.forEach(t => {
       if (t.status === 'in_progress') {
-        t.status = 'paused';
+        t.status = 'paused'; t._localUpdatedAt = Date.now();
         if (t.startTimestamp) {
           const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - t.startTimestamp) / 1000));
           t.accumulatedSeconds = (t.accumulatedSeconds || (t.actMin ? t.actMin * 60 : 0)) + sessionElapsedSec;
@@ -1703,7 +1703,7 @@ function pauseHabit(habitId) {
   const habit = mState.habits.find(h => String(h.id) === String(habitId));
   if (!habit || habit.status !== 'in_progress') return;
 
-  habit.status = 'paused';
+  habit.status = 'paused'; habit._localUpdatedAt = Date.now(); t._localUpdatedAt = Date.now();
   if (habit.startTimestamp) {
     const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - habit.startTimestamp) / 1000));
     habit.accumulatedSeconds = (habit.accumulatedSeconds || (habit.actMin ? habit.actMin * 60 : 0)) + sessionElapsedSec;
@@ -1727,7 +1727,7 @@ function completeHabit(habitId) {
 
   const now = new Date();
   const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  habit.actEnd = nowTimeStr;
+  habit.actEnd = nowTimeStr; habit._localUpdatedAt = Date.now();
 
   if (habit.startTimestamp) {
     const sessionElapsedSec = Math.max(0, Math.floor((Date.now() - habit.startTimestamp) / 1000));

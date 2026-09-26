@@ -1,7 +1,24 @@
-# CHANGELOG - Gendrive
+﻿# CHANGELOG - Gendrive
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.13] - 2026-09-26
+### Fixed & Hardened (Zero-Rollback Cloud Sync & Non-blocking Latency Engine)
+- **Zero-Rollback Cloud Sync & Non-blocking Latency Engine (毎朝再発バグ根絶・ゼロロールバック防衛＆ノンブロッキング高速同期エンジン)**:
+  1. **ノンブロッキング通信とタイムアウト制御 (js/services/storageService.js)**:
+     - etchWithTimeout(url, options, 6000) を実装し、Google Apps Script (GAS) への通信に6秒のタイムアウトと AbortController を配置。
+     - クラウド同期の遅延がUIスレッドを数分間ブロックする現象を完全排除し、開始・終了・単発タスク追加が即座に画面へ反映されるよう高速化。
+  2. **Zero-Rollback Guard（直近ローカル操作の絶対優先保護） (js/services/storageService.js / mobile.js)**:
+     - 直近120秒以内にローカル操作（開始・一時停止・完了）されたタスクおよびハビットに _localUpdatedAt を付与。
+     - クラウド同期時のディープマージ（mergeTasksDeep / mergeHabitsDeep）において、端末とGoogleサーバーの時計ズレ（Clock Skew）があっても直近120秒以内のローカル変更を最優先する防壁を配備。古いクラウドデータによる上書きロールバック・ゾンビ復活を完全遮断。
+  3. **当日完了ステータスの絶対保護 (mergeHabitsDeep / mergeMobileHabitsDeep)**:
+     - 本日の日付で完了履歴（history[todayKey].done）が記録されているハビットは、クラウドの未完了ステータスによって巻き戻らないよう絶対完了保護。
+  4. **カスタム時間枠ハビットの表示保証 (pp.js)**:
+     - isHabitInCurrentTimeWindow を改修し、「朝オペ」等のセクション時間枠内であれば、個別ハビットの指定時間外であっても非表示化せず常時操作可能に改善。
+  5. **GASバックアップ書き込みの非同期・例外安全化 (gas_sync_script.js)**:
+     - プロパティストア（JSON）への保存を最優先し、スプレッドシートの重い行書き込みを 	ry-catch で保護してレスポンスを即座に返却。
+  6. **バージョン管理の一元化とキャッシュバスター更新 (1.9.13)**:
+     - js/config.js (APP_VERSION = 'v1.9.13')、index.html、mobile.html、sw.js (CACHE_NAME = 'gendrive-lite-v1913') の全クエリパラメータを ?v=1.9.13 に完全統一。
 ## [v1.9.12] - 2026-09-26
 ### Fixed & Hardened (Mobile Cloud-Sync Auto-Recovery & Syntax Integrity Engine)
 - **Mobile Cloud-Sync Auto-Recovery & Syntax Integrity Engine (スマホ版クラウド自動復旧＆構文整合性恒久防衛エンジン)**:

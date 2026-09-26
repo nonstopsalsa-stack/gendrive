@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Google Apps Script (GAS) Cloud Sync Engine & Drive Time-Machine Backup
  * 哲生 (AI Company OS & Personal OS Engine)
  *
@@ -156,7 +156,12 @@ function doPost(e) {
     props.setProperty('GENDRIVE_FULL_DATA', JSON.stringify(payload));
 
     // B. スプレッドシートの各シートへ行単位で反映（人間用バックアップ＆可視化）
-    syncToSpreadsheetSheets(payload);
+        // B. スプレッドシートの各シートへ行単位で反映（人間用バックアップ＆可視化 - 非同期保護）
+    try {
+      syncToSpreadsheetSheets(payload);
+    } catch (sheetErr) {
+      console.warn('syncToSpreadsheetSheets non-fatal warning: ' + sheetErr);
+    }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',

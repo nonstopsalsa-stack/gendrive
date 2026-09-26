@@ -585,8 +585,18 @@ function mergeTasksDeep(localTasks, cloudTasks) {
     // 同一IDタスクのマージ
     const finalTask = { ...cloudTask };
 
-    // 1. 完了ステータス・実行中ステータスの絶対保護 (Zero-Rollback)
-    if (localTask.status === 'completed' || cloudTask.status === 'completed') {
+    // 0. 直近ローカル操作（_localUpdatedAt: 120秒以内）の絶対優先保護 (Zero-Rollback Guard)
+    const isRecentLocalTask = localTask._localUpdatedAt && (Date.now() - localTask._localUpdatedAt < 120000);
+    if (isRecentLocalTask) {
+      finalTask.status = localTask.status;
+      finalTask.startTimestamp = localTask.startTimestamp;
+      finalTask.accumulatedSeconds = localTask.accumulatedSeconds || 0;
+      finalTask.actStart = localTask.actStart;
+      finalTask.actEnd = localTask.actEnd;
+      finalTask.actMin = localTask.actMin || 0;
+      finalTask.completedAt = localTask.completedAt;
+      finalTask._localUpdatedAt = localTask._localUpdatedAt;
+    } else if (localTask.status === 'completed' || cloudTask.status === 'completed') {
       finalTask.status = 'completed';
       finalTask.startTimestamp = null;
       finalTask.accumulatedSeconds = 0;
@@ -1139,7 +1149,10 @@ function migrateHabit(h, index = 0) {
   const targetTimes = getHabitTargetTimes(h);
   const todayEntry = h.history && h.history[todayKey];
   const isTodayDone = Boolean(todayEntry === true || (todayEntry && todayEntry.done) || (curTodayCount >= targetTimes && targetTimes > 0));
-  if (isTodayDone) {
+  const isRecentLocal = h._localUpdatedAt && (Date.now() - h._localUpdatedAt < 120000);
+  if (isRecentLocal) {
+    // 直近120秒以内のローカル操作（完了・実行中など）はサニタイズせず最優先保護
+  } else if (isTodayDone) {
     h.status = 'completed';
     h.startTimestamp = null;
     h.accumulatedSeconds = 0;
@@ -1238,8 +1251,16 @@ function mergeHabitsDeep(localHabits, cloudHabits) {
     // 同一IDハビットのマージ
     const finalHabit = { ...cloudHabit };
 
-    // 1. 完了ステータス・実行中ステータスの絶対保護
-    if (localHabit.status === 'completed' || cloudHabit.status === 'completed') {
+    // 0. 直近ローカル操作（_localUpdatedAt: 120秒以内）の絶対優先保護 (Zero-Rollback Guard)
+    const isRecentLocalHabit = localHabit._localUpdatedAt && (Date.now() - localHabit._localUpdatedAt < 120000);
+    if (isRecentLocalHabit) {
+      finalHabit.status = localHabit.status;
+      finalHabit.startTimestamp = localHabit.startTimestamp;
+      finalHabit.accumulatedSeconds = localHabit.accumulatedSeconds || 0;
+      finalHabit.actStart = localHabit.actStart;
+      finalHabit.actEnd = localHabit.actEnd;
+      finalHabit._localUpdatedAt = localHabit._localUpdatedAt;
+    } else if (localHabit.status === 'completed' || cloudHabit.status === 'completed') {
       finalHabit.status = 'completed';
       finalHabit.startTimestamp = null;
       finalHabit.accumulatedSeconds = 0;
@@ -1466,6 +1487,20 @@ function triggerCloudSync() {
   }, 300); // 300ms instant push
 }
 
+// Fetch with AbortController Timeout to prevent hanging/blocking
+async function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { credentials: 'omit', ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
 async function pushDataToCloud() {
   const gasUrl = getGasApiUrl();
   if (!gasUrl) return;
@@ -1495,13 +1530,13 @@ async function pushDataToCloud() {
       }
     };
 
-    const response = await fetch(gasUrl, {
+    const response = await fetchWithTimeout(gasUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8'
       },
       body: JSON.stringify(payload)
-    });
+    }, 6000);
 
     let isSuccess = false;
     try {
@@ -1527,7 +1562,7 @@ async function pushDataToCloud() {
       updateSyncStatus('cloud_error');
     }
   } catch (err) {
-    console.error('Cloud sync push failed:', err);
+    console.error('Cloud sync push failed (timeout or offline):', err);
     updateSyncStatus('offline');
   } finally {
     isSyncing = false;
@@ -1551,7 +1586,7 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
   }
 
   try {
-    const response = await fetch(`${gasUrl}?t=${Date.now()}`);
+    const response = await fetchWithTimeout(`${gasUrl}?t=${Date.now()}`, { credentials: 'omit' }, 6000);
     const resJson = await response.json();
 
     if (resJson.status === 'success' && resJson.data) {
