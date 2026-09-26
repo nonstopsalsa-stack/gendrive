@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -47,7 +47,7 @@
           <span class="brand-title">GENDRIVE</span>
           <span class="brand-sub-lite">LITE</span>
         </div>
-        <span class="version-capsule-badge">v1.9.11</span>
+        <span class="version-capsule-badge">v1.9.13</span>
       </div>
       <div class="header-meta-actions">
         <div class="sync-badge" id="m-sync-badge" onclick="pullFromCloud(true)" title="タップで強制再同期">
@@ -179,28 +179,14 @@
         <input type="url" id="m-gas-url-input" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; font-family: var(--font-mono); font-size: 12px; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff;">
       </div>
 
-      <!-- 1. 機能ボタン群 -->
-      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
         <button class="btn-touch btn-touch-primary" onclick="saveSettings()" style="flex: 2;">💾 保存して同期</button>
         <button class="btn-touch btn-touch-subtle" onclick="pullFromCloud(true)" style="flex: 1;">📥 取得</button>
         <button class="btn-touch btn-touch-subtle" onclick="closeSettingsModal()" style="flex: 1;">閉じる</button>
       </div>
-      <div style="margin-bottom: 18px;">
+      <div>
         <button class="btn-touch btn-touch-subtle" onclick="forceHardRefresh()" style="width: 100%; font-size: 11.5px; border-color: rgba(56,189,248,0.3); color: #38bdf8;">🧹 キャッシュ消去して最新に更新</button>
       </div>
-
-      <!-- 2. バージョン情報表示 -->
-      <div class="settings-version-card" style="text-align: center; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 10px; margin-bottom: 24px;">
-        <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); font-family: var(--font-mono);">
-          ⚡ Gendrive Lite <span style="color: #38bdf8; background: rgba(56,189,248,0.15); padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(56,189,248,0.35); margin-left: 4px;">v1.9.11</span>
-        </div>
-        <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 4px;">
-          Company OS & Personal OS Engine
-        </div>
-      </div>
-
-      <!-- 3. 最下部クリアランス余白（トーストバー被り完全防御） -->
-      <div style="height: 85px;"></div>
     </div>
   </div>
 

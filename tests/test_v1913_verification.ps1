@@ -58,6 +58,11 @@ try {
     tests.push({ name, pass: Boolean(cond), extra: String(extra) });
   }
 
+  let retries = 0;
+  while ((typeof mergeTasksDeep === 'undefined' || typeof state === 'undefined') && retries < 50) {
+    await new Promise(r => setTimeout(r, 100));
+    retries++;
+  }
   // 1. Version Check
   assert('APP_VERSION is v1.9.13', typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v1.9.13', typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined');
 
@@ -133,6 +138,7 @@ try {
   }
 
   // 7. Custom time habit stays visible in its section
+  const targetSection = SECTIONS_CONFIG.find(s => s.id === 'sec_4')?.name || '第3セッション';
   const customHabit = {
     id: 'h_custom_win',
     title: 'Custom Habit',
@@ -140,10 +146,10 @@ try {
     customStart: '12:00',
     customEnd: '17:00',
     status: 'uncompleted',
-    section: '第3セッション'
+    section: targetSection
   };
-  const isVisible = isHabitInCurrentTimeWindow(customHabit, '第3セッション');
-  assert('Custom habit 12:00-17:00 is visible in 第3セッション', isVisible === true, isVisible);
+  const isVisible = isHabitInCurrentTimeWindow(customHabit, targetSection);
+  assert('Custom habit 12:00-17:00 is visible in ' + targetSection, isVisible === true, isVisible);
 
   return tests;
 })()
