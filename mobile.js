@@ -200,7 +200,7 @@ function formatTime(totalSec) {
 }
 
 function getGasUrl() {
-  return localStorage.getItem(STORAGE_KEYS.GAS_URL) || (typeof DEFAULT_GAS_URL !== 'undefined' ? DEFAULT_GAS_URL : '');
+  return localStorage.getItem(STORAGE_KEYS.GAS_URL) || (typeof DEFAULT_GAS_URL !== 'undefined' && DEFAULT_GAS_URL ? DEFAULT_GAS_URL : 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec');
 }
 
 function setGasUrl(url) {
@@ -385,11 +385,10 @@ function migrateMobileHabit(h, idx = 0) {
               }
             }
           }
+          i += gapLen - 1;
         }
-        i += gapLen - 1;
       }
     }
-  }
 
   const todayKeyMobile = normalizeMobileDateKey(new Date());
   const todayEntryMobile = migrated.history && migrated.history[todayKeyMobile];

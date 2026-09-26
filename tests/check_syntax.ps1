@@ -24,8 +24,12 @@ try {
     $ws.SendAsync((New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)), [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct).Wait()
     $buf = New-Object byte[] 2097152
     $res = $ws.ReceiveAsync((New-Object System.ArraySegment[byte] -ArgumentList @(,$buf)), $ct).Result
-    $text = [System.Text.Encoding]::UTF8.GetString($buf, 0, $res.Count)
-    return ($text | ConvertFrom-Json).result
+    $obj = $text | ConvertFrom-Json
+    $val = $obj.result.result.value
+    if ($obj.result.exceptionDetails) {
+      $val = "EVAL_ERR: " + $obj.result.exceptionDetails.exception.description
+    }
+    return $val
   }
 
   $files = @(
@@ -63,7 +67,7 @@ try {
     $content = Get-Content -Raw -Encoding UTF8 $f
     $escaped = $content | ConvertTo-Json -Compress
     $res = Exec "try { new Function($escaped); 'SYNTAX_OK'; } catch (e) { 'ERROR: ' + e.message; }"
-    Write-Host "$f : $($res.value)"
+    Write-Host "$f : $res"
   }
 } finally {
   Stop-Process -Id $edge.Id -Force

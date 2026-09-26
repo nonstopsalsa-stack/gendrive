@@ -283,7 +283,7 @@ function importFullBackupJSON(file) {
 // 0-B. Metadata & Settings Management
 // =========================================================================
 
-const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
+var DEFAULT_GAS_URL = window.DEFAULT_GAS_URL || 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
 
 function getGasApiUrl() {
   return localStorage.getItem(STORAGE_KEYS.GAS_URL) || DEFAULT_GAS_URL;

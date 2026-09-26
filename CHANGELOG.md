@@ -2,6 +2,20 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.12] - 2026-09-26
+### Fixed & Hardened (Mobile Cloud-Sync Auto-Recovery & Syntax Integrity Engine)
+- **Mobile Cloud-Sync Auto-Recovery & Syntax Integrity Engine (スマホ版クラウド自動復旧＆構文整合性恒久防衛エンジン)**:
+  1. **スマホ版構文エラー（`SyntaxError: Illegal return statement`）の完全切除 (`mobile.js`)**:
+     - `sanitizeMobileHabits` 内のギャップ補完ブロックにおける余分な閉じ括弧（`}`）を特定・除去し、関数外へトップレベルコードが漏出していた重大バグを完全解消。
+     - これにより、スマホ版起動時に JavaScript の評価が中断して `mState` が初期化されず、ボタンやカードがフリーズしていた問題を根絶。
+  2. **マスター設定一元化とクラウド同期URL自律フォールバック (`js/config.js` / `mobile.js`)**:
+     - `DEFAULT_GAS_URL` を `js/config.js` のマスター定数として正式配備し、`mobile.html` でも起動時から確実に参照可能に。
+     - キャッシュ消去ボタン（🧹 キャッシュ消去して最新に更新）押下後など、ローカルストレージが空になった状況下でも直ちに Google Apps Script クラウドマスターへ接続してタスク・ハビット全データを自律プルする二重フェイルセーフを構築。
+  3. **バージョン同期とキャッシュバスター更新 (`v1.9.12`)**:
+     - `js/config.js`、`index.html`、`mobile.html`、`style.css`、`mobile.css` の全バージョン表記およびキャッシュバスターを `v1.9.12` に完全統一。
+  4. **実ブラウザ自動テスト（Edge Headless）による全項目100%パス検証**:
+     - モバイル版において、タスク236件・ハビット98件のデータ受信、`🟢 同期完了` バッジ表示、23件のカードレンダリング、クイック追加モーダル開閉、タスク開始・中断ボタンのインタラクティブ動作がすべて正常に稼働することを実証済。
+
 ## [v1.9.11] - 2026-09-26
 ### Fixed & Permanently Restored (Silver Week 5-Day Outage Bridge & Multi-Tier Streak Restoration Engine)
 - **Silver Week 5-Day Outage Bridge & Multi-Tier Streak Restoration Engine (シルバーウィーク連休・障害5日間完全救済＆多層ストリーク復旧恒久エンジン)**:
