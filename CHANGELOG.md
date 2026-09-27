@@ -1,6 +1,26 @@
-# CHANGELOG - Gendrive
+﻿# CHANGELOG - Gendrive
 
 All notable changes to Gendrive project will be documented in this file.
+
+## [v1.9.16] - 2026-09-27
+### Fixed & Enhanced (Preset Task Drag & Drop Reorder Engine)
+- **Preset Task Drag & Drop Reorder Engine (プリセットタスク Drag & Drop 順序・位置変更＆ショートカットキー即時同期エンジン)**:
+  1. **プリセットタスク並び替えエンジン（Drag & Drop）の完全実装**:
+     - 	askPresetsService.js に HTML5 Drag and Drop API によるイベントハンドラ（handlePresetCardDragStart, handlePresetCardDragOver, handlePresetCardDragLeave, handlePresetCardDrop, handlePresetCardDragEnd）を完全配備。
+     - 各プリセットカードに draggable="true" および data-preset-id 属性を付与し、ドラッグ＆ドロップによる直感的な位置・順番の並び替えを復旧・確立。
+  2. **ドロップ挿入位置インジケーター＆視覚フィードバック (style.css)**:
+     - カードを掴む際の cursor: grab; / cursor: grabbing; を定義。
+     - ドラッグ中のカードを半透明・点線枠表示（.preset-card-dragging）にし、ドラッグ先のカードの左側／右側判定による青色発光インジケーター（.drop-left, .drop-right）を適用。
+  3. **QWERTY / 数字ショートカットキー（1〜0, Q〜P）の自動即時再割り当て**:
+     - 並び替え確定後、即座にインデックス順序（PRESET_SHORTCUT_KEYS）とキーボードショートカットバッジが再同期。
+     - 最も頻繁に使うプリセットを左上（1〜5 キー）に自由に再配置可能に。
+  4. **ドラッグ直後のタスク誤爆開始防止ガード (handlePresetCardClick)**:
+     - ドラッグ終了直後（350ms）のクリックイベントを安全に抑止し、並び替え完了時に意図せずタスクが実行開始される問題を根絶。
+     - 編集（✏️）および削除（🗑️）ボタンに draggable="false" とイベント伝播防止（stopPropagation）を配備。
+  5. **即時Undo（元に戻す）履歴連動**:
+     - 並び替え前の状態をスナップショットとして pushUndoAction に保存し、誤操作時もワンクリックまたは Ctrl+Z で直前の並び順に即座に復旧可能。
+  6. **バージョン表記の一元統一**:
+     - 1.9.16 に完全統一（index.html, mobile.html, js/config.js, sw.js）。
 
 ## [v1.9.15] - 2026-09-27
 ### Fixed & Hardened (Dummy Purge & Production Safety Interceptor Engine)

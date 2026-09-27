@@ -194,6 +194,108 @@ function showPresetEditView(isNew = true, preset = null) {
   if (titleInput) titleInput.focus();
 }
 
+// Preset Drag & Drop Reordering State
+let draggedPresetId = null;
+let justFinishedPresetDragging = false;
+
+function handlePresetCardDragStart(event, presetId) {
+  draggedPresetId = presetId;
+  justFinishedPresetDragging = false;
+  event.dataTransfer.setData('text/plain', presetId);
+  event.dataTransfer.effectAllowed = 'move';
+  const card = event.currentTarget;
+  if (card) {
+    setTimeout(() => {
+      if (draggedPresetId) card.classList.add('preset-card-dragging');
+    }, 0);
+  }
+}
+
+function handlePresetCardDragOver(event, targetId) {
+  if (!draggedPresetId || draggedPresetId === targetId) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+
+  const card = event.currentTarget;
+  const rect = card.getBoundingClientRect();
+  const isLeft = event.clientX < (rect.left + rect.width / 2);
+
+  card.classList.toggle('drop-left', isLeft);
+  card.classList.toggle('drop-right', !isLeft);
+}
+
+function handlePresetCardDragLeave(event) {
+  const card = event.currentTarget;
+  card.classList.remove('drop-left', 'drop-right');
+}
+
+function handlePresetCardDrop(event, targetId) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const card = event.currentTarget;
+  const rect = card.getBoundingClientRect();
+  const isLeft = event.clientX < (rect.left + rect.width / 2);
+
+  card.classList.remove('drop-left', 'drop-right');
+
+  const sourceId = draggedPresetId || event.dataTransfer.getData('text/plain');
+  if (!sourceId || sourceId === targetId) return;
+
+  justFinishedPresetDragging = true;
+  reorderTaskPresets(sourceId, targetId, isLeft);
+  setTimeout(() => {
+    justFinishedPresetDragging = false;
+  }, 350);
+}
+
+function handlePresetCardDragEnd(event) {
+  draggedPresetId = null;
+  document.querySelectorAll('.preset-card-item').forEach(c => {
+    c.classList.remove('preset-card-dragging', 'drop-left', 'drop-right');
+  });
+  setTimeout(() => {
+    justFinishedPresetDragging = false;
+  }, 350);
+}
+
+function handlePresetCardClick(event, presetId) {
+  if (justFinishedPresetDragging) {
+    justFinishedPresetDragging = false;
+    return;
+  }
+  executePresetTask(presetId);
+}
+
+function reorderTaskPresets(sourceId, targetId, isLeft) {
+  const list = [...(state.taskPresets || loadTaskPresets())];
+  const sourceIdx = list.findIndex(p => p.id === sourceId);
+  const targetIdx = list.findIndex(p => p.id === targetId);
+  if (sourceIdx === -1 || targetIdx === -1 || sourceIdx === targetIdx) return;
+
+  const prevListSnapshot = JSON.parse(JSON.stringify(list));
+  const [moved] = list.splice(sourceIdx, 1);
+  const newTargetIdx = list.findIndex(p => p.id === targetId);
+  const insertIdx = isLeft ? newTargetIdx : newTargetIdx + 1;
+  list.splice(insertIdx, 0, moved);
+
+  state.taskPresets = list;
+  saveTaskPresets();
+
+  if (typeof pushUndoAction === 'function') {
+    pushUndoAction({
+      description: `プリセット「${moved.title}」の並び順を変更`,
+      undo: () => {
+        state.taskPresets = prevListSnapshot;
+        saveTaskPresets();
+        renderTaskPresetsCards();
+      }
+    });
+  }
+
+  renderTaskPresetsCards();
+}
+
 function renderTaskPresetsCards() {
   const container = document.getElementById('preset-cards-grid');
   if (!container) return;
@@ -217,7 +319,16 @@ function renderTaskPresetsCards() {
       : '';
 
     return `
-      <div class="preset-card-item" onclick="executePresetTask('${p.id}')" title="クリック (または [${shortcutKey}] キー) で今すぐタスクを追加＆即座に開始！">
+      <div class="preset-card-item"
+           draggable="true"
+           data-preset-id="${p.id}"
+           ondragstart="handlePresetCardDragStart(event, '${p.id}')"
+           ondragover="handlePresetCardDragOver(event, '${p.id}')"
+           ondragleave="handlePresetCardDragLeave(event)"
+           ondrop="handlePresetCardDrop(event, '${p.id}')"
+           ondragend="handlePresetCardDragEnd(event)"
+           onclick="handlePresetCardClick(event, '${p.id}')"
+           title="ドラッグで位置変更／クリック (または [${shortcutKey}] キー) で今すぐ開始！">
         <div class="preset-card-top">
           <div class="preset-card-icon-title">
             <span class="preset-card-icon">${p.icon || '⚡'}</span>
@@ -234,9 +345,9 @@ function renderTaskPresetsCards() {
           ${p.projMinor ? `<span class="meta-tag proj" style="font-size: 9.5px;">${p.projMinor}</span>` : ''}
         </div>
         ${p.notes ? `<div class="preset-card-notes" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📝 ${p.notes}</div>` : ''}
-        <div class="preset-card-actions" onclick="event.stopPropagation()">
-          <button type="button" class="btn-preset-edit" onclick="editPresetTask('${p.id}')" title="プリセットを修正・編集">✏️ 編集</button>
-          <button type="button" class="btn-preset-delete" onclick="deletePresetTask('${p.id}')" title="プリセットを削除">🗑️</button>
+        <div class="preset-card-actions" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+          <button type="button" class="btn-preset-edit" draggable="false" onclick="editPresetTask('${p.id}')" title="プリセットを修正・編集">✏️ 編集</button>
+          <button type="button" class="btn-preset-delete" draggable="false" onclick="deletePresetTask('${p.id}')" title="プリセットを削除">🗑️</button>
         </div>
       </div>
     `;

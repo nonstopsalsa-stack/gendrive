@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.9.15';
-const APP_VERSION_NAME = 'Dummy Purge & Production Safety Interceptor Engine';
+const APP_VERSION = 'v1.9.16';
+const APP_VERSION_NAME = 'Preset Task Drag & Drop Reorder Engine';
 var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
 
 var MAX_TASK_PRESETS = 20;
