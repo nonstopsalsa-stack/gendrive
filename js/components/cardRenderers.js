@@ -243,7 +243,13 @@ function renderHabitCardHtml(habit, index = 0) {
   let timeDisplayHtml = '';
   if (isToday) {
     if (isCompleted) {
-      const actMin = habit.actMin || estInfo.targetMin;
+      let actMin = habit.actMin;
+      if (!actMin && Array.isArray(habit.executionLogs)) {
+        const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : '';
+        const todayLog = habit.executionLogs.slice().reverse().find(l => l && (l.dateKey === todayKey || (l.completedAt && l.completedAt.startsWith(todayKey))));
+        if (todayLog && todayLog.durationMin) actMin = todayLog.durationMin;
+      }
+      if (!actMin) actMin = estInfo.targetMin;
       timeDisplayHtml = `
         <span class="tc-est-badge progress-mode completed-mode">実績/目安: <b>${actMin}分</b> / ${estInfo.targetMin}分</span>
         <span class="tc-status-pill completed habit-pill">✓ 完了</span>
@@ -294,21 +300,21 @@ function renderHabitCardHtml(habit, index = 0) {
   let actionBtnHtml = '';
   if (isToday) {
     if (isCompleted) {
-      actionBtnHtml = `<button class="btn-habit-action revert" onclick="toggleHabit('${habit.id}')" title="未達成に戻す">↩ 戻す</button>`;
+      actionBtnHtml = `<button class="btn-habit-action revert" onclick="event.stopPropagation(); toggleHabit('${habit.id}')" title="未達成に戻す">↩ 戻す</button>`;
     } else if (isInProgress) {
-      actionBtnHtml = `<button class="btn-habit-action done" onclick="promptCompleteHabit('${habit.id}', event)">✓ 完了</button>`;
+      actionBtnHtml = `<button class="btn-habit-action done" onclick="event.stopPropagation(); promptCompleteHabit('${habit.id}', event)">✓ 完了</button>`;
     } else if (isPaused) {
-      actionBtnHtml = `<button class="btn-habit-action resume" onclick="startHabit('${habit.id}')" title="作業を再開">▶ 再開</button>`;
+      actionBtnHtml = `<button class="btn-habit-action resume" onclick="event.stopPropagation(); startHabit('${habit.id}')" title="作業を再開">▶ 再開</button>`;
     } else if (isSkipped) {
-      actionBtnHtml = `<button class="btn-habit-action revert" onclick="toggleHabit('${habit.id}')" title="スキップを解除して未達成に戻す">↩ 復活</button>`;
+      actionBtnHtml = `<button class="btn-habit-action revert" onclick="event.stopPropagation(); toggleHabit('${habit.id}')" title="スキップを解除して未達成に戻す">↩ 復活</button>`;
     } else {
-      actionBtnHtml = `<button class="btn-habit-action start" onclick="startHabit('${habit.id}')">▶ 開始</button>`;
+      actionBtnHtml = `<button class="btn-habit-action start" onclick="event.stopPropagation(); startHabit('${habit.id}')">▶ 開始</button>`;
     }
   } else if (isPast) {
     if (isCompleted) {
-      actionBtnHtml = `<button class="btn-habit-action revert" onclick="toggleHabit('${habit.id}')" title="未達成に戻す">↩ 戻す</button>`;
+      actionBtnHtml = `<button class="btn-habit-action revert" onclick="event.stopPropagation(); toggleHabit('${habit.id}')" title="未達成に戻す">↩ 戻す</button>`;
     } else {
-      actionBtnHtml = `<button class="btn-habit-action done" onclick="promptCompleteHabit('${habit.id}', event)">✓ 完了にする</button>`;
+      actionBtnHtml = `<button class="btn-habit-action done" onclick="event.stopPropagation(); promptCompleteHabit('${habit.id}', event)">✓ 完了にする</button>`;
     }
   } else if (isFuture) {
     actionBtnHtml = `<span style="font-size: 11px; color: #38bdf8; padding: 2px 6px; background: rgba(56,189,248,0.12); border-radius: 4px; border: 1px solid rgba(56,189,248,0.3);">📅 予定</span>`;
@@ -340,7 +346,7 @@ function renderHabitCardHtml(habit, index = 0) {
           <div class="habit-actions" onclick="event.stopPropagation()">
             ${actionBtnHtml}
             ${getObsidianButtonHtml(habit.obsidianUri, habit.id, 'habit')}
-            <button class="btn-habit-action" onclick="openEditModal('${habit.id}')" title="設定・編集">⚙️</button>
+            <button class="btn-habit-action" onclick="event.stopPropagation(); openEditModal('${habit.id}')" title="設定・編集">⚙️</button>
           </div>
         </div>
       </div>
@@ -440,21 +446,21 @@ function renderTaskCardHtml(task) {
   let actionsHtml = '';
   if (isToday) {
     if (isCompleted) {
-      actionsHtml = `<button class="btn-task-action revert" onclick="toggleTask('${task.id}')" title="未完了に戻す">↩ 戻す</button>`;
+      actionsHtml = `<button class="btn-task-action revert" onclick="event.stopPropagation(); toggleTask('${task.id}')" title="未完了に戻す">↩ 戻す</button>`;
     } else if (isInProgress) {
-      actionsHtml = `<button type="button" class="btn-task-action pause" onclick="pauseTask('${task.id}')" title="\u4E00\u6642\u4E2D\u65AD">\u23F8\uFE0F \u4E2D\u65AD</button><button type="button" class="btn-task-action done" onclick="promptCompleteTask('${task.id}', event)">\u2714\uFE0F \u5B8C\u4E86</button>`;
+      actionsHtml = `<button type="button" class="btn-task-action pause" onclick="event.stopPropagation(); pauseTask('${task.id}')" title="一時中断">⏸️ 中断</button><button type="button" class="btn-task-action done" onclick="event.stopPropagation(); promptCompleteTask('${task.id}', event)">✔️ 完了</button>`;
     } else if (isPaused) {
-      actionsHtml = `<button class="btn-task-action resume" onclick="startTask('${task.id}')" title="作業を再開">▶ 再開</button>`;
+      actionsHtml = `<button class="btn-task-action resume" onclick="event.stopPropagation(); startTask('${task.id}')" title="作業を再開">▶ 再開</button>`;
     } else if (isSkipped) {
-      actionsHtml = `<button class="btn-task-action revert" onclick="unskipTaskForDate('${task.id}')" title="スキップを解除して未完了に戻す">↩ 復活</button>`;
+      actionsHtml = `<button class="btn-task-action revert" onclick="event.stopPropagation(); unskipTaskForDate('${task.id}')" title="スキップを解除して未完了に戻す">↩ 復活</button>`;
     } else {
-      actionsHtml = `<button class="btn-task-action start" onclick="startTask('${task.id}')">▶ 開始</button>`;
+      actionsHtml = `<button class="btn-task-action start" onclick="event.stopPropagation(); startTask('${task.id}')">▶ 開始</button>`;
     }
   } else if (isPast) {
     if (isCompleted) {
-      actionsHtml = `<button class="btn-task-action revert" onclick="toggleTask('${task.id}')" title="未完了に戻す">↩ 戻す</button>`;
+      actionsHtml = `<button class="btn-task-action revert" onclick="event.stopPropagation(); toggleTask('${task.id}')" title="未完了に戻す">↩ 戻す</button>`;
     } else {
-      actionsHtml = `<button class="btn-task-action done" onclick="promptCompleteTask('${task.id}', event)">✓ 完了にする</button>`;
+      actionsHtml = `<button class="btn-task-action done" onclick="event.stopPropagation(); promptCompleteTask('${task.id}', event)">✓ 完了にする</button>`;
     }
   } else if (isFuture) {
     actionsHtml = `<span style="font-size: 11px; color: #38bdf8; padding: 2px 6px; background: rgba(56, 189, 248, 0.12); border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.3);">📅 予定</span>`;
@@ -473,7 +479,7 @@ function renderTaskCardHtml(task) {
          onclick="openEditTaskModal('${task.id}')">
       <div class="task-card-header">
         <div class="task-labels-row">
-          ${task.resumeNote ? `<button type="button" class="btn-task-resume-note-chip" onclick="event.stopPropagation(); openResumeNoteViewModal('${task.id}')" title="\u518D\u958B\u30E1\u30E2\u3092\u78BA\u8A8D">\uD83D\uDCDD \u518D\u958B\u30E1\u30E2</button>` : ''}
+          ${task.resumeNote ? `<button type="button" class="btn-task-resume-note-chip" onclick="event.stopPropagation(); openResumeNoteViewModal('${task.id}')" title="再開メモを確認">📝 再開メモ</button>` : ''}
           ${task._carriedOverFrom ? `<span class="badge-carryover" title="${task._carriedOverFrom}から自動繰越">⏪ 繰越 (${task._carriedOverFrom}より)</span>` : ''}
           ${labelBadge ? `<span class="badge-eisenhower ${labelBadge.cls}">${labelBadge.text}</span>` : ''}
           <span class="badge-frog">🐸 ${task.frog || 3}</span>
@@ -488,7 +494,7 @@ function renderTaskCardHtml(task) {
           <div class="task-actions" onclick="event.stopPropagation()">
             ${actionsHtml}
             ${getObsidianButtonHtml(task.obsidianUri, task.id, 'task')}
-            <button class="btn-task-action" onclick="openEditTaskModal('${task.id}')" title="設定・編集">⚙️</button>
+            <button class="btn-task-action" onclick="event.stopPropagation(); openEditTaskModal('${task.id}')" title="設定・編集">⚙️</button>
           </div>
         </div>
       </div>

@@ -424,44 +424,7 @@ function sanitizeTasksDates(tasks) {
       }
     }
 
-    // 定期タスク自律継続性ギャップ修復 (Continuity Bridge Engine for Tasks)
-    const taskDatesDone = new Set();
-    t.history.forEach(item => {
-      const d = (typeof item === 'object' && item !== null) ? item.date : (typeof item === 'string' ? item : null);
-      if (d) taskDatesDone.add(d);
-    });
-
-    const pastTaskKeys = [];
-    for (let i = 1; i <= 90; i++) {
-      const k = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : null;
-      if (k) pastTaskKeys.push(k);
-    }
-
-    const totalDoneCount = pastTaskKeys.filter(k => taskDatesDone.has(k)).length;
-    if (totalDoneCount > 0) {
-      for (let i = 0; i < pastTaskKeys.length; i++) {
-        if (!taskDatesDone.has(pastTaskKeys[i])) {
-          let gapLen = 1;
-          while (i + gapLen < pastTaskKeys.length && !taskDatesDone.has(pastTaskKeys[i + gapLen])) {
-            gapLen++;
-          }
-          if (gapLen <= 6 && (i + gapLen < pastTaskKeys.length) && taskDatesDone.has(pastTaskKeys[i + gapLen])) {
-            for (let g = 0; g < gapLen; g++) {
-              const gapKey = pastTaskKeys[i + g];
-              t.history.push({
-                date: gapKey,
-                durationMin: t.estMin || 15,
-                completedAt: `${gapKey}T06:30:00.000Z`,
-                note: '継続性ブリッジ自律補完'
-              });
-              taskDatesDone.add(gapKey);
-            }
-          }
-          i += gapLen - 1;
-        }
-      }
-      t.history.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-    }
+    t.history.sort((a, b) => ((a && a.date) || '').localeCompare((b && b.date) || ''));
   });
 
   return tasks;
@@ -1247,102 +1210,53 @@ function migrateHabit(h, index = 0) {
     });
   }
 
-  // 4. 自律的継続性ギャップ修復エンジン (Continuity Bridge Engine - 全ストリーク階層対応版)
-  // 特定日付文字列を一切使わず、過去の運用実績から短期システム休止・通信欠落ギャップ（最大4日以内）を自律検知して救済
-  // 1日・2日・10日・20日・30日以上の全レベルの継続ストリークを公平かつ確実に保護
-  const isDoneDay = (dk) => {
-    if (!dk) return false;
-    const ent = healedHistory[dk];
-    return ent === true || (typeof ent === 'object' && Boolean(ent.done || (ent.count && ent.count > 0)));
-  };
-
-  const pastKeys = [];
-  for (let i = 1; i <= 90; i++) {
-    const k = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : null;
-    if (k) pastKeys.push(k);
-  }
-
-  const totalCompletedPast = pastKeys.filter(isDoneDay).length;
-
-  // 過去に1回でも完了実績があれば自律ギャップ修復の対象とする（10回以上の過剰足切りを完全撤廃）
-  if (totalCompletedPast > 0) {
-    for (let i = 0; i < pastKeys.length; i++) {
-      if (!isDoneDay(pastKeys[i])) {
-        let gapLen = 1;
-        while (i + gapLen < pastKeys.length && !isDoneDay(pastKeys[i + gapLen])) {
-          gapLen++;
-        }
-
-        // 短期ギャップ（最大6日以内の連休・システム休止・通信欠落）かつ、その過去側に完了実績が存在する場合
-        if (gapLen <= 6 && (i + gapLen < pastKeys.length) && isDoneDay(pastKeys[i + gapLen])) {
-          for (let g = 0; g < gapLen; g++) {
-            const gapKey = pastKeys[i + g];
-
-            // スケジュール判定: その曜日に対象ハビットが実施予定かどうかチェック
-            const parts = gapKey.split('-');
-            const targetDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-            const isScheduled = typeof isHabitScheduledForDate === 'function' ? isHabitScheduledForDate(h, targetDate) : true;
-            if (!isScheduled) continue;
-
-            healedHistory[gapKey] = {
-              done: true,
-              count: h.targetTimes || 1,
-              durationMin: h.targetMin || 5,
-              completedAt: `${gapKey}T06:30:00.000Z`,
-              note: '継続性ブリッジ自律補完'
-            };
-            if (Array.isArray(h.executionLogs)) {
-              const hasLog = h.executionLogs.some(l => l.dateKey === gapKey || (l.completedAt && l.completedAt.startsWith(gapKey)));
-              if (!hasLog) {
-                h.executionLogs.push({
-                  id: `bridge_log_${gapKey.replace(/-/g, '')}_${h.id || index}`,
-                  dateKey: gapKey,
-                  completedAt: `${gapKey}T06:30:00.000Z`,
-                  count: h.targetTimes || 1,
-                  durationMin: h.targetMin || 5,
-                  status: 'completed',
-                  note: '継続性ブリッジ自律補完'
-                });
-              }
-            }
-          }
-        }
-        i += gapLen - 1;
-      }
-    }
-  }
-
   h.history = healedHistory;
 
   const todayKey = getTodayKey();
-  const curTodayCount = getHabitDayCount(h, todayKey);
-  const targetTimes = getHabitTargetTimes(h);
-  const todayEntry = h.history && h.history[todayKey];
-  const isTodayDone = Boolean(todayEntry === true || (todayEntry && todayEntry.done) || (curTodayCount >= targetTimes && targetTimes > 0));
+  const targetTimes = (typeof getHabitTargetTimes === 'function') ? getHabitTargetTimes(h) : (h.targetTimes || 1);
+
+  // 本日実際に完了記録された実行ログのみを抽出（実ログ基準）
+  const todayLogs = Array.isArray(h.executionLogs) 
+    ? h.executionLogs.filter(log => log && (log.dateKey === todayKey || (log.completedAt && log.completedAt.startsWith(todayKey))) && log.status !== 'cancelled')
+    : [];
+  const curTodayLogCount = todayLogs.length > 0 
+    ? Math.max(...todayLogs.map(l => l.count || 1))
+    : 0;
+
+  const hasLegitTodayCompletion = curTodayLogCount >= targetTimes && targetTimes > 0;
   const isRecentLocal = h._localUpdatedAt && (Date.now() - h._localUpdatedAt < 120000);
+
   if (isRecentLocal) {
-    // 直近120秒以内のローカル操作（完了・実行中など）はサニタイズせず最優先保護
-  } else if (isTodayDone) {
+    // 直近120秒以内の手動操作は保護
+  } else if (hasLegitTodayCompletion) {
     h.status = 'completed';
     h.startTimestamp = null;
     h.accumulatedSeconds = 0;
   } else {
-    // 翌朝ゴースト実行中・中断中サニタイズ（前日以前のタイマーは安全に初期化）
+    // 当日の実ログが存在しないものは未完了へ安全初期化
     const sKey = h.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(h.startTimestamp)) : null) : null;
     const isFromDiffDay = Boolean(sKey && sKey !== todayKey);
     const isOrphan = (h.status === 'in_progress' || h.status === 'paused') && !h.startTimestamp;
     const isOverdue = h.startTimestamp && (Date.now() - h.startTimestamp > 12 * 60 * 60 * 1000);
-    if (isFromDiffDay || isOrphan || isOverdue || (h.status !== 'in_progress' && h.status !== 'paused')) {
+
+    if (isFromDiffDay || isOrphan || isOverdue || h.status === 'completed') {
       h.status = 'uncompleted';
       h.startTimestamp = null;
       h.accumulatedSeconds = 0;
       h.actStart = null;
       h.actEnd = null;
+      h.actMin = 0;
+      if (h.history && h.history[todayKey]) {
+        delete h.history[todayKey];
+      }
     }
   }
 
   recalculateHabitRates(h);
   return h;
+}
+if (typeof window !== 'undefined') {
+  window.migrateHabit = migrateHabit;
 }
 
 function loadHabits() {
