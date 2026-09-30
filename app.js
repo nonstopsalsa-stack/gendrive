@@ -660,22 +660,27 @@ function sanitizeDailyState() {
       }
     }
 
-    // 隍・焚蝗槭ワ繝薙ャ繝茨ｼ・argetTimes > 1・峨・逶ｮ讓呎悴驕疲凾縺ｮ閾ｪ蜍戊・蟾ｱ菫ｮ蠕ｩ・井ｻ頑悃縺ｮ隱､螳御ｺ・舞貂茨ｼ・
-    if (targetTimes > 1 && curCount < targetTimes) {
-      if (habit.history && habit.history[todayKey] && habit.history[todayKey].done) {
-        habit.history[todayKey].done = false;
-        changed = true;
-      }
+    // 当日完了実ログ絶対基準サニタイズ（実ログのない不正完了・汚染historyの自動即時正常化）
+    const dayLogs = Array.isArray(habit.executionLogs)
+      ? habit.executionLogs.filter(log => log && (log.dateKey === todayKey || (log.completedAt && log.completedAt.startsWith(todayKey))) && log.status !== 'cancelled')
+      : [];
+    const curTodayLogCount = dayLogs.length > 0 ? Math.max(...dayLogs.map(l => l.count || 1)) : 0;
+    const hasLegitToday = curTodayLogCount >= targetTimes && targetTimes > 0;
+    const isRecentLocal = habit._localUpdatedAt && (Date.now() - habit._localUpdatedAt < 120000);
+
+    if (!isRecentLocal && !hasLegitToday) {
       if (habit.status === 'completed') {
         habit.status = 'uncompleted';
         habit.accumulatedSeconds = 0;
+        habit.actMin = 0;
         changed = true;
       }
-    } else if (habit.status === 'completed') {
-      const hasTodayHistory = Boolean(habit.history && (habit.history[todayKey] === true || habit.history[todayKey]?.done));
-      if (curCount < targetTimes && !hasTodayHistory) {
-        habit.status = 'uncompleted';
-        habit.accumulatedSeconds = 0;
+      if (habit.history && habit.history[todayKey]) {
+        delete habit.history[todayKey];
+        changed = true;
+      }
+      if (Array.isArray(habit.history) && habit.history.includes(todayKey)) {
+        habit.history = habit.history.filter(d => d !== todayKey);
         changed = true;
       }
     }
@@ -691,43 +696,39 @@ function getHabitStatusForSelectedDate(habit) {
   if (!habit) return 'uncompleted';
   const k = getSelectedDateKey();
 
-  // 1. Future date is ALWAYS uncompleted (planning mode)
-  if (state.selectedDateOffset < 0) {
-    return 'uncompleted';
-  }
+  // 1. 未来日は常に未完了
+  if (state.selectedDateOffset < 0) return 'uncompleted';
 
-  // 2. Check skipped status
+  // 2. スキップ判定
   if (habit.status === 'skipped') {
     const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : k;
-    if (k === todayKey || habit.skippedDateKey === k) {
-      return 'skipped';
-    }
-  }
-  
-  // 3. Check multi-count progress
-  const curCount = getHabitDayCount(habit, k);
-  const targetTimes = getHabitTargetTimes(habit);
-  if (targetTimes > 1) {
-    if (curCount >= targetTimes) return 'completed';
-    if (habit.status === 'in_progress' && state.selectedDateOffset === 0) return 'in_progress';
-    if (habit.status === 'paused' && state.selectedDateOffset === 0) return 'paused';
-    return 'uncompleted';
-  }
-  if (curCount >= targetTimes && targetTimes > 0) return 'completed';
-
-  // 4. Check history array (Event Sourcing) / object for exact date completion
-  const hasHistoryDone = Array.isArray(habit.history) ? habit.history.includes(k) : Boolean(habit.history && (habit.history[k] === true || habit.history[k]?.done));
-  if (hasHistoryDone) return 'completed';
-  
-  // 5. In progress check
-  if (habit.status === 'in_progress' && state.selectedDateOffset === 0) {
-    return 'in_progress';
-  }
-  if (habit.status === 'paused' && state.selectedDateOffset === 0) {
-    return 'paused';
+    if (k === todayKey || habit.skippedDateKey === k) return 'skipped';
   }
 
-  // 6. If no history and count is not reached, it's ALWAYS uncompleted
+  const targetTimes = (typeof getHabitTargetTimes === 'function') ? getHabitTargetTimes(habit) : (habit.targetTimes || 1);
+
+  // 3. 有効な executionLogs の有無を厳格に照合（実ログ基準）
+  const dayLogs = Array.isArray(habit.executionLogs)
+    ? habit.executionLogs.filter(log => log && (log.dateKey === k || (log.completedAt && log.completedAt.startsWith(k))) && log.status !== 'cancelled')
+    : [];
+  const curLogCount = dayLogs.length > 0 ? Math.max(...dayLogs.map(l => l.count || 1)) : 0;
+
+  if (curLogCount >= targetTimes && targetTimes > 0) {
+    return 'completed';
+  }
+
+  // 過去日のレガシー履歴フォールバック（過去日かつ実ログがない場合のみhistoryを許容、今日(selectedDateOffset === 0)は実ログ絶対基準）
+  if (state.selectedDateOffset > 0) {
+    const hasHistoryDone = Array.isArray(habit.history) ? habit.history.includes(k) : Boolean(habit.history && (habit.history[k] === true || habit.history[k]?.done));
+    if (hasHistoryDone) return 'completed';
+  }
+
+  // 4. 実行中・中断中判定（今日のみ）
+  if (state.selectedDateOffset === 0) {
+    if (habit.status === 'in_progress') return 'in_progress';
+    if (habit.status === 'paused') return 'paused';
+  }
+
   return 'uncompleted';
 }
 
