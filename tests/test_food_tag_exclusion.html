@@ -65,11 +65,11 @@
       // Test 1: Helper function isHabitTimeExcluded
       // -------------------------------------------------------------
       assert(typeof isHabitTimeExcluded === 'function', 'Test 1.1: isHabitTimeExcluded should be a function');
-      assert(isHabitTimeExcluded({ tags: ['\u98df\u6750'] }) === true, 'Test 1.2: tags: [鬟滓攝] should return true');
-      assert(isHabitTimeExcluded({ tags: ['#\u98df\u6750'] }) === true, 'Test 1.3: tags: [#鬟滓攝] should return true');
-      assert(isHabitTimeExcluded({ tags: ['\u65e5\u5e38', '\u98df\u6750', '\u5065\u5eb7'] }) === true, 'Test 1.4: multiple tags containing 鬟滓攝 should return true');
-      assert(isHabitTimeExcluded({ tags: '\u98df\u6750' }) === true, 'Test 1.5: string tag 鬟滓攝 should return true');
-      assert(isHabitTimeExcluded({ tags: ['\u904b\u52d5'] }) === false, 'Test 1.6: tags: [驕句虚] should return false');
+      assert(isHabitTimeExcluded({ tags: ['\u98df\u6750'] }) === true, 'Test 1.2: tags: [食材] should return true');
+      assert(isHabitTimeExcluded({ tags: ['#\u98df\u6750'] }) === true, 'Test 1.3: tags: [#食材] should return true');
+      assert(isHabitTimeExcluded({ tags: ['\u65e5\u5e38', '\u98df\u6750', '\u5065\u5eb7'] }) === true, 'Test 1.4: multiple tags containing 食材 should return true');
+      assert(isHabitTimeExcluded({ tags: '\u98df\u6750' }) === true, 'Test 1.5: string tag 食材 should return true');
+      assert(isHabitTimeExcluded({ tags: ['\u904b\u52d5'] }) === false, 'Test 1.6: tags: [運動] should return false');
       assert(isHabitTimeExcluded({ tags: [] }) === false, 'Test 1.7: empty tags should return false');
       assert(isHabitTimeExcluded({}) === false, 'Test 1.8: empty object should return false');
       assert(isHabitTimeExcluded(null) === false, 'Test 1.9: null should return false');
@@ -129,23 +129,23 @@
       assert(res1.secRemainMin === 35, 'Test 2.9: secRemainMin should be 35');
 
       // -------------------------------------------------------------
-      // Test 3: Dynamic tag removal (removing '鬟滓攝' tag)
+      // Test 3: Dynamic tag removal (removing '食材' tag)
       // -------------------------------------------------------------
       mockHabitFood.tags = ['\u671d\u98df'];
       const res2 = calculateTaskChuteEstimates();
 
-      assert(res2.dayHabitRemainMin === 20, 'Test 3.1: After removing 鬟滓攝 tag, dayHabitRemainMin should be 20');
-      assert(res2.dayHabitRemainCount === 2, 'Test 3.2: After removing 鬟滓攝 tag, dayHabitRemainCount should be 2');
+      assert(res2.dayHabitRemainMin === 20, 'Test 3.1: After removing 食材 tag, dayHabitRemainMin should be 20');
+      assert(res2.dayHabitRemainCount === 2, 'Test 3.2: After removing 食材 tag, dayHabitRemainCount should be 2');
       assert(res2.totalDayRemainMin === 40, 'Test 3.3: totalDayRemainMin should be 40 (20 + 20)');
 
       // -------------------------------------------------------------
-      // Test 4: Dynamic tag addition (re-adding '#鬟滓攝' tag)
+      // Test 4: Dynamic tag addition (re-adding '#食材' tag)
       // -------------------------------------------------------------
       mockHabitFood.tags = ['\u671d\u98df', '#\u98df\u6750'];
       const res3 = calculateTaskChuteEstimates();
 
-      assert(res3.dayHabitRemainMin === 15, 'Test 4.1: After re-adding #鬟滓攝 tag, dayHabitRemainMin should be 15');
-      assert(res3.dayHabitRemainCount === 1, 'Test 4.2: After re-adding #鬟滓攝 tag, dayHabitRemainCount should be 1');
+      assert(res3.dayHabitRemainMin === 15, 'Test 4.1: After re-adding #食材 tag, dayHabitRemainMin should be 15');
+      assert(res3.dayHabitRemainCount === 1, 'Test 4.2: After re-adding #食材 tag, dayHabitRemainCount should be 1');
       assert(res3.totalDayRemainMin === 35, 'Test 4.3: totalDayRemainMin should return to 35');
 
       // -------------------------------------------------------------

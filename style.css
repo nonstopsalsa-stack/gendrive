@@ -561,7 +561,7 @@ body {
   font-size: 8px;
 }
 
-/* --- Overdue / Alert Status (雜・℃繧｢繝ｩ繝ｼ繝・ 襍､蟄励・隴ｦ蜻願｡ｨ遉ｺ) --- */
+/* --- Overdue / Alert Status (超過アラート・赤字・警告表示) --- */
 .tc-eta-unified-badge.eta-alert-overdue {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(127, 29, 29, 0.3) 100%) !important;
   border: 1px solid rgba(248, 113, 113, 0.55) !important;
@@ -10472,7 +10472,7 @@ body.mode-table .main-content {
   padding-top: 1.5px;
 }
 /* =========================================================================
-   Task Resume Memo (蜀埼幕繝｡繝｢繝ｻ荳ｭ譁ｭ繝｡繝｢) Modal & Card Chips
+   Task Resume Memo (再開メモ・中断メモ) Modal & Card Chips
    ========================================================================= */
 .resume-note-modal-dialog {
   max-width: 480px;

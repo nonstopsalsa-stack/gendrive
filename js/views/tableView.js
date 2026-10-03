@@ -654,7 +654,7 @@ function buildInlineDomainHtml(item, type) {
 }
 
 function buildInlineDeptHtml(item, type) {
-  const currentMajor = item.deptMajor || 'CEO螳､';
+  const currentMajor = item.deptMajor || 'CEO室';
   const currentMinor = item.deptMinor || item.dept || '';
 
   const deptsData = (typeof DEPTS_DATA !== 'undefined' && DEPTS_DATA) ? DEPTS_DATA : {};
@@ -681,7 +681,7 @@ function buildInlineDeptHtml(item, type) {
 }
 
 function buildInlineProjHtml(item, type) {
-  const currentMajor = item.projMajor || '繝薙ず繝阪せ';
+  const currentMajor = item.projMajor || 'ビジネス';
   const currentMinor = item.projMinor || item.proj || '';
 
   const projsData = (typeof PROJECTS_DATA !== 'undefined' && PROJECTS_DATA) ? PROJECTS_DATA : {};
@@ -708,7 +708,7 @@ function buildInlineProjHtml(item, type) {
 }
 
 function buildInlineTimingHtml(item, type) {
-  const curSection = item.section || '隨ｬ2繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ';
+  const curSection = item.section || '第2セクション';
   const curType = item.displayType || item.timingType || 'section';
   const start = item.customStart || '13:00';
   const end = item.customEnd || '17:00';
@@ -2476,7 +2476,7 @@ function renderTableAnalyticsView() {
   // 5-Stage Trend Status Evaluation Engine (30d -> 7d -> 3d dynamics)
   // ---------------------------------------------------------------------------
     const getStatusInfo = (r3, r7, r30, streak) => {
-    // 1. Super / 邨ｶ螂ｽ隱ｿ (score: 5)
+    // 1. Super / 絶好調 (score: 5)
     if ((r7 >= 80 && r3 >= 67 && (r30 >= 70 || r30 === 0)) || (r7 >= 85 && streak >= 5)) {
       return {
         score: 5,
@@ -2484,7 +2484,7 @@ function renderTableAnalyticsView() {
       };
     }
 
-    // 2. Growth / 謌宣聞荳ｭ (score: 4)
+    // 2. Growth / 成長中 (score: 4)
     const isRising = (r3 > r7 && r7 >= r30 && r3 >= 67) || (r3 >= 67 && r3 >= r30 + 15) || (r7 >= 60 && r7 >= r30 + 15);
     if (isRising) {
       return {
@@ -2493,7 +2493,7 @@ function renderTableAnalyticsView() {
       };
     }
 
-    // 3. Decline / 荳矩剄荳ｭ (score: 2)
+    // 3. Decline / 下降中 (score: 2)
     const isFalling = (r30 >= 55 && (r7 <= r30 - 15 || r3 <= r30 - 25)) || (r7 >= 60 && r3 <= 33);
     if (isFalling) {
       return {
@@ -2502,7 +2502,7 @@ function renderTableAnalyticsView() {
       };
     }
 
-    // 4. Good / 鬆・ｪｿ (score: 3)
+    // 4. Good / 順調 (score: 3)
     if (r7 >= 60 && r30 >= 50 && r3 >= 50) {
       return {
         score: 3,
@@ -2510,7 +2510,7 @@ function renderTableAnalyticsView() {
       };
     }
 
-    // 5. Danger / 隕√ユ繧ｳ蜈･繧・(score: 1)
+    // 5. Danger / 要テコ入れ (score: 1)
     return {
       score: 1,
       badgeHtml: '<span class="analytics-status-badge badge-danger" title="\u8981\u30C6\u30B3\u5165\u308C: \u9054\u6210\u5EA6\u304C\u4F4E\u8FF7\u4E2D\u3002\u76EE\u6A19\u3084\u624B\u9806\u306E\u898B\u76F4\u3057\u3092\u63A8\u5968">\u26A0\uFE0F \u8981\u30C6\u30B3\u5165\u308C</span>'

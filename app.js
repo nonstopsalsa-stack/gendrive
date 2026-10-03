@@ -1,6 +1,6 @@
 /**
  * Habit Flow - Core Logic & Keyboard Engine
- * Fully customized for 蜩ｲ逕・(AI Company OS & Personal OS Engine)
+ * Fully customized for 哲生 (AI Company OS & Personal OS Engine)
  * Enhanced with 3-Way Timing Selector (Anytime / Section / Custom Range)
  */
 
@@ -90,7 +90,7 @@ var state = {
   tasks: loadTasks(),
   goals: loadGoals(),
   manifesto: loadManifesto(),
-  goalsSubmode: 'front', // 'front' (4螟ｧ逶ｮ讓吶げ繝ｪ繝・ラ) | 'back' (鬲ゅ・螳｣隱薙・繝九ヵ繧ｧ繧ｹ繝・
+  goalsSubmode: 'front', // 'front' (4大目標グリッド) | 'back' (魂の宣誓マニフェスト)
   taskPresets: loadTaskPresets(),
   customTags: typeof loadCustomTags === 'function' ? loadCustomTags() : [],
   activeHabitId: null,
@@ -146,7 +146,7 @@ function normalizeTags(raw) {
     return Array.from(new Set(raw.map(t => String(t).trim().replace(/^#/, '')).filter(Boolean)));
   }
   if (typeof raw === 'string') {
-    return Array.from(new Set(raw.split(/[,縲―s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean)));
+    return Array.from(new Set(raw.split(/[,、\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean)));
   }
   return [];
 }
@@ -164,7 +164,7 @@ function getAllRegisteredTags() {
   if (Array.isArray(state.habits)) state.habits.forEach(addTags);
   if (Array.isArray(state.taskPresets)) state.taskPresets.forEach(addTags);
 
-  // 繝ｦ繝ｼ繧ｶ繝ｼ縺御ｽ懈・縺励◆繧ｫ繧ｹ繧ｿ繝繧ｿ繧ｰ・医ち繧ｹ繧ｯ譛ｪ逋ｻ骭ｲ縺ｧ繧ゆｿ晄戟・・
+  // ユーザーが作成したカスタムタグ（タスク未登録でも保持）
   if (Array.isArray(state.customTags)) {
     state.customTags.forEach(t => {
       const clean = String(t).trim().replace(/^#/, '');
@@ -264,7 +264,7 @@ function updateAllItemsTag(oldTag, newTag, mode) {
   if (Array.isArray(state.habits)) state.habits.forEach(updateItemTags);
   if (Array.isArray(state.taskPresets)) state.taskPresets.forEach(updateItemTags);
 
-  // 繧ｫ繧ｹ繧ｿ繝繧ｿ繧ｰ繝励・繝ｫ縺ｮ譖ｴ譁ｰ
+  // カスタムタグプールの更新
   if (Array.isArray(state.customTags)) {
     if (mode === 'rename') {
       state.customTags = state.customTags.map(t => (t === cleanOld ? cleanNew : t));
@@ -275,7 +275,7 @@ function updateAllItemsTag(oldTag, newTag, mode) {
     }
   }
 
-  // 繝輔ぅ繝ｫ繧ｿ迥ｶ諷九・蜷梧悄
+  // フィルタ状態の同期
   if (state.filters) {
     if (state.filters.includeTags) {
       if (mode === 'rename') {
@@ -293,7 +293,7 @@ function updateAllItemsTag(oldTag, newTag, mode) {
     }
   }
 
-  // 豌ｸ邯壼喧菫晏ｭ・
+// 永続化保存
   if (typeof saveTasks === 'function') saveTasks();
   if (typeof saveHabits === 'function') saveHabits();
   if (typeof saveTaskPresets === 'function') saveTaskPresets();
@@ -479,8 +479,8 @@ function renderSmartTagBar() {
   const listEl = document.getElementById('smart-tag-chips-list');
   if (!container || !listEl) return;
 
-  // 陦ｨ遉ｺ蟇ｾ雎｡繝｢繝ｼ繝・ section (1 繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ), all (3 繝・う繝ｪ繝ｼ), table (4 繝槭せ繧ｿ繝ｼ)
-  // 髱櫁｡ｨ遉ｺ蟇ｾ雎｡繝｢繝ｼ繝・ focus (2 繝輔か繝ｼ繧ｫ繧ｹ), goals (5 繝薙ず繝ｧ繝ｳ), timer (6 繧ｿ繧､繝槭・)
+  // 表示対象モード: section (1 セクション), all (3 デイリー), table (4 マスター)
+  // 非表示対象モード: focus (2 フォーカス), goals (5 ビジョン), timer (6 タイマー)
   const isTagBarEnabled = state && ['section', 'all', 'table'].includes(state.currentMode);
   if (!isTagBarEnabled) {
     container.classList.add('hidden');
@@ -489,7 +489,7 @@ function renderSmartTagBar() {
 
   container.classList.remove('hidden');
 
-  // 遨ｺ縺埼伜沺蜿ｳ繧ｯ繝ｪ繝・け縺ｧ譁ｰ隕上ち繧ｰ菴懈・繝｡繝九Η繝ｼ
+  // 空き領域右クリックで新規タグ作成メニュー
   container.oncontextmenu = (e) => {
     if (e.target.closest('.quick-tag-chip') || e.target.closest('.btn-add-tag-fixed')) return;
     showTagContextMenu(e, null);
@@ -512,15 +512,15 @@ function renderSmartTagBar() {
     const isExc = excludeSet.has(name);
     let stateCls = '';
     let icon = '';
-    let hint = '蟾ｦ繧ｯ繝ｪ繝・け: 邨櫁ｾｼ / 蜿ｳ繧ｯ繝ｪ繝・け: 蜑企勁繝ｻ蜷榊燕螟画峩';
+    let hint = '左クリック: 絞込 / 右クリック: 削除・名前変更';
     if (isInc) {
       stateCls = 'include';
       icon = '<span class="chip-state-icon">笨・/span>';
-      hint = '蟾ｦ繧ｯ繝ｪ繝・け: 髯､螟・/ 蜿ｳ繧ｯ繝ｪ繝・け: 蜑企勁繝ｻ蜷榊燕螟画峩';
+      hint = '左クリック: 除外 / 右クリック: 削除・名前変更';
     } else if (isExc) {
       stateCls = 'exclude';
-      icon = '<span class="chip-state-icon">圻</span>';
-      hint = '蟾ｦ繧ｯ繝ｪ繝・け: 隗｣髯､ / 蜿ｳ繧ｯ繝ｪ繝・け: 蜑企勁繝ｻ蜷榊燕螟画峩';
+      icon = '<span class="chip-state-icon">📝</span>';
+      hint = '左クリック: 解除 / 右クリック: 削除・名前変更';
     }
 
     return `
@@ -584,7 +584,7 @@ function sanitizeDailyState() {
   (state.tasks || []).forEach(task => {
     const isRec = typeof isRecurringTaskItem === 'function' ? isRecurringTaskItem(task) : (task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType));
     
-    // 鄙梧悃繧ｴ繝ｼ繧ｹ繝亥ｮ溯｡御ｸｭ繝ｻ荳ｭ譁ｭ荳ｭ繧ｵ繝九ち繧､繧ｺ: 蜑肴律莉･蜑阪↓髢句ｧ九＆繧後◆繧ｿ繧､繝槭・縲｛rphan縺ｪ繧ｿ繧､繝槭・縲・2譎る俣莉･荳翫・逡ｰ蟶ｸ邨碁℃繧貞ｮ牙・縺ｫuncompleted縺ｸ蛻晄悄蛹・
+    // 翌朝ゴースト実行中・中断中サニタイズ: 前日以前に開始されたタイマー、orphanなタイマー、12時間以上の異常経過を安全にuncompletedへ初期化
     if (task._localUpdatedAt && Date.now() - task._localUpdatedAt < 120000) return; if (task.status === 'in_progress' || task.status === 'paused') {
       const startKey = task.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(task.startTimestamp)) : null) : null;
       const isFromDifferentDay = Boolean(startKey && startKey !== todayKey);
@@ -616,7 +616,7 @@ function sanitizeDailyState() {
           changed = true;
         }
       } else if (task.status === 'skipped') {
-        // 鄙梧悃繧ｹ繧ｭ繝・・閾ｪ蜍募ｾｩ蜈・ 蠖捺律縺ｮ繧ｹ繧ｭ繝・・險倬鹸縺後↑縺代ｌ縺ｰuncompleted縺ｸ閾ｪ蟾ｱ菫ｮ蠕ｩ
+        // 翌朝スキップ自動復元: 当日のスキップ記録がなければuncompletedへ自己修復
         const isSkippedToday = (typeof isTaskSkippedForDate === 'function')
           ? isTaskSkippedForDate(task, todayKey)
           : (Array.isArray(task.skippedDates) ? task.skippedDates.includes(todayKey) : (task.skippedDateKey === todayKey));
@@ -629,13 +629,13 @@ function sanitizeDailyState() {
   });
 
   (state.habits || []).forEach(habit => {
-    // 鄙梧悃繧ｴ繝ｼ繧ｹ繝亥ｮ溯｡御ｸｭ繝ｻ荳ｭ譁ｭ荳ｭ繧ｵ繝九ち繧､繧ｺ: 蜑肴律莉･蜑阪↓髢句ｧ九＆繧後◆繧ｿ繧､繝槭・縲｛rphan縺ｪ繧ｿ繧､繝槭・縲・2譎る俣莉･荳翫・逡ｰ蟶ｸ邨碁℃繧貞ｮ牙・縺ｫuncompleted縺ｸ蛻晄悄蛹・
+    // 翌朝ゴースト実行中・中断中サニタイズ: 前日以前に開始されたタイマー、orphanなタイマー、12時間以上の異常経過を安全にuncompletedへ初期化
     if (habit._localUpdatedAt && Date.now() - habit._localUpdatedAt < 120000) return; if (habit.status === 'in_progress' || habit.status === 'paused') {
       const startKey = habit.startTimestamp ? (typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(new Date(habit.startTimestamp)) : null) : null;
       const isFromDifferentDay = Boolean(startKey && startKey !== todayKey);
       const isOrphan = !habit.startTimestamp;
       const isOverdue = habit.startTimestamp && (Date.now() - habit.startTimestamp > 12 * 60 * 60 * 1000);
-      const isAbnormalDuration = (habit.accumulatedSeconds || 0) > 12 * 60 * 60; // 12譎る俣莉･荳翫・逡ｰ蟶ｸ遨咲ｮ・
+      const isAbnormalDuration = (habit.accumulatedSeconds || 0) > 12 * 60 * 60; // 12時間以上の異常積算
       if (isFromDifferentDay || isOrphan || isOverdue || isAbnormalDuration) {
         habit.status = 'uncompleted';
         habit.startTimestamp = null;
@@ -788,9 +788,9 @@ function getTaskStatusForSelectedDate(task) {
 }
 function isTaskForSelectedDate(task, dateObj = null) {
   if (!task || task.isDisabled) return false;
-  // 閾ｪ蜍慕函謌舌＆繧後◆螳壽悄繧ｿ繧ｹ繧ｯ縺ｮ繧ｯ繝ｭ繝ｼ繝ｳ蜊倡匱繧ｿ繧ｹ繧ｯ縺ｯ繝・う繝ｪ繝ｼ逕ｻ髱｢縺九ｉ髯､螟厄ｼ郁ｦｪ縺ｮ螳壽悄繧ｿ繧ｹ繧ｯ縺檎峩謗･陦ｨ遉ｺ繝ｻ邂｡逅・＆繧後ｋ縺溘ａ莠碁㍾陦ｨ遉ｺ繝ｻ莠碁㍾髮・ｨ医ｒ髦ｲ豁｢・・
+  // 自動生成された定期タスクのクローン単発タスクはデイリー画面から除外（親の定期タスクが直接表示・管理されるため二重表示・二重集計を防止）
   if (task.isRecurringInstance) return false;
-  // Inbox, This Week, Next Week, Genius, Someday, Vault 縺ｪ縺ｩ縺ｮ蟆ら畑繝舌こ繝・ヨ縺ｮ繧ｿ繧ｹ繧ｯ縺ｯ繝・う繝ｪ繝ｼ逕ｻ髱｢縺九ｉ髯､螟・
+  // Inbox, This Week, Next Week, Genius, Someday, Vault などの専用バケットのタスクはデイリー画面から除外
   if (task.bucket && task.bucket !== 'today') return false;
 
   const isValidDateInput = (dateObj instanceof Date) || (typeof dateObj === 'string' && dateObj.length >= 8);
@@ -804,21 +804,21 @@ function isTaskForSelectedDate(task, dateObj = null) {
 
   const isRec = task.type === 'recurring' || task.taskType === 'recurring' || Boolean(task.recType) || (Boolean(task.recurrence) && task.recurrence.type && task.recurrence.type !== 'none');
 
-  // 1. 螳壽悄繧ｿ繧ｹ繧ｯ (Recurring Tasks)
+  // 1. 定期タスク (Recurring Tasks)
   if (isRec) {
-    // 驕主悉譌･・域乖譌･莉･蜑搾ｼ峨ｒ陦ｨ遉ｺ縺励※縺・ｋ蝣ｴ蜷医・縲∝ｮ壽悄繧ｿ繧ｹ繧ｯ縺ｯ髱櫁｡ｨ遉ｺ・域悴螳御ｺ・腰逋ｺ繧ｿ繧ｹ繧ｯ縺ｮ谿句ｭ倡｢ｺ隱阪ｒ荳逋ｺ縺ｧ謚頑升蜿ｯ閭ｽ縺ｫ縺吶ｋ縺溘ａ・・
+    // 過去日（昨日以前）を表示している場合は、定期タスクは非表示（未完了単発タスクの残存確認を一発で把握可能にするため）
     if (dateKey < todayKey) {
       return false;
     }
     return isHabitScheduledForDate(task, d);
   }
 
-  // 2. 蜊倡匱繧ｿ繧ｹ繧ｯ (Single Tasks: bucket === 'today' 縺ｾ縺溘・ 譛ｪ謖・ｮ・
+  // 2. 単発タスク (Single Tasks: bucket === 'today' または 未指定)
   if (task.scheduledDate) {
     const normDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(task.scheduledDate) : task.scheduledDate;
     return normDate === dateKey;
   }
-  // scheduledDate縺梧悴謖・ｮ壹□縺悟ｮ御ｺ・ｸ医∩縺ｮ蝣ｴ蜷・ 螳御ｺ・Ο繧ｰ縺ｮ譌･莉倥ｒ蝓ｺ貅悶↓縺励※隧ｲ蠖捺律縺ｮ縺ｿ縺ｫ陦ｨ遉ｺ・井ｻ頑律縺ｸ縺ｮ繧ｾ繝ｳ繝捺ｵ∝・繧貞ｮ悟・驕ｮ譁ｭ・・
+  // scheduledDateが未指定だが完了済みの場合: 完了ログの日付を基準にして該当日のみに表示（今日へのゾンビ流出を完全遮断）
   if (task.status === 'completed') {
     let completedDate = null;
     if (Array.isArray(task.executionLogs) && task.executionLogs.length > 0 && task.executionLogs[0].dateKey) {
@@ -831,39 +831,39 @@ function isTaskForSelectedDate(task, dateObj = null) {
       const normCompDate = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(completedDate) : completedDate;
       return normCompDate === dateKey;
     }
-    // 螳御ｺ・律繧ゆｸ肴・縺ｪ螳御ｺ・ｸ医∩繧ｿ繧ｹ繧ｯ縺ｯ繝・う繝ｪ繝ｼ逕ｻ髱｢縺ｫ縺ｯ陦ｨ遉ｺ縺励↑縺・ｼ医・繧ｹ繧ｿ繝ｼ繝懊・繝牙・縺ｧ邂｡逅・ｼ・
+    // 完了日も不明な完了済みタスクはデイリー画面には表示しない（マスターボード側で管理）
     return false;
   }
-  // 譌･莉俶悴謖・ｮ壹・譛ｪ螳御ｺ・ち繧ｹ繧ｯ縺ｯ縲御ｻ頑律・・odayKey・峨阪↓陦ｨ遉ｺ
+  // 日付未指定の未完了タスクは「今日（todayKey）」に表示
   return dateKey === todayKey;
 }
 
 function isHabitInCurrentTimeWindow(habit, targetSectionName = null) {
   if (!habit) return false;
-  // targetSectionName縺梧枚蟄怜・莉･螟厄ｼ・ilter繧ｳ繝ｼ繝ｫ繝舌ャ繧ｯ縺ｮindex遲会ｼ峨・蝣ｴ蜷医・state.currentSection繧剃ｽｿ逕ｨ
+  // targetSectionNameが文字列以外（filterコールバックのindex等）の場合はstate.currentSectionを使用
   const actualTargetSec = (typeof targetSectionName === 'string') ? targetSectionName : state.currentSection;
   const normSecName = normalizeSectionName(actualTargetSec);
   const sectionConfig = SECTIONS_CONFIG.find(s => s.name === normSecName) || SECTIONS_CONFIG[0];
   const type = habit.displayType || habit.timingType || 'section';
 
-  // 1. Anytime (1譌･荳ｭ陦ｨ遉ｺ): 縺ｩ縺ｮ繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ縺ｧ繧ょｸｸ縺ｫ陦ｨ遉ｺ
+  // 1. Anytime (1日中表示): どのセクションでも常に表示
   if (type === 'anytime') {
     return true;
   }
 
-  // 2. Section (繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ謖・ｮ・: 謖・ｮ壹そ繧ｯ繧ｷ繝ｧ繝ｳ縺ｨ螳悟・荳閾ｴ
+  // 2. Section (セクション指定): 指定セクションと完全一致
   if (type === 'section') {
     return normalizeSectionName(habit.section) === normSecName;
   }
 
-  // 3. Custom Time Range (蛟句挨譎る俣謖・ｮ・ 萓・11:00縲・2:00)
+  // 3. Custom Time Range (個別時間指定: 例 11:00〜12:00)
   if (type === 'custom') {
-    if (!habit.customStart) return true; // 髢句ｧ区凾髢捺悴險ｭ螳壹↑繧牙ｸｸ譎り｡ｨ遉ｺ
+    if (!habit.customStart) return true; // 開始時間未設定なら常時表示
 
     const [sH, sM] = String(habit.customStart).split(':').map(Number);
     const habitStart = (sH || 0) + (sM || 0) / 60;
 
-    let habitEnd = habitStart + ((habit.targetMin || 30) / 60); // 邨ゆｺ・悴謖・ｮ壽凾縺ｮ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ
+    let habitEnd = habitStart + ((habit.targetMin || 30) / 60); // 終了未指定時のフォールバック
     if (habit.customEnd) {
       const [eH, eM] = String(habit.customEnd).split(':').map(Number);
       habitEnd = (eH || 0) + (eM || 0) / 60;
@@ -889,16 +889,16 @@ function isHabitInCurrentTimeWindow(habit, targetSectionName = null) {
       const currentHour = now.getHours() + now.getMinutes() / 60;
 
       if (habitStart <= habitEnd) {
-        // 騾壼ｸｸ蛹ｺ髢・(萓・ 11:00 縲・12:00)
+        // 通常区間 (例: 11:00 〜 12:00)
         return currentHour >= habitStart && currentHour < habitEnd;
       } else {
-        // 譌･縺ｾ縺溘℃蛹ｺ髢・(萓・ 23:00 縲・01:00)
+        // 日またぎ区間 (例: 23:00 〜 01:00)
         return currentHour >= habitStart || currentHour < habitEnd;
       }
     }
 
-    // B. 驕主悉譌･繝ｻ譛ｪ譚･譌･・郁ｨ育判遒ｺ隱阪・螻･豁ｴ遒ｺ隱肴凾・・
-    // 繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ縺ｮ譎る俣譫縺ｨ譎る俣蟶ｯ縺碁㍾縺ｪ縺｣縺ｦ縺・ｋ縺句愛螳・
+    // B. 過去日・未来日（計画確認・履歴確認時）:
+    // セクションの時間枠と時間帯が重なっているか判定
     const secStart = sectionConfig.start;
     const secEnd = sectionConfig.end;
 
@@ -920,24 +920,24 @@ function isHabitInCurrentTimeWindow(habit, targetSectionName = null) {
   return false;
 }
 
-// 繝・う繝ｪ繝ｼ逕ｻ髱｢蟆ら畑: 髢句ｧ区凾髢薙′縺昴・繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ縺ｫ蜷ｫ縺ｾ繧後※縺・ｋ繝上ン繝・ヨ縺ｮ縺ｿ繧呈歓蜃ｺ・磯㍾隍・亟豁｢・・
+// デイリー画面専用: 開始時間がそのセクションに含まれているハビットのみを抽出（重複防止）
 function isHabitInDailySection(habit, sectionName) {
   if (!habit) return false;
   const normSecName = normalizeSectionName(sectionName);
   const sectionConfig = SECTIONS_CONFIG.find(s => s.name === normSecName) || SECTIONS_CONFIG[0];
   const type = habit.displayType || habit.timingType || 'section';
 
-  // 1. Anytime: Anytime縺ｯ繝・う繝ｪ繝ｼ逕ｻ髱｢譛荳企Κ縺ｮ縲窟nytime繝悶Ο繝・け縲阪↓陦ｨ遉ｺ縺吶ｋ縺溘ａ縲∝推繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ縺ｫ縺ｯ驥崎､・｡ｨ遉ｺ縺励↑縺・
+  // 1. Anytime: Anytimeはデイリー画面最上部の「Anytimeブロック」に表示するため、各セクションには重複表示しない
   if (type === 'anytime') {
     return false;
   }
 
-  // 2. Section: 謖・ｮ壹そ繧ｯ繧ｷ繝ｧ繝ｳ縺ｨ螳悟・荳閾ｴ
+  // 2. Section: 指定セクションと完全一致
   if (type === 'section') {
     return normalizeSectionName(habit.section) === normSecName;
   }
 
-  // 3. Custom Time Range: 髢句ｧ区凾蛻ｻ・・ustomStart・峨′縺昴・繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ縺ｮ譎る俣蜀・↓縺ゅｋ蝣ｴ蜷医・縺ｿ陦ｨ遉ｺ
+  // 3. Custom Time Range: 開始時刻（customStart）がそのセクションの時間内にある場合のみ表示
   if (type === 'custom') {
     if (!habit.customStart) {
       return normalizeSectionName(habit.section) === normSecName;
@@ -951,7 +951,7 @@ function isHabitInDailySection(habit, sectionName) {
     if (secStart <= secEnd) {
       return habitStart >= secStart && habitStart < secEnd;
     } else {
-      // 譌･縺ｾ縺溘℃繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ
+      // 日またぎセクション
       return habitStart >= secStart || habitStart < secEnd;
     }
   }
@@ -992,8 +992,8 @@ function startHabit(id) {
   const habit = state.habits.find(h => String(h.id) === targetId);
   if (!habit) return;
 
-  // 1. Optimistic Direct DOM Mutation Guard (蜊ｳ譎・OM螳溯｡御ｸｭ驕ｷ遘ｻ繧ｬ繝ｼ繝・
-  // 騾壻ｿ｡驕・ｻｶ繧・・逕ｻ髱｢renderApp()縺ｮ雋闕ｷ繧貞ｾ・◆縺壹・繝溘Μ遘偵〒蜊ｳ蠎ｧ縺ｫ繧ｫ繝ｼ繝峨ｒ繧ｨ繝｡繝ｩ繝ｫ繝峨げ繝ｪ繝ｼ繝ｳ縲娯酪 螳溯｡御ｸｭ縲阪∈蛻・ｊ譖ｿ縺医ｋ
+  // 1. Optimistic Direct DOM Mutation Guard (即時DOM実行中遷移ガード)
+  // 通信遅延や全画面renderApp()の負荷を待たず、1ミリ秒で即座にカードをエメラルドグリーン「● 実行中」へ切り替える
   try {
     const cardEl = document.querySelector(`.habit-card[data-id="${targetId}"]`);
     if (cardEl) {
@@ -1005,8 +1005,8 @@ function startHabit(id) {
       if (pill) {
         pill.className = 'tc-status-pill in-progress habit-pill clickable-pause';
         pill.setAttribute('onclick', `event.stopPropagation(); pauseHabit('${targetId}')`);
-        pill.setAttribute('title', '繧ｯ繝ｪ繝・け縺励※荳譎ゆｸｭ譁ｭ [P]');
-        pill.textContent = '笳・螳溯｡御ｸｭ';
+        pill.setAttribute('title', 'クリックして一時中断 [P]');
+        pill.textContent = '● 実行中';
       }
 
       const actionsDiv = cardEl.querySelector('.habit-actions');
@@ -1091,7 +1091,7 @@ function startHabit(id) {
   state.activeHabitId = habit.id;
   state.activeTaskId = null;
 
-  // 螳溯｡御ｸｭ繧ｿ繧ｹ繧ｯ縺後≠繧後・閾ｪ蜍穂ｸｭ譁ｭ・亥ｮ悟・繧ｷ繝ｳ繧ｰ繝ｫ繧ｿ繧ｹ繧ｯ謗剃ｻ門宛蠕｡・・
+  // 実行中タスクがあれば自動中断（完全シングルタスク排他制御）
   if (Array.isArray(state.tasks)) {
     let taskPaused = false;
     state.tasks.forEach(t => {
@@ -1349,13 +1349,13 @@ function renderExecutionTimeline(type, item) {
   item.executionLogs.sort((a, b) => new Date(b.completedAt || b.dateKey) - new Date(a.completedAt || a.dateKey));
 
   if (countBadge) {
-    countBadge.textContent = `蜈ｨ${item.executionLogs.length}莉ｶ縺ｮ險倬鹸`;
+    countBadge.textContent = `全${item.executionLogs.length}件の記録`;
   }
 
   if (item.executionLogs.length === 0) {
     container.innerHTML = `
       <div class="timeline-empty-state">
-        <span>糖 縺ｾ縺螳溯｡瑚ｨ倬鹸縺ｯ縺ゅｊ縺ｾ縺帙ｓ縲ゅ娯恣 螳御ｺ・肴凾縺ｫ荳險繝｡繝｢繧呈ｮ九☆縺ｨ縲√％縺薙↓譎らｳｻ蛻励〒闢・ｩ阪＆繧後∪縺吶・/span>
+        <span>📜 まだ実行記録はありません。「✓ 完了」時に一言メモを残すと、ここに時系列で蓄積されます。</span>
       </div>
     `;
     return;
@@ -1364,10 +1364,10 @@ function renderExecutionTimeline(type, item) {
   const isHabit = type === 'habit';
   container.innerHTML = item.executionLogs.map(log => {
     const d = new Date(log.completedAt || log.dateKey);
-    const dateFormatted = isNaN(d.getTime()) ? (log.dateKey || '譌･莉俶悴險倬鹸') : `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    const countText = (isHabit && log.count) ? `<span class="timeline-badge">${log.count}蝗樒岼</span>` : '';
-    const durationText = log.durationMin ? `<span class="timeline-badge">竢ｱ・・${log.durationMin}蛻・/span>` : '';
-    const noteText = log.note ? `<div class="timeline-note">${escapeHtml(log.note)}</div>` : `<div class="timeline-note" style="color: var(--text-dim); font-style: italic;">・医Γ繝｢縺ｪ縺怜ｮ御ｺ・ｼ・/div>`;
+    const dateFormatted = isNaN(d.getTime()) ? (log.dateKey || '日付未記録') : `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const countText = (isHabit && log.count) ? `<span class="timeline-badge">${log.count}回目</span>` : '';
+    const durationText = log.durationMin ? `<span class="timeline-badge">⏱️ ${log.durationMin}分</span>` : '';
+    const noteText = log.note ? `<div class="timeline-note">${escapeHtml(log.note)}</div>` : `<div class="timeline-note" style="color: var(--text-dim); font-style: italic;">（メモなし完了）</div>`;
 
     return `
       <div class="timeline-item ${isHabit ? 'habit-item' : ''}" data-log-id="${log.id}">
@@ -1380,7 +1380,7 @@ function renderExecutionTimeline(type, item) {
           ${noteText}
         </div>
         <div class="timeline-item-actions">
-          <button type="button" class="timeline-btn-del" onclick="deleteExecutionLog('${type}', '${item.id}', '${log.id}')" title="縺薙・險倬鹸繧貞炎髯､">卵・・/button>
+          <button type="button" class="timeline-btn-del" onclick="deleteExecutionLog('${type}', '${item.id}', '${log.id}')" title="この記録を削除">🗑️</button>
         </div>
       </div>
     `;
@@ -1398,7 +1398,7 @@ function deleteExecutionLog(type, itemId, logId) {
 
   item.executionLogs = item.executionLogs.filter(l => l.id !== logId);
 
-  // 螳壽悄繧ｿ繧ｹ繧ｯ縺ｮ螳溯｡後Ο繧ｰ縺悟炎髯､縺輔ｌ縺溷ｴ蜷医・｣蜍輔☆繧九け繝ｭ繝ｼ繝ｳ蜊倡匱繧ｿ繧ｹ繧ｯ繧り・蜍募炎髯､
+  // 定期タスクの実行ログが削除された場合、連動するクローン単発タスクも自動削除
   if (type === 'task' && typeof removeRecurringInstanceSingleTasks === 'function') {
     removeRecurringInstanceSingleTasks(itemId, logDateKey, logId, state.tasks);
   }
@@ -1424,7 +1424,7 @@ function uncompleteHabit(id) {
   const prevStatus = habit.status;
   const prevLogs = Array.isArray(habit.executionLogs) ? [...habit.executionLogs] : [];
 
-  // 縺昴・譌･縺ｮ螳溯｡瑚ｨ倬鹸繧貞ｮ悟・縺ｫ蜑企勁・亥屓謨ｰ0蝗槭・螳悟・譛ｪ螳御ｺ・↓繝ｪ繧ｻ繝・ヨ・・
+  // その日の実行記録を完全に削除（回数0回・完全未完了にリセット）
   habit.history = habit.history.filter(d => d !== dateKey);
 
   if (state.selectedDateOffset === 0) {
@@ -1437,7 +1437,7 @@ function uncompleteHabit(id) {
     }
   }
 
-  // 繧ｿ繧､繝繝ｩ繧､繝ｳ繝ｭ繧ｰ縺九ｉ繧ょｽ捺律縺ｮ繝ｭ繧ｰ繧帝勁蜴ｻ
+  // タイムラインログからも当日のログを除去
   if (Array.isArray(habit.executionLogs)) {
     habit.executionLogs = habit.executionLogs.filter(l => l.dateKey !== dateKey);
   }
@@ -1514,7 +1514,7 @@ function getFilteredHabits(customMode = null) {
   const mode = customMode || state.currentMode;
   let list = [...state.habits].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
-  // 驕主悉譌･縺ｮ陦ｨ遉ｺ譎ゅ・繝槭せ繧ｿ繝ｼ繝・・繝悶Ν莉･螟悶〒縺ｯ繝上ン繝・ヨ繧帝撼陦ｨ遉ｺ・域悴螳御ｺ・腰逋ｺ繧ｿ繧ｹ繧ｯ縺ｮ谿句ｭ倡｢ｺ隱阪ｒ螳ｹ譏薙↓縺吶ｋ縺溘ａ・・
+  // 過去日の表示時はマスターテーブル以外ではハビットを非表示（未完了単発タスクの残存確認を容易にするため）
   if (mode !== 'table' && state.selectedDateOffset > 0) {
     return [];
   }
@@ -1744,9 +1744,9 @@ function updateHeaderAndStatus() {
   const activeNameEl = document.getElementById('active-habit-name');
   if (activeNameEl) {
     if (activeTask && state.selectedDateOffset === 0) {
-      activeNameEl.textContent = `識 ${activeTask.title} (${activeTask.actStart || ''}~)`;
+      activeNameEl.textContent = `🎯 ${activeTask.title} (${activeTask.actStart || ''}~)`;
     } else if (activeHabit && state.selectedDateOffset === 0) {
-      activeNameEl.textContent = `諺 ${activeHabit.name}`;
+      activeNameEl.textContent = `🌿 ${activeHabit.name}`;
     } else {
       activeNameEl.textContent = 'なし';
     }
@@ -1755,7 +1755,7 @@ function updateHeaderAndStatus() {
   // Real-Time TaskChute Dynamic Estimates & ETAs calculation
   calculateTaskChuteEstimates();
 
-  // 1蛻・＃縺ｨ縺ｮ螳壽悄譖ｴ譁ｰ譎・ 繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ逕ｻ髱｢縺ｮ蛟句挨譎る俣繝上ン繝・ヨ縺ｮ蜍慕噪蜃ｺ迴ｾ繝ｻ豸域ｻ・ｒ蜿肴丐
+  // 1分ごとの定期更新時: セクション画面の個別時間ハビットの動的出現・消滅を反映
   if (state.currentMode === 'section' && state.selectedDateOffset === 0) {
     const isModalOpen = Boolean(document.querySelector('.modal.active, .modal.show, .modal-overlay.active, .modal[style*="display: block"]'));
     if (!isModalOpen && typeof renderSectionView === 'function') {
@@ -1765,18 +1765,18 @@ function updateHeaderAndStatus() {
 }
 
 function updateFilterPillsUI() {
-  const statusLabels = { uncompleted: '譛ｪ螳御ｺ・・縺ｿ', all: '蜈ｨ莉ｶ陦ｨ遉ｺ', completed: '螳御ｺ・・縺ｿ' };
+  const statusLabels = { uncompleted: '未完了のみ', all: '全件表示', completed: '完了のみ' };
   document.getElementById('filter-status-val').textContent = statusLabels[state.filters.status];
-  document.getElementById('filter-domain-val').textContent = state.filters.domain || '縺吶∋縺ｦ';
-  document.getElementById('filter-dept-val').textContent = state.filters.dept || '縺吶∋縺ｦ';
-  document.getElementById('filter-proj-val').textContent = state.filters.proj || '縺吶∋縺ｦ';
+  document.getElementById('filter-domain-val').textContent = state.filters.domain || 'すべて';
+  document.getElementById('filter-dept-val').textContent = state.filters.dept || 'すべて';
+  document.getElementById('filter-proj-val').textContent = state.filters.proj || 'すべて';
 
   const tagValEl = document.getElementById('filter-tag-val');
   if (tagValEl) {
     const inc = state.filters.includeTags || [];
     const exc = state.filters.excludeTags || [];
     if (inc.length === 0 && exc.length === 0) {
-      tagValEl.textContent = '縺吶∋縺ｦ';
+      tagValEl.textContent = 'すべて';
     } else {
       const parts = [];
       if (inc.length > 0) parts.push(`+${inc.map(t => '#' + t).join(',')}`);
@@ -2323,19 +2323,19 @@ function setMode(mode, isReverse = false) {
   if (state.currentMode === mode) {
     // Already in this mode: perform context-aware toggle!
     if (mode === 'section') {
-      cycleStatusFilter(); // 1: Toggle 譛ｪ螳・竍・蜈ｨ莉ｶ 竍・螳御ｺ・
+      cycleStatusFilter(); // 1: Toggle 未完 ⇄ 全件 ⇄ 完了
       return;
     }
     if (mode === 'focus') {
-      cycleFocusCount(); // 2: Toggle 1蛟・(繧ｷ繝ｳ繧ｰ繝ｫ) 竍・2蛟・(2謚・ 竍・3蛟・(TOP 3)
+      cycleFocusCount(); // 2: Toggle 1個 (シングル) ⇄ 2個 (2択) ⇄ 3個 (TOP 3)
       return;
     }
     if (mode === 'all') {
-      cycleStatusFilter(); // 3: Toggle 譛ｪ螳・竍・蜈ｨ莉ｶ 竍・螳御ｺ・
+      cycleStatusFilter(); // 3: Toggle 未完 ⇄ 全件 ⇄ 完了
       return;
     }
     if (mode === 'table') {
-      // 4: Cycle Analytics Scoreboard (1) 竍・Habits (2) 竍・Recurring Tasks (3) 竍・Single Tasks (4) 竍・Profiles (5) (Reverse with Shift+4)
+      // 4: Cycle Analytics Scoreboard (1) ⇄ Habits (2) ⇄ Recurring Tasks (3) ⇄ Single Tasks (4) ⇄ Profiles (5) (Reverse with Shift+4)
       const subtabs = ['analytics', 'habits', 'tasks', 'single_tasks', 'profiles'];
       let currentIndex = subtabs.indexOf(state.masterSubtab);
       if (currentIndex === -1) currentIndex = 0;
@@ -2353,7 +2353,7 @@ function setMode(mode, isReverse = false) {
       return;
     }
     if (mode === 'goals') {
-      // 5: Toggle Front 4-Level Goals 竍・Back Core Manifesto (鬲ゅ・螳｣隱薙・譬ｹ譛ｬ豎ｺ諢・
+      // 5: Toggle Front 4-Level Goals ⇄ Back Core Manifesto (魂の宣誓・根本決意)
       toggleGoalsSubmode();
       return;
     }
@@ -2365,7 +2365,7 @@ function setMode(mode, isReverse = false) {
 
   // Switching to new mode
   if (mode === 'table') {
-    state.masterSubtab = 'analytics'; // 莉悶・繝ｼ繝峨°繧・縺ｧ蜈･縺｣縺溘→縺阪・蠢・★縲檎ｶ咏ｶ壹せ繧ｳ繧｢繝懊・繝峨阪′荳逡ｪ譛蛻昴↓髢九￥
+    state.masterSubtab = 'analytics'; // 他ボードから4で入ったときは必ず「継続スコアボード」が一番最初に開く
   }
   const isEnteringFocus = (state.currentMode !== 'focus' && mode === 'focus');
   if (state.currentMode !== mode && state.currentMode !== 'timer') {
@@ -2450,8 +2450,8 @@ const safeBindClick = (id, fn) => {
 };
 
 safeBindClick('filter-status-pill', cycleStatusFilter);
-safeBindClick('filter-domain-pill', () => openCascadeFilterModal('domain', '繝峨Γ繧､繝ｳ (PN1縲弃N5)', DOMAINS_DATA));
-safeBindClick('filter-dept-pill', () => openCascadeFilterModal('dept', '驛ｨ髢 (譛ｬ驛ｨ/逶ｴ霓・', DEPTS_DATA));
+safeBindClick('filter-domain-pill', () => openCascadeFilterModal('domain', 'ドメイン (PN1〜PN5)', DOMAINS_DATA));
+safeBindClick('filter-dept-pill', () => openCascadeFilterModal('dept', '部門 (本部/直轄)', DEPTS_DATA));
 safeBindClick('filter-proj-pill', () => openCascadeFilterModal('proj', 'プロジェクト', PROJECTS_DATA));
 safeBindClick('filter-tag-pill', openTagFilterModal);
 safeBindClick('btn-reset-filters', resetAllFilters);
@@ -2528,7 +2528,7 @@ function renderProfileHistoryGrid(habit) {
     html += `
       <div class="history-day-tile ${isCompleted ? 'completed' : ''} ${isToday ? 'today' : ''}" 
            onclick="toggleHistoryTile('${habit.id}', '${dateKey}', ${offset})" 
-           title="${m}譛・{dayNum}譌･(${w}) - 繧ｯ繝ｪ繝・け縺励※螳御ｺ・譛ｪ螳御ｺ・ｒ蛻・崛">
+           title="${m}月${dayNum}日(${w}) - クリックして完了/未完了を切替">
         <span class="tile-date">${label}</span>
         <span class="tile-icon">${statusIcon}</span>
       </div>
@@ -2588,7 +2588,7 @@ function toggleHistoryTile(habitId, dateKey, offset) {
   setBadge('edit-rate-90d', r90);
 
   const tierEl = document.getElementById('edit-profile-tier');
-  if (tierEl) tierEl.textContent = habit.stats?.tier || '験 Developing';
+    if (tierEl) tierEl.textContent = habit.stats?.tier || '🌱 Developing';
 
   renderProfileHistoryGrid(habit);
   renderApp();
@@ -2634,13 +2634,13 @@ function getNextWeekdayDateKey(baseDateKey = null) {
   const day = base.getDay(); // 0: Sun, 1: Mon, ..., 5: Fri, 6: Sat
   let addDays = 1;
   if (day === 5) {
-    addDays = 3; // 驥第屆 筐・譛域屆
+    addDays = 3; // 金曜 ➔ 月曜
   } else if (day === 6) {
-    addDays = 2; // 蝨滓屆 筐・譛域屆
+    addDays = 2; // 土曜 ➔ 月曜
   } else if (day === 0) {
-    addDays = 1; // 譌･譖・筐・譛域屆
+    addDays = 1; // 日曜 ➔ 月曜
   } else {
-    addDays = 1; // 譛医懈惠 筐・鄙梧律
+    addDays = 1; // 月〜木 ➔ 翌日
   }
   base.setDate(base.getDate() + addDays);
   return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
@@ -2661,7 +2661,7 @@ function deferTask(taskId, targetDateKey, targetBucket = 'today', actionLabel = 
   renderApp();
 
   if (typeof showUndoToast === 'function') {
-    showUndoToast(`笞｡ 縲・{task.title}縲阪ｒ ${actionLabel} 縺ｫ遘ｻ蜍輔＠縺ｾ縺励◆`, () => {
+    showUndoToast(`⚡ 「${task.title}」を ${actionLabel} に移動しました`, () => {
       task.scheduledDate = prevScheduledDate;
       task.bucket = prevBucket;
       task.section = prevSection;
@@ -2690,7 +2690,7 @@ function removeSingleTaskFromBucket(taskId) {
 
   if (typeof pushUndoAction === 'function') {
     pushUndoAction({
-      description: `繧ｿ繧ｹ繧ｯ縲・{task.title}縲阪ｒ邂ｱ縺九ｉ螟悶＠縺ｾ縺励◆`,
+      description: `タスク「${task.title}」を箱から外しました`,
       undo: () => {
         task.bucket = prevBucket;
         task.scheduledDate = prevScheduledDate;
@@ -2731,9 +2731,9 @@ function showContextMenu(e, habitId) {
   const curStatus = getHabitStatusForSelectedDate(habit);
   const isCompleted = curStatus === 'completed';
 
-  const dateLabel = state.selectedDateOffset === 0 ? '莉頑律' : '縺薙・譌･';
+  const dateLabel = state.selectedDateOffset === 0 ? '今日' : 'この日';
   if (isCompleted) {
-    if (toggleIcon) toggleIcon.textContent = '竢ｳ';
+  if (toggleIcon) toggleIcon.textContent = '⏳';
     if (toggleText) toggleText.textContent = `${dateLabel}を未完了に戻す`;
   } else {
     if (toggleIcon) toggleIcon.textContent = '✓';
@@ -2773,7 +2773,7 @@ function showTaskContextMenu(e, taskId) {
   const headerEl = document.getElementById('context-menu-task-name');
   if (headerEl) headerEl.textContent = task.title;
 
-  // Dynamic date labels (e.g. 譏取律 (8/21), 譏主ｾ梧律 (8/22), 谺｡縺ｮ蟷ｳ譌･ (8/21))
+  // Dynamic date labels (e.g. 明日 (8/21), 明後日 (8/22), 次の平日 (8/21))
   const tomorrowKey = getTomorrowDateKey();
   const dayAfterKey = getDayAfterTomorrowDateKey();
   const nextWeekdayKey = getNextWeekdayDateKey();
@@ -2964,7 +2964,7 @@ function setupContextMenuHandlers() {
       if (!tid) return;
       const targetDate = getTomorrowDateKey();
       const [, m, d] = targetDate.split('-');
-      deferTask(tid, targetDate, 'today', `譏取律 (${parseInt(m, 10)}/${parseInt(d, 10)})`);
+      deferTask(tid, targetDate, 'today', `明日 (${parseInt(m, 10)}/${parseInt(d, 10)})`);
     });
   }
 
@@ -2977,7 +2977,7 @@ function setupContextMenuHandlers() {
       if (!tid) return;
       const targetDate = getDayAfterTomorrowDateKey();
       const [, m, d] = targetDate.split('-');
-      deferTask(tid, targetDate, 'today', `譏主ｾ梧律 (${parseInt(m, 10)}/${parseInt(d, 10)})`);
+      deferTask(tid, targetDate, 'today', `明後日 (${parseInt(m, 10)}/${parseInt(d, 10)})`);
     });
   }
 
@@ -2990,7 +2990,7 @@ function setupContextMenuHandlers() {
       if (!tid) return;
       const targetDate = getNextWeekdayDateKey();
       const [, m, d] = targetDate.split('-');
-      deferTask(tid, targetDate, 'today', `谺｡縺ｮ蟷ｳ譌･ (${parseInt(m, 10)}/${parseInt(d, 10)})`);
+      deferTask(tid, targetDate, 'today', `次の平日 (${parseInt(m, 10)}/${parseInt(d, 10)})`);
     });
   }
 
@@ -3002,11 +3002,11 @@ function setupContextMenuHandlers() {
       hideAllContextMenus();
       if (!tid) return;
       const defaultDate = getTomorrowDateKey();
-      const inputDate = prompt('螳溯｡御ｺ亥ｮ壽律繧貞・蜉帙＠縺ｦ縺上□縺輔＞ (YYYY-MM-DD):', defaultDate);
+      const inputDate = prompt('実行予定日を入力してください (YYYY-MM-DD):', defaultDate);
       if (inputDate && /^\d{4}-\d{2}-\d{2}$/.test(inputDate.trim())) {
         const targetDate = inputDate.trim();
         const [, m, d] = targetDate.split('-');
-        deferTask(tid, targetDate, 'today', `謖・ｮ壽律 (${parseInt(m, 10)}/${parseInt(d, 10)})`);
+        deferTask(tid, targetDate, 'today', `指定日 (${parseInt(m, 10)}/${parseInt(d, 10)})`);
       }
     });
   }
@@ -3018,7 +3018,7 @@ function setupContextMenuHandlers() {
       const tid = state.contextMenuTaskId;
       hideAllContextMenus();
       if (!tid) return;
-      deferTask(tid, null, 'inbox', 'Inbox (譌･莉倥↑縺・');
+      deferTask(tid, null, 'inbox', 'Inbox (日付なし)');
     });
   }
 
@@ -3055,8 +3055,8 @@ function setupContextMenuHandlers() {
       }
 
       const msg = isRec
-        ? `笞｡ 螳壽悄繧ｿ繧ｹ繧ｯ縲・{task.title}縲阪ｒ譛ｬ譌･縺ｯ繧ｹ繧ｭ繝・・縺励∪縺励◆ (譏取律縺ｾ縺溯・蜍戊｡ｨ遉ｺ縺輔ｌ縺ｾ縺・`
-        : `笞｡ 繧ｿ繧ｹ繧ｯ縲・{task.title}縲阪ｒ譛ｬ譌･縺ｯ繧ｹ繧ｭ繝・・縺励∪縺励◆`;
+        ? `⚡ 定期タスク「${task.title}」を本日はスキップしました (明日また自動表示されます)`
+        : `⚡ タスク「${task.title}」を本日はスキップしました`;
 
       if (typeof showUndoToast === 'function') {
         showUndoToast(msg, () => {
@@ -3092,7 +3092,7 @@ function setupContextMenuHandlers() {
       }
 
       if (typeof showUndoToast === 'function') {
-        showUndoToast(`売 縲・{task.title}縲阪・繧ｹ繧ｭ繝・・繧定ｧ｣髯､縺励∪縺励◆`, () => {
+        showUndoToast(`🔄 「${task.title}」のスキップを解除しました`, () => {
           if (typeof skipTaskForToday === 'function') {
             skipTaskForToday(tid, curDateKey);
           }
@@ -3129,7 +3129,7 @@ function setupContextMenuHandlers() {
 
         if (typeof pushUndoAction === 'function') {
           pushUndoAction({
-            description: `繧ｿ繧ｹ繧ｯ縲・{deletedTask.title}縲阪ｒ蜑企勁`,
+          description: `タスク「${deletedTask.title}」を削除`,
             undo: () => {
               if (typeof unrecordTaskDeletion === 'function') {
                 unrecordTaskDeletion(tid);
@@ -3312,7 +3312,7 @@ function setupDateNavHandlers() {
       closeCarryoverModal();
       updateCarryoverBanner();
       renderApp();
-      showCarryoverToast(`驕主悉縺ｮ譛ｪ螳御ｺ・ち繧ｹ繧ｯ ${pastTasks.length}莉ｶ 繧偵蝕nbox縲代∈遘ｻ蜍輔＠縺ｾ縺励◆`);
+      showCarryoverToast(`過去の未完了タスク ${pastTasks.length}件 を【Inbox】へ移動しました`);
     });
   }
 }
@@ -3530,7 +3530,7 @@ function setupTaskFormHandlers() {
       const newId = generateNextTaskId();
       const title = document.getElementById('add-task-title').value.trim();
       const estMin = parseInt(document.getElementById('add-task-est-min').value, 10) || 15;
-      const section = document.getElementById('add-task-section')?.value || state.currentSection || '隨ｬ2繧ｻ繝・す繝ｧ繝ｳ';
+      const section = document.getElementById('add-task-section')?.value || state.currentSection || '第2セッション';
       const customStart = document.getElementById('add-task-custom-start')?.value || null;
       const customEnd = document.getElementById('add-task-custom-end')?.value || null;
       const notes = document.getElementById('add-task-notes').value.trim();
@@ -3606,7 +3606,7 @@ function setupTaskFormHandlers() {
 
       state.tasks.push(newTask);
       pushUndoAction({
-        description: `繧ｿ繧ｹ繧ｯ縲・{newTask.title}縲阪ｒ霑ｽ蜉`,
+        description: `タスク「${newTask.title}」を追加`,
         undo: () => {
           if (typeof recordTaskDeletion === 'function') {
             recordTaskDeletion(newId, newTask.title);
@@ -3707,7 +3707,7 @@ function setupTaskFormHandlers() {
         if (state.activeTaskId === taskId) state.activeTaskId = null;
 
         pushUndoAction({
-          description: `繧ｿ繧ｹ繧ｯ縲・{deletedTask.title}縲阪ｒ蜑企勁`,
+          description: `タスク「${deletedTask.title}」を削除`,
           undo: () => {
             if (typeof unrecordTaskDeletion === 'function') {
               unrecordTaskDeletion(taskId);
@@ -3950,7 +3950,7 @@ function setupAddFormHandlers() {
       recurrence: recObj,
       status: 'uncompleted',
       createdAt: new Date().toISOString(),
-      stats: { d3: 0, d7: 0, d30: 0, d90: 0, sevenDay: 0, thirtyDay: 0, ninetyDay: 0, tier: '験 Developing' }
+      stats: { d3: 0, d7: 0, d30: 0, d90: 0, sevenDay: 0, thirtyDay: 0, ninetyDay: 0, tier: '🌱 Developing' }
     };
 
     // Remember sticky defaults for next fast continuous habit entry
@@ -3979,7 +3979,7 @@ function setupAddFormHandlers() {
 
     state.habits.push(newHabit);
     pushUndoAction({
-      description: `繝上ン繝・ヨ縲・{newHabit.name}縲阪ｒ霑ｽ蜉`,
+      description: `ハビット「${newHabit.name}」を追加`,
       undo: () => {
         state.habits = state.habits.filter(h => h.id !== newId);
       }
@@ -4063,7 +4063,7 @@ function setupEditFormHandlers() {
     let customEndVal = null;
 
     if (timingType === 'section') {
-      sectionVal = document.getElementById('edit-habit-section')?.value || habit.section || '隨ｬ2繧ｻ繝・す繝ｧ繝ｳ';
+      sectionVal = document.getElementById('edit-habit-section')?.value || habit.section || '第2セッション';
     } else if (timingType === 'custom') {
       customStartVal = document.getElementById('edit-custom-start')?.value || habit.customStart || '13:00';
       customEndVal = document.getElementById('edit-custom-end')?.value || habit.customEnd || '17:00';
@@ -4239,7 +4239,7 @@ try {
 safeInit('sanitizeDailyState', sanitizeDailyState);
 safeInit('renderApp', renderApp);
 
-// 繧ｹ繝ｪ繝ｼ繝怜ｾｩ蟶ｰ譎ゅ・繧ｿ繝悶い繧ｯ繝・ぅ繝匁凾縺ｮ鄙梧悃譌･莉伜､画峩蜊ｳ譎ゅメ繧ｧ繝・け・・akeup Rollover Guard・・
+// スリープ復帰時・タブアクティブ時の翌朝日付変更即時チェック（Wakeup Rollover Guard）
 function checkDayRolloverWakeup() {
   const curTodayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toLocaleDateString('sv');
   if (state.lastProcessedDate && state.lastProcessedDate !== curTodayKey) {
