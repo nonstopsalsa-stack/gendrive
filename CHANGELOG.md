@@ -2,6 +2,14 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.22] - 2026-10-04
+### Removed (PC auto cloud sync & practical-preset restore button)
+- **自動クラウド同期の廃止**: `triggerCloudSync` / `pushDataToCloud` / `pullDataFromCloud` / 45秒ハートビートを削除。右下の「同期エラー」が出なくなり、保存時・フォーカス時の GAS 通信が発生しません。
+- `reloadAppData()` は常にローカル再読込、`updateSyncStatus()` は常に `💾 保存完了` 表示。
+- 設定モーダルは「Driveバックアップ用の設定」へ(URL保存のみ)。Pull/Push テストボタン削除。Drive タイムマシン(export/import)は不変。
+- **実用プリセット復元ボタン**と `restoreStandardPresets()` を削除(自動補完 `mergeTaskPresetsDeep` は維持)。
+- mobile.html / mobile.js / gas_sync_script.js / sw.js は未変更。
+
 ## [v1.9.19] - 2026-10-03
 ### Fixed & Hardened (Storage Quota Shield & Irreversible Single-Flow Sync Engine)
 - **LocalStorage Quota Shield & Carryover Rollback Elimination (ブラウザ容量パンク防止＆巻き戻し完全遮断)**:

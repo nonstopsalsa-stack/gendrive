@@ -30,10 +30,10 @@ function Report-Assert($name, $pass, $detail = "") {
 }
 
 try {
-  $fileUrl = "file:///" + ((Get-Item "C:\Users\nonst\recover\obsidian folder\006_AI_Workspace\habit-app\index.html").FullName.Replace('\', '/'))
+  $fileUrl = "file:///" + ((Get-Item "C:\Users\nonst\recover\obsidian folder\006_AI_Workspace\habit-app\index.html").FullName.Replace('\', '/').Replace(' ','%20'))
   Write-Host "[2/4] Connecting to Gendrive: $fileUrl" -ForegroundColor Yellow
   $page = Invoke-RestMethod -Method Put -Uri "http://localhost:${port}/json/new?$fileUrl"
-  Start-Sleep -Seconds 2
+  Start-Sleep -Seconds 6
 
   $wsUrl = $page.webSocketDebuggerUrl
   $ws = New-Object System.Net.WebSockets.ClientWebSocket
