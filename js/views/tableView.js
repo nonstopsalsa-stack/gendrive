@@ -996,16 +996,18 @@ function renderTableView() {
   const subtabAnalytics = document.getElementById('subtab-analytics');
   const subtabProfiles = document.getElementById('subtab-profiles');
 
-  // Recalculate stats safely
-  try {
-    if (Array.isArray(state.habits)) {
-      state.habits.forEach(h => {
-        try { recalculateHabitRates(h); } catch(err) {}
-      });
-    }
-  } catch(e) {}
-
   const curSubtab = state.masterSubtab || 'analytics';
+
+  // Recalculate stats only when analytics subtab is active to prevent UI freeze
+  if (curSubtab === 'analytics') {
+    try {
+      if (Array.isArray(state.habits)) {
+        state.habits.forEach(h => {
+          try { recalculateHabitRates(h); } catch(err) {}
+        });
+      }
+    } catch(e) {}
+  }
 
   // Toggle subviews
   if (habitsView) habitsView.classList.toggle('hidden', curSubtab !== 'habits');
@@ -2076,105 +2078,138 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // =========================================================================
 // 8. Analytics Scoreboard (Habits & Recurring Tasks Continuation Engine)
+// 決定論的ストリーク計算エンジン (Deterministic Streak Engine - Stateless)
 // =========================================================================
 
-function getHabitCurrentStreak(habit) {
-  if (!habit) return 0;
+function getHabitCompletedDatesSet(habit) {
+  const dates = new Set();
+  if (!habit) return dates;
 
-  const isDoneOnDate = (targetDateKey) => {
-    if (!targetDateKey) return false;
-    const targetNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(targetDateKey) : targetDateKey;
-
-    // 1. habit.history (オブジェクト形式)
-    if (habit.history && typeof habit.history === 'object' && !Array.isArray(habit.history)) {
-      const entry = habit.history[targetDateKey] || habit.history[targetNorm];
-      if (entry === true) return true;
-      if (typeof entry === 'object' && entry !== null) {
-        if (entry.done || (entry.count && entry.count > 0) || entry.status === 'completed') return true;
-      }
-      for (const k of Object.keys(habit.history)) {
-        const kNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(k) : k;
-        if (kNorm === targetNorm) {
-          const val = habit.history[k];
-          if (val === true) return true;
-          if (typeof val === 'object' && val !== null) {
-            if (val.done || (val.count && val.count > 0) || val.status === 'completed') return true;
-          }
-        }
-      }
-    }
-
-    // 2. habit.history (配列形式)
+  // 1. habit.history
+  if (habit.history && typeof habit.history === 'object') {
     if (Array.isArray(habit.history)) {
-      const found = habit.history.some(item => {
+      habit.history.forEach(item => {
         if (typeof item === 'string') {
-          const itemNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(item) : item;
-          return itemNorm === targetNorm;
-        }
-        if (typeof item === 'object' && item !== null) {
+          const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(item) : item;
+          if (norm) dates.add(norm.slice(0, 10));
+        } else if (item && typeof item === 'object') {
           const rawD = item.date || item.dateKey || item.completedAt;
-          const dNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
-          return dNorm === targetNorm && (item.done || item.count > 0 || item.status === 'completed');
+          const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
+          if (norm) dates.add(norm.slice(0, 10));
         }
-        return false;
       });
-      if (found) return true;
-    }
-
-    // 3. habit.executionLogs (実行タイムライン履歴)
-    if (Array.isArray(habit.executionLogs)) {
-      const foundLog = habit.executionLogs.some(log => {
-        const rawD = log.dateKey || log.date;
-        const dNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
-        if (dNorm === targetNorm) {
-          return log.status === 'completed' || (log.count && log.count > 0) || !log.status;
-        }
-        if (log.completedAt) {
-          const compNorm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(log.completedAt) : null;
-          if (compNorm === targetNorm) {
-            return log.status === 'completed' || (log.count && log.count > 0) || !log.status;
+    } else {
+      const targetTimes = (typeof getHabitTargetTimes === 'function') ? getHabitTargetTimes(habit) : (habit.targetTimes || 1);
+      Object.keys(habit.history).forEach(k => {
+        const entry = habit.history[k];
+        if (entry === true) {
+          const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(k) : k;
+          if (norm) dates.add(norm.slice(0, 10));
+        } else if (entry && typeof entry === 'object') {
+          const isDone = Boolean(entry.done || (typeof entry.count === 'number' && entry.count >= targetTimes && targetTimes > 0) || (entry.durationMin && entry.durationMin > 0));
+          if (isDone) {
+            const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(k) : k;
+            if (norm) dates.add(norm.slice(0, 10));
           }
         }
-        return false;
       });
-      if (foundLog) return true;
     }
+  }
 
-    return false;
-  };
+  // 2. habit.executionLogs
+  if (Array.isArray(habit.executionLogs)) {
+    habit.executionLogs.forEach(log => {
+      if (!log || log.status === 'cancelled') return;
+      const rawD = log.dateKey || log.date || log.completedAt;
+      if (rawD) {
+        const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
+        if (norm) dates.add(norm.slice(0, 10));
+      }
+    });
+  }
 
+  return dates;
+}
+
+function getTaskCompletedDatesSet(task) {
+  const dates = new Set();
+  if (!task) return dates;
+
+  // 1. task.history
+  if (task.history && typeof task.history === 'object') {
+    if (Array.isArray(task.history)) {
+      task.history.forEach(item => {
+        if (typeof item === 'string') {
+          const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(item) : item;
+          if (norm) dates.add(norm.slice(0, 10));
+        } else if (item && typeof item === 'object') {
+          const rawD = item.date || item.dateKey || item.completedAt;
+          const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
+          if (norm) dates.add(norm.slice(0, 10));
+        }
+      });
+    } else {
+      Object.keys(task.history).forEach(k => {
+        const entry = task.history[k];
+        if (entry === true || (entry && typeof entry === 'object' && (entry.done || entry.status === 'completed' || (entry.durationMin && entry.durationMin > 0)))) {
+          const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(k) : k;
+          if (norm) dates.add(norm.slice(0, 10));
+        }
+      });
+    }
+  }
+
+  // 2. task.executionLogs
+  if (Array.isArray(task.executionLogs)) {
+    task.executionLogs.forEach(log => {
+      if (!log || log.status === 'cancelled') return;
+      const rawD = log.dateKey || log.date || log.completedAt;
+      if (rawD) {
+        const norm = typeof normalizeToLocalDateKey === 'function' ? normalizeToLocalDateKey(rawD) : rawD;
+        if (norm) dates.add(norm.slice(0, 10));
+      }
+    });
+  }
+
+  return dates;
+}
+
+function calculateDeterministicStreak(completedDatesSet, item, isScheduledFn) {
+  if (!completedDatesSet || completedDatesSet.size === 0) return 0;
+
+  const now = new Date();
   let streak = 0;
-  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : (typeof getDateKeyOffset === 'function' ? getDateKeyOffset(0) : '2026-08-27');
-  const isTodayDone = isDoneOnDate(todayKey);
-
-  let startOffset = isTodayDone ? 0 : 1;
   let graceUsed = 0;
   const maxGrace = 1; // 1日猶予 (同期ラグ・日付フリーズ・単日記録漏れによる即時0日化を永久防止)
 
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const isTodayDone = completedDatesSet.has(todayKey);
+  const startOffset = isTodayDone ? 0 : 1;
+
   for (let i = startOffset; i < 365; i++) {
-    const key = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : todayKey;
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${day}`;
 
-    // スケジュール対象日チェック（平日限定ハビットが土日や月曜朝に0日になる不具合を完全防止）
-    const isScheduled = typeof isHabitScheduledForDate === 'function'
-      ? isHabitScheduledForDate(habit, d)
-      : true;
+    const isDone = completedDatesSet.has(key);
+    const isScheduled = typeof isScheduledFn === 'function' ? isScheduledFn(item, d) : true;
 
-    if (!isScheduled) {
-      // スケジュール対象外の日はストリークを壊さずに安全にスキップ
-      continue;
-    }
-
-    if (isDoneOnDate(key)) {
+    if (isDone) {
       streak++;
+    } else if (!isScheduled) {
+      // 確定ルール2: 非スケジュール日の保護 (平日限定タスク等の土日)
+      continue;
     } else {
       // スケジュール日なのに未完了の場合:
       // すでにストリークがあり、かつ1日前が完了していれば1日猶予を適用
       if (streak > 0 && graceUsed < maxGrace) {
-        const prevKey = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i + 1) : null;
-        if (prevKey && isDoneOnDate(prevKey)) {
+        const prevD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (i + 1));
+        const prevKey = `${prevD.getFullYear()}-${String(prevD.getMonth() + 1).padStart(2, '0')}-${String(prevD.getDate()).padStart(2, '0')}`;
+        if (completedDatesSet.has(prevKey)) {
           graceUsed++;
+          streak++; // 猶予日も継続日数スパンとして加算
           continue;
         }
       }
@@ -2183,6 +2218,12 @@ function getHabitCurrentStreak(habit) {
   }
 
   return streak;
+}
+
+function getHabitCurrentStreak(habit) {
+  if (!habit) return 0;
+  const dates = getHabitCompletedDatesSet(habit);
+  return calculateDeterministicStreak(dates, habit, typeof isHabitScheduledForDate === 'function' ? isHabitScheduledForDate : null);
 }
 
 function isTaskDoneOnDate(task, dateKey) {
@@ -2245,47 +2286,23 @@ function isTaskDoneOnDate(task, dateKey) {
 
 function getTaskCurrentStreak(task) {
   if (!task) return 0;
+  const dates = getTaskCompletedDatesSet(task);
+  const streak = calculateDeterministicStreak(dates, task, typeof isTaskScheduledForDate === 'function' ? isTaskScheduledForDate : null);
 
-  let streak = 0;
-  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : (typeof getDateKeyOffset === 'function' ? getDateKeyOffset(0) : '2026-08-27');
-  const isTodayDone = isTaskDoneOnDate(task, todayKey);
-
-  let startOffset = isTodayDone ? 0 : 1;
-  let graceUsed = 0;
-  const maxGrace = 1;
-
-  for (let i = startOffset; i < 365; i++) {
-    const key = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : todayKey;
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-
-    const isScheduled = typeof isTaskScheduledForDate === 'function'
-      ? isTaskScheduledForDate(task, d)
-      : true;
-
-    if (!isScheduled) {
-      continue;
-    }
-
-    if (isTaskDoneOnDate(task, key)) {
-      streak++;
-    } else {
-      if (streak > 0 && graceUsed < maxGrace) {
-        const prevKey = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i + 1) : null;
-        if (prevKey && isTaskDoneOnDate(task, prevKey)) {
-          graceUsed++;
-          continue;
-        }
-      }
-      break;
-    }
-  }
-
-  if (streak === 0 && task.status === 'completed' && (!task.history || (Array.isArray(task.history) && task.history.length === 0))) {
+  if (streak === 0 && task.status === 'completed' && dates.size === 0) {
     return 1;
   }
 
   return streak;
+}
+
+// グローバル公開
+if (typeof window !== 'undefined') {
+  window.getHabitCurrentStreak = getHabitCurrentStreak;
+  window.getTaskCurrentStreak = getTaskCurrentStreak;
+  window.calculateDeterministicStreak = calculateDeterministicStreak;
+  window.getHabitCompletedDatesSet = getHabitCompletedDatesSet;
+  window.getTaskCompletedDatesSet = getTaskCompletedDatesSet;
 }
 
 function getTaskPeriodRate(task, days) {

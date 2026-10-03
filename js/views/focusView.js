@@ -638,17 +638,134 @@ const SOUL_QUOTES = [
   "Get Busy Living or Get Busy Dying\n自らの尊厳と希望を手放すな\n毎日スプーン1杯の砂を掻き出せ\n人生の舵をお前の手に取り戻せ"
 ];
 
+// =========================================================================
+// Soul Quotes Storage & Dynamic Loading Engine
+// =========================================================================
+
+const SOUL_QUOTES_STORAGE_KEY = 'gendrive_custom_soul_quotes_v1';
+const OBSIDIAN_QUOTES_PATH = 'リスト/鼓舞フレーズ集.md';
+
 let currentSoulQuote = '';
 
-function pickNextSoulQuote() {
-  if (!SOUL_QUOTES || SOUL_QUOTES.length === 0) return '';
-  let nextIdx = Math.floor(Math.random() * SOUL_QUOTES.length);
-  if (SOUL_QUOTES.length > 1 && SOUL_QUOTES[nextIdx] === currentSoulQuote) {
-    nextIdx = (nextIdx + 1) % SOUL_QUOTES.length;
+function getActiveSoulQuotes() {
+  try {
+    const raw = localStorage.getItem(SOUL_QUOTES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('[SoulQuotes] Failed to load custom quotes:', e);
   }
-  currentSoulQuote = SOUL_QUOTES[nextIdx];
+  return SOUL_QUOTES;
+}
+
+function pickNextSoulQuote() {
+  const quotes = getActiveSoulQuotes();
+  if (!quotes || quotes.length === 0) return '';
+  let nextIdx = Math.floor(Math.random() * quotes.length);
+  if (quotes.length > 1 && quotes[nextIdx] === currentSoulQuote) {
+    nextIdx = (nextIdx + 1) % quotes.length;
+  }
+  currentSoulQuote = quotes[nextIdx];
+  if (typeof state !== 'undefined' && state) {
+    state.currentSoulQuote = currentSoulQuote;
+  }
   return currentSoulQuote;
 }
+
+function openSoulQuotesInObsidian(e) {
+  if (e) e.stopPropagation();
+  if (typeof openObsidianLink === 'function') {
+    openObsidianLink(OBSIDIAN_QUOTES_PATH, e);
+  } else {
+    const cleanPath = OBSIDIAN_QUOTES_PATH.replace(/\.md$/i, '');
+    window.open(`obsidian://open?vault=obsidian%20folder&file=${encodeURIComponent(cleanPath)}`, '_blank');
+  }
+}
+
+function parseSoulQuotesMarkdown(mdText) {
+  const lines = mdText.split(/\r?\n/);
+  const quotes = [];
+  let currentMultiLine = [];
+
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if (/^[-*]\s+/.test(trimmed)) {
+      if (currentMultiLine.length > 0) {
+        quotes.push(currentMultiLine.join('\n').trim());
+        currentMultiLine = [];
+      }
+      currentMultiLine.push(trimmed.replace(/^[-*]\s+/, ''));
+    } else if (trimmed.startsWith('#') || trimmed === '') {
+      if (currentMultiLine.length > 0) {
+        quotes.push(currentMultiLine.join('\n').trim());
+        currentMultiLine = [];
+      }
+    } else if (currentMultiLine.length > 0) {
+      currentMultiLine.push(trimmed);
+    }
+  });
+
+  if (currentMultiLine.length > 0) {
+    quotes.push(currentMultiLine.join('\n').trim());
+  }
+
+  return quotes.filter(q => q.length > 0);
+}
+
+function exportSoulQuotesToMarkdown(e) {
+  if (e) e.stopPropagation();
+  const quotes = getActiveSoulQuotes();
+  let content = '# 鼓舞フレーズ集 (Soul Quotes)\n\n';
+  content += '> フォーカスボードにランダム表示される鼓舞フレーズ集です。\n';
+  content += '> 行頭が「- 」で始まる行を1つのフレーズとしてGendriveが読み込みます。\n\n';
+  content += quotes.map(q => `- ${q}`).join('\n');
+
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '鼓舞フレーズ集.md';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importSoulQuotesFromMarkdownFile(file) {
+  const fileInput = document.getElementById('input-soul-quote-file');
+  if (fileInput) fileInput.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const quotes = parseSoulQuotesMarkdown(text);
+    if (quotes.length === 0) {
+      alert('有効な箇条書きフレーズ（- で始まる行）が見つかりませんでした。');
+      return;
+    }
+    localStorage.setItem(SOUL_QUOTES_STORAGE_KEY, JSON.stringify(quotes));
+    alert(`Obsidianノートから ${quotes.length} 件の鼓舞フレーズを取り込みました！`);
+    pickNextSoulQuote();
+    if (typeof renderFocusView === 'function') {
+      renderFocusView();
+    } else if (typeof renderSoulQuoteBanner === 'function') {
+      renderSoulQuoteBanner();
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Global scope export
+window.getActiveSoulQuotes = getActiveSoulQuotes;
+window.pickNextSoulQuote = pickNextSoulQuote;
+window.openSoulQuotesInObsidian = openSoulQuotesInObsidian;
+window.exportSoulQuotesToMarkdown = exportSoulQuotesToMarkdown;
+window.importSoulQuotesFromMarkdownFile = importSoulQuotesFromMarkdownFile;
+
 
 // =========================================================================
 // 1. Task Priority Weight Scoring Engine (User Specified Hierarchy)
@@ -849,15 +966,27 @@ function renderFocusView(forceResample = false) {
 function renderSoulQuoteBanner() {
   const quoteContainer = document.getElementById('focus-soul-quote-container');
   const quoteTextEl = document.getElementById('focus-soul-quote-text');
-  if (quoteContainer && quoteTextEl) {
-    if (!currentSoulQuote) {
-      pickNextSoulQuote();
-    }
-    quoteTextEl.style.whiteSpace = 'pre-line';
-    quoteTextEl.textContent = currentSoulQuote;
-    quoteContainer.style.display = 'flex';
+  if (!quoteContainer || !quoteTextEl) return;
+
+  const currentQuote = currentSoulQuote || (typeof state !== 'undefined' && state.currentSoulQuote) || pickNextSoulQuote();
+  quoteTextEl.style.whiteSpace = 'pre-line';
+  quoteTextEl.textContent = currentQuote;
+  quoteContainer.style.display = 'flex';
+
+  if (!document.getElementById('soul-quote-action-wrap')) {
+    const actionWrap = document.createElement('div');
+    actionWrap.id = 'soul-quote-action-wrap';
+    actionWrap.className = 'soul-quote-action-wrap';
+    actionWrap.innerHTML = `
+      <button type="button" class="btn-quote-op" title="現在の全フレーズを .md ファイルとして書き出し (Obsidian保管・バックアップ用)" onclick="exportSoulQuotesToMarkdown(event)">📥</button>
+      <button type="button" class="btn-quote-op" title="Obsidianでノートを開く [リスト/鼓舞フレーズ集.md]" onclick="openSoulQuotesInObsidian(event)">📝</button>
+      <button type="button" class="btn-quote-op" title="Obsidianで編集した .md ファイルを選択して取り込み" onclick="event.stopPropagation(); document.getElementById('input-soul-quote-file').click();">🔄</button>
+      <input type="file" id="input-soul-quote-file" accept=".md,.markdown,.txt" style="display: none;" onchange="importSoulQuotesFromMarkdownFile(this.files[0])" />
+    `;
+    quoteContainer.appendChild(actionWrap);
   }
 }
+window.renderSoulQuoteBanner = renderSoulQuoteBanner;
 
 // =========================================================================
 // 4. Render Single Focus Card

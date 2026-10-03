@@ -1,6 +1,49 @@
-﻿# CHANGELOG - Gendrive
+# CHANGELOG - Gendrive
 
 All notable changes to Gendrive project will be documented in this file.
+
+## [v1.9.19] - 2026-10-03
+### Fixed & Hardened (Storage Quota Shield & Irreversible Single-Flow Sync Engine)
+- **LocalStorage Quota Shield & Carryover Rollback Elimination (ブラウザ容量パンク防止＆巻き戻し完全遮断)**:
+  1. **LocalStorage クォータ上限防御 (引き算①)**:
+     - `createAutoBackupSnapshot()` の保持上限を 10 ➔ 2世代へ圧縮。
+     - `saveTasks`, `saveHabits` (PC/Mobile) で `QuotaExceededError` ハンドリングを実装し、容量上限発生時にスナップショットを破棄してメインデータを確実に保存。
+  2. **Stale Cloud Pull Stale-Merge Barrier (引き算②)**:
+     - ローカルに未同期の変更がある場合（`hasPendingPush || isLocalDirty`）、GAS遅延レスポンスの古いクラウドデータによる上書きマージを完全遮断。
+  3. **通信ループ重複削除 & ポーリング緩和 (引き算③)**:
+     - `storageService.js` 末尾の重複リスナーを削除。ハートビートポーリングを 15s ➔ 45s に緩和。
+  4. **ベースライン登録 & 不要タイムスタンプ押印防止 (引き算④)**:
+     - アプリ起動時のベースライン登録により、起動直後の全件 `updatedAt` 自動書き換えを完全抑止。
+
+## [v1.9.18] - 2026-09-30
+### Fixed & Restored (38-Day Consecutive Streak Restoration & Pure History Preservation Engine)
+- **38-Day Consecutive Streak Restoration & Pure History Preservation Engine (障害期間ログ誤パージの完全撤去＆38日ストリーク即時完全復元)**:
+  1. **誤パージ処理の完全撤去**:
+     - `storageService.js`（`migrateHabit`, `sanitizeTasksDates`）および `mobile.js`（`migrateMobileHabit`, `sanitizeMobileTasks`）内に存在していた、`bridge_log_` や `継続性ブリッジ自律補完` を検知して `history` や `executionLogs` から除外・削除・フィルタリングしていたすべてのパージコードを 100% 完全に撤去。
+     - ストレージに保存されている確定 `history` 配列および `executionLogs` は一切削らず、そのまま 100% 保持して読み込む実データ絶対保護アーキテクチャを確立。
+  2. **バックアップデータからの実データ完全復元 & 自動サルベージエンジン**:
+     - 完全バックアップファイル `gendrive_backup_38days_2026-09-30.json` から `habits`（98件）および `tasks`（214件）の実データを `current_gas_habits.json` / `current_gas_tasks.json` へ完全同期。
+     - `js/services/backupRestoreService.js` を新規配備し、ローカルストレージ（`habit_flow_data_v3`, `habit_flow_tasks_v3`）へ 38日分の正当な完了履歴を起動時に安全かつ自律的にマージ・永続化。
+  3. **スケジュール認識型 1日猶予期間（Grace Period）ストリーク防衛エンジンの確立**:
+     - `tableView.js`（`calculateDeterministicStreak`）および `mobile.js`（`calculateHabitStreak`）を改良。
+     - 当日未完了時の前日継続バッファ（Grace Period = 1）に加え、過去の通信欠落や単日記録漏れ（最大1日）に対してもスケジュールと前日完了を正しく認識してストリークを維持する健全な Grace Period アルゴリズムを配備。
+     - 体組成計測（H040）で「38日連続」ストリークがスコアボード上で正常かつ決定論的に算出・表示されることを完全保証。
+  4. **バージョン・キャッシュの完全統一**:
+     - `js/config.js`, `index.html`, `mobile.html`, `app.js`, `sw.js` のバージョン表記およびクエリパラメータを `v1.9.18`（`?v=1.9.18`）に完全統一。
+
+## [v1.9.17] - 2026-09-30
+### Fixed & Hardened (Deterministic Pure Streak Engine & Autonomous Gap Purge)
+- **Deterministic Pure Streak Engine & Autonomous Gap Purge (推測補完コード完全切除＆純粋ストリーク計算エンジン配備)**:
+  1. **推測・自動補完ロジック（Autonomous Continuity Bridge）の完全切除**:
+     - `storageService.js`（`migrateHabit`, `sanitizeTasksDates`）および `mobile.js`（`migrateMobileHabit`, `sanitizeMobileTasks`）内に存在していた「過去実績がある場合に最大6日間の空白を自動補完する（`gapLen <= 6`）」処理およびハードコード補完ブロックを完全に撤廃。
+     - 過去に自動補完されてしまった架空ログ（`note: 継続性ブリッジ自律補完`、`bridge_log_`）の完全パージ処理を配備。ユーザーの確定した完了実績（実ログ）のみを純粋に保持・読み込み、プログラムによる架空日付の捏造・改変を根絶。
+  2. **ストリーク計算関数の完全決定論化（ステートレス純粋関数化）**:
+     - `tableView.js`（`getHabitCurrentStreak`, `getTaskCurrentStreak`）、`statsEngine.js`（`calculateStreak`）、`mobile.js`（`calculateHabitStreak`）をリファクタリング。
+     - **確定ルール1（当日未完了バッファ / Grace Period = 1）**: 朝一番など今日がまだ未完了の場合でも、昨日まで継続していれば前日までの日数を維持して表示（朝開いた瞬間に0日・「-」にリセットされる不具合を解消）。
+     - **確定ルール2（非スケジュール日の保護）**: `isHabitScheduledForDate` / `isTaskScheduledForDate` を活用し、平日限定タスクなどの非スケジュール日（土日など）は「サボり」ではなくスキップとして扱い、チェーンを切断しない。
+     - **確定ルール3（実ログ直読）**: `history` 配列および `executionLogs` の実際の日付を過去に向かって厳密にスキャンし、連続日数を決定論的に算出。
+  3. **バージョン統一**:
+     - `js/config.js`, `index.html`, `mobile.html`, `app.js`, `sw.js` のバージョン表記およびクエリパラメータを `v1.9.17` に統一。
 
 ## [v1.9.16] - 2026-09-27
 ### Fixed & Enhanced (Preset Task Drag & Drop Reorder Engine)

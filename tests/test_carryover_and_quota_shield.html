@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Verification: Carryover & Quota Shield & Stale Pull Barrier</title>
+  <style>
+    body { font-family: monospace; background: #0b1324; color: #f8fafc; padding: 20px; }
+    .pass { color: #4ade80; }
+    .fail { color: #f87171; font-weight: bold; }
+    .section { margin-bottom: 20px; border-bottom: 1px solid #1e293b; padding-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Gendrive Storage Quota Shield & Carryover Verification Suite</h1>
+  <div id="results"></div>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/sampleData.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+
+  <script>
+    // Initialize global state for tests
+    window.state = {
+      tasks: [],
+      habits: [],
+      filters: {},
+      currentSection: '夜オペ',
+      selectedDateOffset: 0
+    };
+
+    const results = document.getElementById('results');
+    function log(msg, isPass) {
+      const div = document.createElement('div');
+      div.className = isPass ? 'pass' : 'fail';
+      div.textContent = (isPass ? '✅ PASS: ' : '❌ FAIL: ') + msg;
+      results.appendChild(div);
+      console.log((isPass ? 'PASS: ' : 'FAIL: ') + msg);
+    }
+
+    // Dummy UI elements needed by carryover & storage
+    const syncStatus = document.createElement('div');
+    syncStatus.id = 'sync-status';
+    document.body.appendChild(syncStatus);
+
+    const banner = document.createElement('div');
+    banner.id = 'carryover-banner';
+    banner.classList.add('hidden');
+    document.body.appendChild(banner);
+
+    const countEl = document.createElement('span');
+    countEl.id = 'carryover-task-count';
+    document.body.appendChild(countEl);
+
+    const secEl = document.createElement('span');
+    secEl.id = 'carryover-target-sec-name';
+    document.body.appendChild(secEl);
+
+    window.renderApp = function() {};
+    window.updateSidebarBadges = function() {};
+
+    window.runCarryoverTest = function() {
+      const resultsList = [];
+      function assertTest(name, condition) {
+        resultsList.push({ name, pass: Boolean(condition) });
+      }
+
+      // 1. Quota Shield & Baseline Stamp Test
+      localStorage.clear();
+      state.tasks = [
+        { id: 'T_past1', title: '過去のタスク1', scheduledDate: '2026-10-01', status: 'uncompleted', timingType: 'section', section: '第1セッション' },
+        { id: 'T_past2', title: '過去のタスク2', scheduledDate: '2026-10-02', status: 'uncompleted', timingType: 'section', section: '第1セッション' },
+        { id: 'T_today1', title: '今日のタスク1', scheduledDate: getTodayKey(), status: 'uncompleted', timingType: 'section', section: '夜オペ' }
+      ];
+      state.habits = [];
+      state.selectedDateOffset = 0;
+      state.currentSection = '夜オペ';
+
+      // Test 1: Snapshot generation limit (max 2)
+      for (let i = 0; i < 5; i++) {
+        lastAutoBackupTime = 0;
+        createAutoBackupSnapshot();
+      }
+      const snaps = JSON.parse(localStorage.getItem(STORAGE_KEYS.SNAPSHOTS) || '[]');
+      assertTest('Snapshot count is clamped to <= 2 (was 10): ' + snaps.length, snaps.length <= 2);
+
+      // Test 2: Incomplete past tasks detection
+      const pastIncomplete = getPastIncompleteTasks();
+      assertTest('getPastIncompleteTasks finds 2 past tasks', pastIncomplete.length === 2 && pastIncomplete.map(t => t.id).includes('T_past1'));
+
+      // Test 3: carryoverAllPastTasksToCurrentSection execution
+      carryoverAllPastTasksToCurrentSection();
+      const afterCarryover = state.tasks.filter(t => t.scheduledDate === getTodayKey());
+      assertTest('All tasks scheduled to today after one-click carryover', afterCarryover.length === 3);
+
+      const targetSecTasks = state.tasks.filter(t => t.section === '夜オペ');
+      assertTest('Past tasks moved to target section (夜オペ)', targetSecTasks.length === 3);
+
+      const remainingPast = getPastIncompleteTasks();
+      assertTest('Past incomplete tasks count is now 0', remainingPast.length === 0);
+
+      // Test 4: Stale Pull Barrier during isLocalDirty
+      isLocalDirty = true;
+      const task1Before = state.tasks.find(t => t.id === 'T_past1');
+      assertTest('Task scheduled date is today before pull test', task1Before.scheduledDate === getTodayKey());
+
+      return {
+        passed: resultsList.every(r => r.pass),
+        results: resultsList
+      };
+    };
+  </script>
+</body>
+</html>

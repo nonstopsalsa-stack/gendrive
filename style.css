@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Habit Flow - Design System & Modern Aesthetics
    ========================================================================== */
 
@@ -2039,21 +2039,48 @@ body {
   box-shadow: 0 4px 12px rgba(14, 165, 233, 0.5);
 }
 
-.modal-close {
+.modal-close,
+.btn-modal-close {
   background: transparent;
   border: none;
-  color: var(--text-dim);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
+  outline: none;
+  color: var(--text-dim, #94a3b8);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: var(--transition-fast);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+  user-select: none;
+  -webkit-appearance: none;
 }
 
-.modal-close:hover {
-  color: var(--text-main);
+.modal-close:hover,
+.btn-modal-close:hover {
+  background-color: #c42b1c;
+  color: #ffffff;
+}
+
+.modal-close:active,
+.btn-modal-close:active {
+  background-color: #a82315;
+  color: #ffffff;
+  transform: scale(0.95);
+}
+
+.modal-close svg,
+.btn-modal-close svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  pointer-events: none;
 }
 
 .modal-body {
@@ -11386,6 +11413,41 @@ body[data-mode="focus"] .focus-board-layout {
   word-break: break-word;
 }
 
+.soul-quote-action-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 14px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.btn-quote-op {
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.45;
+  font-size: 15px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: opacity 0.2s ease, transform 0.15s ease, background 0.2s ease;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.btn-quote-op:hover {
+  opacity: 1;
+  transform: scale(1.15);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-quote-op:active {
+  transform: scale(0.92);
+}
+
 @media (max-width: 768px) {
   .focus-soul-quote-container {
     margin-top: 30px;
@@ -11394,6 +11456,14 @@ body[data-mode="focus"] .focus-board-layout {
   .soul-quote-text {
     font-size: 20px;
     line-height: 1.55;
+  }
+  .soul-quote-action-wrap {
+    margin-left: 8px;
+    gap: 4px;
+  }
+  .btn-quote-op {
+    font-size: 13px;
+    padding: 3px 4px;
   }
 }
 

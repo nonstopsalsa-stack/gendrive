@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gendrive - Modal Management & Form Handler Service
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -197,17 +197,19 @@ function clearAllTagFilters() {
 // =========================================================================
 
 function promptCompleteHabit(id, event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
+  const ev = event || (typeof window !== 'undefined' ? window.event : null);
+  if (ev) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    if (typeof ev.preventDefault === 'function') ev.preventDefault();
   }
   completeHabit(id);
 }
 
 function promptCompleteTask(taskId, event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
+  const ev = event || (typeof window !== 'undefined' ? window.event : null);
+  if (ev) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    if (typeof ev.preventDefault === 'function') ev.preventDefault();
   }
   completeTask(taskId);
 }
@@ -675,7 +677,9 @@ function openEditModal(habitId) {
         const dayNum = parseInt(dk.split('-')[2], 10);
         
         let isDone = false;
-        if (habit.history && typeof habit.history === 'object') {
+        if (Array.isArray(habit.history)) {
+          isDone = habit.history.includes(dk);
+        } else if (habit.history && typeof habit.history === 'object') {
           const entry = habit.history[dk];
           if (entry === true || (entry && (entry.done || entry.count > 0 || entry.status === 'completed'))) {
             isDone = true;

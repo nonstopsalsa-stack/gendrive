@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Multi Habit Lifecycle Test</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="mode-section">
+  <!-- Minimal DOM for Gendrive rendering -->
+  <div id="app-version-badge"></div>
+  <div id="current-time-display"></div>
+  <div id="current-section-name"></div>
+  <div id="section-title"></div>
+  <div id="section-desc"></div>
+  <div id="section-progress-bar"></div>
+  <div id="section-habit-progress"></div>
+  <div id="count-section-habits"></div>
+  <div id="section-task-progress"></div>
+  <div id="count-section-tasks"></div>
+  <div id="anytime-task-list"></div>
+  <div id="anytime-task-count"></div>
+  <div id="anytime-daily-list"></div>
+  <div id="anytime-daily-count"></div>
+  <div id="section-task-list"></div>
+  <div id="section-habit-list"></div>
+  <div id="toast-container"></div>
+
+  <!-- Dependencies -->
+  <script src="../js/config.js"></script>
+  <script src="../js/services/profileMasterService.js"></script>
+  <script src="../js/sampleData.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+  <script src="../js/engine/statsEngine.js"></script>
+  <script src="../js/engine/matrixEngine.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+  <script src="../js/engine/keyboardShortcuts.js"></script>
+  <script src="../js/services/undoService.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/services/resumeNoteService.js"></script>
+  <script src="../js/services/taskCloneHelper.js"></script>
+  <script src="../js/services/taskTimerService.js"></script>
+  <script src="../js/components/cardRenderers.js"></script>
+  <script src="../js/components/modalService.js"></script>
+  <script src="../js/components/taskPresetsService.js"></script>
+  <script src="../js/components/dragAndDropService.js"></script>
+  <script src="../js/views/calendarView.js"></script>
+  <script src="../js/views/sectionView.js"></script>
+  <script src="../js/views/focusView.js"></script>
+  <script src="../js/views/allView.js"></script>
+  <script src="../js/views/tableView.js"></script>
+  <script src="../js/views/bucketView.js"></script>
+  <script src="../js/views/goalsView.js"></script>
+  <script src="../js/views/timerView.js"></script>
+  <script src="../app.js"></script>
+
+  <script>
+    // Stub out non-essential app functions to isolate Section View & Habit Lifecycle
+    window.updateFilterPillsUI = function() {};
+    window.updateSidebarBadges = function() {};
+    window.renderSidebarCalendar = function() {};
+    window.updateCarryoverBanner = function() {};
+    window.updateHeaderAndStatus = function() {};
+    window.saveHabits = function() {}; // prevent polluting localStorage during test
+
+    window.__TEST_RESULTS__ = [];
+
+    function assert(name, condition, detail = "") {
+      const pass = Boolean(condition);
+      window.__TEST_RESULTS__.push({ name, pass, detail });
+      console.log((pass ? "✓ PASS: " : "✗ FAIL: ") + name + (detail ? " - " + detail : ""));
+    }
+
+    window.runLifecycleTest = function() {
+      const todayKey = getSelectedDateKey();
+
+      // 1. Setup multi-count habits
+      const habit2Times = {
+        id: 'h_test_coffee_2',
+        name: 'コーヒー休憩',
+        status: 'uncompleted',
+        timingType: 'anytime',
+        targetMin: 10,
+        sortOrder: 1,
+        dailyTimes: 2,
+        recurrence: { type: 'everyday', targetTimes: 2 },
+        history: [],
+        executionLogs: []
+      };
+
+      const habit3Times = {
+        id: 'h_test_water_3',
+        name: '水分補給',
+        status: 'uncompleted',
+        timingType: 'anytime',
+        targetMin: 5,
+        sortOrder: 2,
+        dailyTimes: 3,
+        recurrence: { type: 'everyday', targetTimes: 3 },
+        history: [],
+        executionLogs: []
+      };
+
+      state.habits = [habit2Times, habit3Times];
+      state.tasks = [];
+      state.currentMode = 'section';
+      state.selectedDateOffset = 0;
+      renderApp();
+
+      // -------------------------------------------------------------
+      // Test A: 2-times Habit Lifecycle (コーヒー休憩)
+      // -------------------------------------------------------------
+      console.log("=== Testing 2-Times Habit Lifecycle ===");
+
+      // Initial state check
+      let cardEl = document.querySelector('.habit-card[data-id="h_test_coffee_2"]');
+      assert("A1. Initial Card exists", Boolean(cardEl));
+      assert("A2. Initial Day Count is 0", getHabitDayCount(habit2Times, todayKey) === 0);
+      assert("A3. Initial Button is Start", cardEl ? cardEl.querySelector('.btn-habit-action.start') !== null : false);
+
+      // 1st Start
+      startHabit('h_test_coffee_2');
+      cardEl = document.querySelector('.habit-card[data-id="h_test_coffee_2"]');
+      assert("A4. After 1st Start: Card has .in-progress", cardEl ? cardEl.classList.contains('in-progress') : false);
+      const actionBtn1 = cardEl ? cardEl.querySelector('.btn-habit-action.done') : null;
+      assert("A5. After 1st Start: Button is Done", Boolean(actionBtn1));
+
+      // 1st Complete
+      completeHabit('h_test_coffee_2');
+      cardEl = document.querySelector('.habit-card[data-id="h_test_coffee_2"]');
+      const countAfter1st = getHabitDayCount(habit2Times, todayKey);
+      assert("A6. After 1st Complete: getHabitDayCount returns 1", countAfter1st === 1, `Got: ${countAfter1st}`);
+      assert("A7. After 1st Complete: Card .in-progress is REMOVED", cardEl ? !cardEl.classList.contains('in-progress') : false);
+      
+      const pillAfter1st = cardEl ? cardEl.querySelector('.tc-status-pill') : null;
+      assert("A8. After 1st Complete: Pill is wait (⏳ 待機中)", pillAfter1st ? pillAfter1st.textContent.includes('待機中') : false, `Pill text: ${pillAfter1st ? pillAfter1st.textContent : 'null'}`);
+
+      const actionBtnAfter1st = cardEl ? cardEl.querySelector('.btn-habit-action') : null;
+      assert("A9. After 1st Complete: Button returned to ▶ 開始", actionBtnAfter1st ? actionBtnAfter1st.classList.contains('start') && actionBtnAfter1st.textContent.includes('開始') : false);
+
+      const badgeAfter1st = cardEl ? cardEl.querySelector('.badge-daily-times') : null;
+      assert("A10. After 1st Complete: Badge shows 1/2回", badgeAfter1st ? badgeAfter1st.textContent.includes('1/2回') : false, `Badge text: ${badgeAfter1st ? badgeAfter1st.textContent : 'null'}`);
+
+      assert("A11. After 1st Complete: activeHabitId is null", state.activeHabitId === null);
+      assert("A12. After 1st Complete: habit status is uncompleted", habit2Times.status === 'uncompleted');
+
+      // 2nd Start
+      startHabit('h_test_coffee_2');
+      cardEl = document.querySelector('.habit-card[data-id="h_test_coffee_2"]');
+      assert("A13. After 2nd Start: Card has .in-progress", cardEl ? cardEl.classList.contains('in-progress') : false);
+
+      // 2nd Complete
+      completeHabit('h_test_coffee_2');
+      const countAfter2nd = getHabitDayCount(habit2Times, todayKey);
+      assert("A14. After 2nd Complete: getHabitDayCount returns 2", countAfter2nd === 2, `Got: ${countAfter2nd}`);
+      assert("A15. After 2nd Complete: habit status is completed", habit2Times.status === 'completed');
+      assert("A16. After 2nd Complete: habit.history includes todayKey", habit2Times.history.includes(todayKey));
+
+      // -------------------------------------------------------------
+      // Test B: 3-times Habit Lifecycle (水分補給)
+      // -------------------------------------------------------------
+      console.log("=== Testing 3-Times Habit Lifecycle ===");
+      let waterCard = document.querySelector('.habit-card[data-id="h_test_water_3"]');
+      assert("B1. Water Card exists", Boolean(waterCard));
+      assert("B2. Water Initial Count is 0", getHabitDayCount(habit3Times, todayKey) === 0);
+
+      // 1st Start & Complete
+      startHabit('h_test_water_3');
+      completeHabit('h_test_water_3');
+      waterCard = document.querySelector('.habit-card[data-id="h_test_water_3"]');
+      const waterCount1 = getHabitDayCount(habit3Times, todayKey);
+      assert("B3. Water 1st Complete: Count is 1", waterCount1 === 1, `Got: ${waterCount1}`);
+      assert("B4. Water 1st Complete: Card is wait mode (not in-progress)", waterCard ? !waterCard.classList.contains('in-progress') : false);
+      let waterBtn = waterCard ? waterCard.querySelector('.btn-habit-action') : null;
+      assert("B5. Water 1st Complete: Button is Start", waterBtn ? waterBtn.classList.contains('start') : false);
+      let waterBadge = waterCard ? waterCard.querySelector('.badge-daily-times') : null;
+      assert("B6. Water 1st Complete: Badge is 1/3回", waterBadge ? waterBadge.textContent.includes('1/3回') : false);
+
+      // 2nd Start & Complete
+      startHabit('h_test_water_3');
+      completeHabit('h_test_water_3');
+      waterCard = document.querySelector('.habit-card[data-id="h_test_water_3"]');
+      const waterCount2 = getHabitDayCount(habit3Times, todayKey);
+      assert("B7. Water 2nd Complete: Count is 2", waterCount2 === 2, `Got: ${waterCount2}`);
+      assert("B8. Water 2nd Complete: Card is wait mode", waterCard ? !waterCard.classList.contains('in-progress') : false);
+      waterBtn = waterCard ? waterCard.querySelector('.btn-habit-action') : null;
+      assert("B9. Water 2nd Complete: Button is Start", waterBtn ? waterBtn.classList.contains('start') : false);
+      waterBadge = waterCard ? waterCard.querySelector('.badge-daily-times') : null;
+      assert("B10. Water 2nd Complete: Badge is 2/3回", waterBadge ? waterBadge.textContent.includes('2/3回') : false);
+
+      // 3rd Start & Complete
+      startHabit('h_test_water_3');
+      completeHabit('h_test_water_3');
+      const waterCount3 = getHabitDayCount(habit3Times, todayKey);
+      assert("B11. Water 3rd Complete: Count is 3", waterCount3 === 3, `Got: ${waterCount3}`);
+      assert("B12. Water 3rd Complete: Status is completed", habit3Times.status === 'completed');
+      assert("B13. Water 3rd Complete: history includes todayKey", habit3Times.history.includes(todayKey));
+
+      // -------------------------------------------------------------
+      // Test C: Object-History Legacy Format Compatibility (実データ再現)
+      // -------------------------------------------------------------
+      console.log("=== Testing Object-History Legacy Format Habit ===");
+      const habitLegacyObj = {
+        id: 'h_test_legacy_obj',
+        name: 'オブジェクト形式ハビット',
+        status: 'uncompleted',
+        timingType: 'anytime',
+        targetMin: 15,
+        sortOrder: 3,
+        dailyTimes: 2,
+        recurrence: { type: 'everyday', targetTimes: 2 },
+        history: {}, // Object format as in real GAS data
+        executionLogs: []
+      };
+      state.habits.push(habitLegacyObj);
+      renderApp();
+
+      let legacyCard = document.querySelector('.habit-card[data-id="h_test_legacy_obj"]');
+      assert("C1. Legacy Card exists", Boolean(legacyCard));
+      assert("C2. Legacy Initial Count is 0", getHabitDayCount(habitLegacyObj, todayKey) === 0);
+
+      // 1st Start & Complete
+      startHabit('h_test_legacy_obj');
+      completeHabit('h_test_legacy_obj');
+      legacyCard = document.querySelector('.habit-card[data-id="h_test_legacy_obj"]');
+      const legacyCount1 = getHabitDayCount(habitLegacyObj, todayKey);
+      assert("C3. Legacy 1st Complete: Count is 1", legacyCount1 === 1, `Got: ${legacyCount1}`);
+      assert("C4. Legacy 1st Complete: Card is wait mode", legacyCard ? !legacyCard.classList.contains('in-progress') : false);
+      let legacyBtn = legacyCard ? legacyCard.querySelector('.btn-habit-action') : null;
+      assert("C5. Legacy 1st Complete: Button is Start", legacyBtn ? legacyBtn.classList.contains('start') : false);
+      let legacyBadge = legacyCard ? legacyCard.querySelector('.badge-daily-times') : null;
+      assert("C6. Legacy 1st Complete: Badge is 1/2回", legacyBadge ? legacyBadge.textContent.includes('1/2回') : false);
+
+      // 2nd Start & Complete
+      startHabit('h_test_legacy_obj');
+      completeHabit('h_test_legacy_obj');
+      const legacyCount2 = getHabitDayCount(habitLegacyObj, todayKey);
+      assert("C7. Legacy 2nd Complete: Count is 2", legacyCount2 === 2, `Got: ${legacyCount2}`);
+      assert("C8. Legacy 2nd Complete: Status is completed", habitLegacyObj.status === 'completed');
+      assert("C9. Legacy 2nd Complete: history includes todayKey", habitLegacyObj.history.includes(todayKey));
+
+      // -------------------------------------------------------------
+      // Test D: Event Bubbling Stop-Propagation & Real DOM Click Flow
+      // (ユーザー報告不具合: 完了時即時再開ループとカウント不整合の物理遮断テスト)
+      // -------------------------------------------------------------
+      console.log("=== Testing Event Bubbling Stop-Propagation & Click Flow ===");
+      const habitClickTest = {
+        id: 'h_test_click_bubble',
+        name: '水分補給（クリック検証）',
+        status: 'uncompleted',
+        timingType: 'anytime',
+        targetMin: 5,
+        sortOrder: 4,
+        dailyTimes: 2,
+        recurrence: { type: 'everyday', targetTimes: 2 },
+        history: [],
+        executionLogs: []
+      };
+      state.habits.push(habitClickTest);
+      renderApp();
+
+      let clickCard = document.querySelector('.habit-card[data-id="h_test_click_bubble"]');
+      assert("D1. Click-Test Card exists", Boolean(clickCard));
+
+      // 親カード要素に toggleHabit 誤爆監視リスナーを設置
+      let parentToggleFiredCount = 0;
+      clickCard.addEventListener('click', () => {
+        parentToggleFiredCount++;
+      });
+
+      // 1. DOM上の「▶ 開始」ボタンを実際に click() する
+      let startBtn = clickCard.querySelector('.btn-habit-action.start');
+      assert("D2. Start button exists with stopPropagation", startBtn ? startBtn.getAttribute('onclick').includes('stopPropagation') : false);
+      startBtn.click();
+
+      assert("D3. After clicking Start: Parent card click listener DID NOT fire", parentToggleFiredCount === 0, `Fired: ${parentToggleFiredCount}`);
+      clickCard = document.querySelector('.habit-card[data-id="h_test_click_bubble"]');
+      assert("D4. After clicking Start: Card is in-progress", clickCard.classList.contains('in-progress'));
+      assert("D5. After clicking Start: activeHabitId is set", state.activeHabitId === 'h_test_click_bubble');
+
+      // 2. 動的に書き換えられた「✓ 完了」ボタンの属性を検証
+      let doneBtn = clickCard.querySelector('.btn-habit-action.done');
+      assert("D6. Dynamic Done button has event.stopPropagation()", doneBtn ? doneBtn.getAttribute('onclick').includes('stopPropagation') : false, `onclick: ${doneBtn ? doneBtn.getAttribute('onclick') : 'null'}`);
+
+      // 3. DOM上の「✓ 完了」ボタンを実際に click() する
+      doneBtn.click();
+
+      assert("D7. After clicking Done: Parent card click listener DID NOT fire (Propagation completely blocked)", parentToggleFiredCount === 0, `Fired: ${parentToggleFiredCount}`);
+      
+      clickCard = document.querySelector('.habit-card[data-id="h_test_click_bubble"]');
+      const countAfterClick1 = getHabitDayCount(habitClickTest, todayKey);
+      assert("D8. After 1st Click Done: getHabitDayCount returns 1", countAfterClick1 === 1, `Got: ${countAfterClick1}`);
+      assert("D9. After 1st Click Done: Card .in-progress is REMOVED (No instant restart loop)", !clickCard.classList.contains('in-progress'));
+      assert("D10. After 1st Click Done: activeHabitId is reset to null", state.activeHabitId === null);
+      
+      const restoredActionBtn = clickCard.querySelector('.btn-habit-action');
+      assert("D11. After 1st Click Done: Action button restored to ▶ 開始", restoredActionBtn ? restoredActionBtn.classList.contains('start') && restoredActionBtn.textContent.includes('開始') : false);
+      assert("D12. After 1st Click Done: Restored button has event.stopPropagation()", restoredActionBtn ? restoredActionBtn.getAttribute('onclick').includes('stopPropagation') : false, `onclick: ${restoredActionBtn ? restoredActionBtn.getAttribute('onclick') : 'null'}`);
+
+      // 4. 2回目の「▶ 開始」を click()
+      restoredActionBtn.click();
+      assert("D13. After 2nd Click Start: Parent card click listener STILL 0", parentToggleFiredCount === 0, `Fired: ${parentToggleFiredCount}`);
+      clickCard = document.querySelector('.habit-card[data-id="h_test_click_bubble"]');
+      assert("D14. After 2nd Click Start: Card is in-progress", clickCard.classList.contains('in-progress'));
+
+      // 5. 2回目の「✓ 完了」を click()
+      let doneBtn2 = clickCard.querySelector('.btn-habit-action.done');
+      doneBtn2.click();
+      assert("D15. After 2nd Click Done: Parent card click listener STILL 0", parentToggleFiredCount === 0, `Fired: ${parentToggleFiredCount}`);
+      
+      const countAfterClick2 = getHabitDayCount(habitClickTest, todayKey);
+      assert("D16. After 2nd Click Done: getHabitDayCount returns 2", countAfterClick2 === 2, `Got: ${countAfterClick2}`);
+      assert("D17. After 2nd Click Done: Habit status is completed", habitClickTest.status === 'completed');
+      assert("D18. After 2nd Click Done: habit.history includes todayKey", habitClickTest.history.includes(todayKey));
+
+      const total = window.__TEST_RESULTS__.length;
+      const passed = window.__TEST_RESULTS__.filter(r => r.pass).length;
+      const failed = total - passed;
+
+      window.__TEST_SUMMARY__ = {
+        total,
+        passed,
+        failed,
+        allPassed: failed === 0,
+        results: window.__TEST_RESULTS__
+      };
+
+      console.log(`Summary: Total ${total}, Passed ${passed}, Failed ${failed}`);
+      return window.__TEST_SUMMARY__;
+    };
+  </script>
+</body>
+</html>

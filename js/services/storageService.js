@@ -163,11 +163,20 @@ function createAutoBackupSnapshot() {
       }
     };
 
-    // Keep last 10 snapshots max
+    // 引き算: localStorage容量パンク(5MB制限)を恒久防止するため直近2世代のみ保持
     snapshots.unshift(newSnapshot);
-    if (snapshots.length > 10) snapshots = snapshots.slice(0, 10);
+    if (snapshots.length > 2) snapshots = snapshots.slice(0, 2);
 
-    localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots));
+    try {
+      localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots));
+    } catch (quotaErr) {
+      console.warn('[Storage] Snapshots quota exceeded, purging snapshots to free up space:', quotaErr);
+      try {
+        localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify([newSnapshot]));
+      } catch (innerErr) {
+        localStorage.removeItem(STORAGE_KEYS.SNAPSHOTS);
+      }
+    }
 
     // Also trigger Vault physical file auto-write in background
     writeToVaultBackupFile();
@@ -899,6 +908,35 @@ function loadTasks() {
 
   syncTaskIdHighWaterMark(list);
 
+  // 引き算: 起動直後の初期スナップショットを登録し、未変更タスクへの不要な一括タイムスタンプ押印を防止
+  try {
+    list.forEach(t => {
+      if (t && t.id) {
+        const strId = String(t.id);
+        const snapshot = JSON.stringify({
+          title: t.title,
+          status: t.status,
+          section: t.section,
+          scheduledDate: t.scheduledDate,
+          timingType: t.timingType,
+          displayType: t.displayType,
+          bucket: t.bucket,
+          priority: t.priority,
+          tags: t.tags,
+          notes: t.notes,
+          isDisabled: t.isDisabled,
+          sortOrder: t.sortOrder,
+          domainMinor: t.domainMinor,
+          projMinor: t.projMinor,
+          matrix: t.matrix,
+          startTimestamp: t.startTimestamp,
+          accumulatedSeconds: t.accumulatedSeconds
+        });
+        lastKnownTasksStateMap.set(strId, snapshot);
+      }
+    });
+  } catch (e) {}
+
   return list;
 }
 
@@ -940,7 +978,19 @@ function saveTasks(skipCloudSync = false) {
     });
   }
 
-  localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+  try {
+    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+  } catch (err) {
+    console.error('[Storage] Error persisting tasks to localStorage:', err);
+    // スナップショットをパージして再試行
+    localStorage.removeItem(STORAGE_KEYS.SNAPSHOTS);
+    try {
+      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
+    } catch (inner) {
+      console.error('[Storage] Critical quota error persisting tasks:', inner);
+    }
+  }
+
   isLocalDirty = true; // 逆流完全防止弁フラグ (未送信のローカル変更あり)
   updateSyncMetadata({ lastUpdatedDevice: 'PC', lastUpdatedAt: nowIso });
   createAutoBackupSnapshot();
@@ -1292,6 +1342,41 @@ function loadHabits() {
     }
   }
 
+  // 引き算: 起動直後の初期スナップショットを登録し、未変更ハビットへの不要な一括タイムスタンプ押印を防止
+  try {
+    habits.forEach(h => {
+      if (h && h.id) {
+        const strId = String(h.id);
+        const snapshot = JSON.stringify({
+          name: h.name,
+          status: h.status,
+          section: h.section,
+          displayType: h.displayType,
+          timingType: h.timingType,
+          customStart: h.customStart,
+          customEnd: h.customEnd,
+          targetMin: h.targetMin,
+          frequency: h.frequency,
+          recType: h.recType,
+          category: h.category,
+          domain: h.domain,
+          domainMinor: h.domainMinor,
+          dept: h.dept,
+          deptMinor: h.deptMinor,
+          proj: h.proj,
+          projMinor: h.projMinor,
+          tags: h.tags,
+          notes: h.notes,
+          isDisabled: h.isDisabled,
+          sortOrder: h.sortOrder,
+          startTimestamp: h.startTimestamp,
+          accumulatedSeconds: h.accumulatedSeconds
+        });
+        lastKnownHabitsStateMap.set(strId, snapshot);
+      }
+    });
+  } catch (e) {}
+
   return habits;
 }
 
@@ -1581,7 +1666,18 @@ function saveHabits(skipCloudSync = false) {
     });
   }
 
-  localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+  try {
+    localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+  } catch (err) {
+    console.error('[Storage] Error persisting habits to localStorage:', err);
+    localStorage.removeItem(STORAGE_KEYS.SNAPSHOTS);
+    try {
+      localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
+    } catch (inner) {
+      console.error('[Storage] Critical quota error persisting habits:', inner);
+    }
+  }
+
   isLocalDirty = true; // 逆流完全防止弁フラグ (未送信のローカル変更あり)
   updateSyncMetadata({ lastUpdatedDevice: 'PC', lastUpdatedAt: nowIso });
   createAutoBackupSnapshot();
@@ -1829,20 +1925,10 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
         }
       }
 
-      // フェッチ通信中にローカル操作（ハビット完了やタスク追加等）が発生していた場合:
-      // 受信した古いデータでローカルを上書きせず、ローカル最新を最優先でディープマージし即時プッシュへフォワード
-      if (hasPendingPush) {
-        if (Array.isArray(cloudData.tasks)) {
-          state.tasks = mergeTasksDeep(state.tasks, cloudData.tasks);
-          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
-        }
-        if (Array.isArray(cloudData.habits)) {
-          state.habits = mergeHabitsDeep(state.habits, cloudData.habits);
-          localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
-        }
-        if (typeof renderApp === 'function') {
-          renderApp();
-        }
+      // 【引き算: 巻き戻し完全遮断】フェッチ通信中にローカル操作が発生していた場合、
+      // または未送信のローカル変更がある場合は、古いクラウドデータでローカルを上書き・逆流させず即時終了
+      if (hasPendingPush || isLocalDirty) {
+        if (!isSilent) console.log('[Sync] Pending local changes exist during pull. Skipping cloud merge to prevent rollback.');
         return;
       }
 
@@ -1919,14 +2005,14 @@ async function pullDataFromCloud(forceApply = false, isSilent = false) {
   }
 }
 
-// 15-Second Silent Heartbeat Sync & Focus Resume Loop
+// 45-Second Silent Heartbeat Sync & Focus Resume Loop (引き算: 過密15sポーリングを緩和しGAS通信詰まりを解消)
 function initRealtimeSyncHeartbeat() {
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   heartbeatInterval = setInterval(() => {
-    if (getGasApiUrl() && !isSyncing) {
+    if (getGasApiUrl() && !isSyncing && !isLocalDirty) {
       pullDataFromCloud(false, true); // Silent background sync
     }
-  }, 15000); // Poll every 15s
+  }, 45000); // Poll every 45s
 
   window.addEventListener('focus', () => {
     if (getGasApiUrl() && !isSyncing) {
@@ -2029,28 +2115,6 @@ function reloadAppData() {
     updateSyncStatus('local', '🔄 ローカル再読み込み完了');
   }
 }
-
-// Setup Auto-Sync Listeners
-window.addEventListener('DOMContentLoaded', () => {
-  const gasUrl = getGasApiUrl();
-  if (gasUrl) {
-    pullDataFromCloud(false);
-  }
-});
-
-// Sync when switching back to this tab
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && getGasApiUrl()) {
-    pullDataFromCloud(false);
-  }
-});
-
-// Periodic background sync check (every 2 minutes)
-setInterval(() => {
-  if (getGasApiUrl() && !isSyncing) {
-    pullDataFromCloud(false);
-  }
-}, 120000);
 
 // =========================================================================
 // 7. Google Drive Time-Machine Backup & Rollback Engine (5-Sheet Full Export)

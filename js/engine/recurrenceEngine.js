@@ -139,15 +139,57 @@ function getHabitTargetTimes(habit) {
 }
 
 function getHabitDayCount(habit, dateKey = null) {
-  if (!habit || !habit.history) return 0;
-  const dKey = dateKey || getSelectedDateKey();
-  const val = habit.history[dKey];
-  if (typeof val === 'number') return val;
-  if (val === true) return getHabitTargetTimes(habit);
-  if (typeof val === 'object' && val !== null) {
-    if (typeof val.count === 'number') return val.count;
-    if (val.done) return getHabitTargetTimes(habit);
+  if (!habit) return 0;
+  const dKey = dateKey || (typeof getSelectedDateKey === 'function' ? getSelectedDateKey() : (typeof getTodayKey === 'function' ? getTodayKey() : ''));
+  if (!dKey) return 0;
+
+  const targetTimes = typeof getHabitTargetTimes === 'function' ? getHabitTargetTimes(habit) : 1;
+
+  // 1. 最優先: executionLogs の当日実行ログからカウントを取得 (Event Sourcing / Timeline)
+  if (Array.isArray(habit.executionLogs) && habit.executionLogs.length > 0) {
+    const todayLogs = habit.executionLogs.filter(l => {
+      if (!l) return false;
+      if (l.dateKey === dKey) return true;
+      if (l.completedAt && (l.completedAt.startsWith(dKey) || (typeof normalizeToLocalDateKey === 'function' && normalizeToLocalDateKey(l.completedAt) === dKey))) return true;
+      if (l.date && (l.date === dKey || (typeof normalizeToLocalDateKey === 'function' && normalizeToLocalDateKey(l.date) === dKey))) return true;
+      return false;
+    });
+
+    if (todayLogs.length > 0) {
+      // ログ内の最大 count プロパティ、またはログ件数のうち大きい方を最優先で採用
+      const maxCountInLogs = todayLogs.reduce((max, l) => {
+        const c = (typeof l.count === 'number') ? l.count : (parseInt(l.count, 10) || 0);
+        return c > max ? c : max;
+      }, 0);
+      const calculatedCount = Math.max(maxCountInLogs, todayLogs.length);
+      return targetTimes > 0 ? Math.min(calculatedCount, targetTimes) : calculatedCount;
+    }
   }
+
+  // 2. 次点: Array history (Event Sourcing) - 目標達成済み日付リスト
+  if (Array.isArray(habit.history)) {
+    if (habit.history.includes(dKey)) {
+      return targetTimes;
+    }
+    return 0;
+  }
+
+  // 3. 次点: Object history (レガシー互換)
+  if (habit.history && typeof habit.history === 'object') {
+    const val = habit.history[dKey];
+    if (typeof val === 'number') return Math.min(val, targetTimes);
+    if (val === true) return targetTimes;
+    if (typeof val === 'object' && val !== null) {
+      if (typeof val.count === 'number') return Math.min(val.count, targetTimes);
+      if (val.done) return targetTimes;
+    }
+  }
+
+  // 4. フォールバック: habit.todayCount キャッシュ
+  if (typeof habit.todayCount === 'number' && habit.todayCount > 0) {
+    return Math.min(habit.todayCount, targetTimes);
+  }
+
   return 0;
 }
 
