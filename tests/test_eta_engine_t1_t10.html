@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>TaskChute ETA Engine T1-T10 Verification Suite</title>
+  <style>
+    body { font-family: monospace; background: #0f172a; color: #f8fafc; padding: 20px; }
+    .pass { color: #34d399; font-weight: bold; }
+    .fail { color: #f87171; font-weight: bold; }
+    .item { margin: 6px 0; padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); }
+  </style>
+</head>
+<body>
+  <h1>TaskChute ETA Engine (T1〜T10) Verification</h1>
+  <div id="results"></div>
+
+  <!-- Dummy UI Elements required by app.js if any -->
+  <div id="header-daily-eta-badge" style="display:none;"></div>
+  <div id="daily-remain-minutes" style="display:none;"></div>
+  <div id="daily-eta-label" style="display:none;"></div>
+  <div id="daily-eta-time-val" style="display:none;"></div>
+  <div id="daily-task-remain-val" style="display:none;"></div>
+  <div id="daily-habit-remain-val" style="display:none;"></div>
+  <div id="daily-eta-remain-info" style="display:none;"></div>
+  <div id="section-eta-badge" style="display:none;"></div>
+  <div id="section-remain-minutes" style="display:none;"></div>
+  <div id="section-eta-label" style="display:none;"></div>
+  <div id="section-eta-time" style="display:none;"></div>
+  <div id="section-task-remain-val" style="display:none;"></div>
+  <div id="section-habit-remain-val" style="display:none;"></div>
+  <div id="sync-status" style="display:none;"></div>
+  <div id="carryover-banner" style="display:none;"></div>
+  <div id="carryover-task-count" style="display:none;"></div>
+  <div id="carryover-target-sec-name" style="display:none;"></div>
+
+  <script>
+    // Pre-initialize state
+    window.state = {
+      tasks: [],
+      habits: [],
+      filters: { status: 'all', domain: null, dept: null, proj: null, tagSearch: '' },
+      currentSection: '第2セッション',
+      selectedDateOffset: 0
+    };
+    window.renderApp = function() {};
+  </script>
+
+  <!-- Load dependencies in exact order -->
+  <script src="../js/config.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+  <script src="../js/components/cardRenderers.js"></script>
+  <script src="../js/engine/etaEngine.js"></script>
+  <script src="../app.js"></script>
+
+  <script>
+    const resultsDiv = document.getElementById('results');
+    const testLogs = [];
+
+    function logTest(id, name, pass, detail = '') {
+      testLogs.push({ id, name, pass, detail });
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = `[${pass ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'}] <b>${id}</b>: ${name} ${detail ? `<span style="color:#94a3b8">(${detail})</span>` : ''}`;
+      resultsDiv.appendChild(el);
+    }
+
+    function runAllEtaTests() {
+      const todayKey = getTodayKey();
+
+      // =========================================================================
+      // T1: 全完了→全て0・達成
+      // =========================================================================
+      {
+        state.tasks = [
+          { id: 't1', title: 'Task 1', section: '第1セッション', status: 'completed', actMin: 15, estMin: 15, scheduledDate: todayKey },
+          { id: 't2', title: 'Task 2', section: '第2セッション', status: 'completed', actMin: 20, estMin: 20, scheduledDate: todayKey }
+        ];
+        state.habits = [
+          { id: 'h1', name: 'Habit 1', section: '第1セッション', status: 'completed', targetMin: 10, executionLogs: [{ dateKey: todayKey, count: 1 }] },
+          { id: 'h2', name: 'Habit 2', section: '第2セッション', status: 'completed', targetMin: 5, executionLogs: [{ dateKey: todayKey, count: 1 }] }
+        ];
+        state.selectedDateOffset = 0;
+        state.filters = { status: 'all', domain: null, dept: null, proj: null, tagSearch: '' };
+
+        const sec1Rem = getSectionRemaining('第1セッション');
+        const sec1Eta = getSectionEta('第1セッション');
+        const dayEta = getDayEta();
+
+        const pass = (sec1Rem.remainMin === 0 && sec1Rem.remainCount === 0 &&
+                      sec1Eta.isAchieved === true && sec1Eta.etaTimeStr.includes('達成') &&
+                      dayEta.totalDayRemainMin === 0 && dayEta.totalDayRemainCount === 0 &&
+                      dayEta.isAchieved === true && dayEta.dayEtaTimeStr.includes('達成'));
+        logTest('T1', '全完了→全て0・達成', pass, `sec1Remain: ${sec1Rem.remainMin}m, dayRemain: ${dayEta.totalDayRemainMin}m, dayEta: ${dayEta.dayEtaTimeStr}`);
+      }
+
+      // =========================================================================
+      // T2: 枠内 (Within Section Window)
+      // =========================================================================
+      {
+        // 第2セッション (08:30 - 12:00)
+        // Simulate now = 09:30
+        const simNow = new Date();
+        simNow.setHours(9, 30, 0, 0);
+
+        state.tasks = [
+          { id: 't2_1', title: 'Task 2-1', section: '第2セッション', status: 'uncompleted', estMin: 30, scheduledDate: todayKey }
+        ];
+        state.habits = [
+          { id: 'h2_1', name: 'Habit 2-1', section: '第2セッション', status: 'uncompleted', targetMin: 15, executionLogs: [] }
+        ];
+
+        // 30m + 15m = 45m. At 09:30, 09:30 + 45m = 10:15
+        const sec2Eta = getSectionEta('第2セッション', simNow);
+        const pass = (sec2Eta.remainMin === 45 && sec2Eta.etaTimeStr === '10:15' && sec2Eta.isOverdue === false);
+        logTest('T2', '枠内 (09:30 + 45m = 10:15, overdue: false)', pass, `eta: ${sec2Eta.etaTimeStr}, overdue: ${sec2Eta.isOverdue}`);
+      }
+
+      // =========================================================================
+      // T3: 枠終了後 (After Section Window)
+      // 例: 第1セッション(03:00-06:00)・残7分・現在21:17 → 06:07
+      // =========================================================================
+      {
+        const simNow = new Date();
+        simNow.setHours(21, 17, 0, 0);
+
+        state.tasks = [
+          { id: 't3_1', title: 'Task 3-1', section: '第1セッション', status: 'uncompleted', estMin: 7, scheduledDate: todayKey }
+        ];
+        state.habits = [];
+
+        const sec1Eta = getSectionEta('第1セッション', simNow);
+        const pass = (sec1Eta.remainMin === 7 && sec1Eta.etaTimeStr === '06:07' && sec1Eta.isOverdue === true);
+        logTest('T3', '枠終了後 (03:00-06:00枠, 現在21:17, 残7m → 06:07, overdue: true)', pass, `eta: ${sec1Eta.etaTimeStr}, overdue: ${sec1Eta.isOverdue}`);
+      }
+
+      // =========================================================================
+      // T4: 枠開始前 (Before Section Window)
+      // 第3セッション (12:00 - 17:00), 現在10:00, 残30分 → 12:00 + 30m = 12:30
+      // =========================================================================
+      {
+        const simNow = new Date();
+        simNow.setHours(10, 0, 0, 0);
+
+        state.tasks = [
+          { id: 't4_1', title: 'Task 4-1', section: '第3セッション', status: 'uncompleted', estMin: 30, scheduledDate: todayKey }
+        ];
+        state.habits = [];
+
+        const sec3Eta = getSectionEta('第3セッション', simNow);
+        const pass = (sec3Eta.remainMin === 30 && sec3Eta.etaTimeStr === '12:30' && sec3Eta.isOverdue === false);
+        logTest('T4', '枠開始前 (12:00-17:00枠, 現在10:00, 残30m → 12:30, overdue: false)', pass, `eta: ${sec3Eta.etaTimeStr}, overdue: ${sec3Eta.isOverdue}`);
+      }
+
+      // =========================================================================
+      // T5: 前倒し(10分を7分→-3分)・遅延(15分→+5分)
+      // =========================================================================
+      {
+        // 基準: Task A (estMin: 10), Task B (estMin: 20) in 第2セッション (08:30-12:00)
+        // Case A (前倒し): Task A is completed in 7 min. Now only Task B (20m) remains.
+        const simNowEarly = new Date();
+        simNowEarly.setHours(9, 7, 0, 0);
+
+        const taskA = { id: 't5_a', title: 'Task A', section: '第2セッション', status: 'completed', actMin: 7, estMin: 10, scheduledDate: todayKey };
+        const taskB = { id: 't5_b', title: 'Task B', section: '第2セッション', status: 'uncompleted', estMin: 20, scheduledDate: todayKey };
+
+        state.tasks = [taskA, taskB];
+        state.habits = [];
+
+        const etaEarly = getSectionEta('第2セッション', simNowEarly);
+        // Completed task A has 0 remaining minutes!
+        const remA = getItemRemainingMinutes(taskA, 'task');
+        // Remaining is only Task B (20 min) -> 09:07 + 20m = 09:27 (3 min ahead of planned 09:00 + 10 + 20 = 09:30)
+        const passEarly = (remA === 0 && etaEarly.remainMin === 20 && etaEarly.etaTimeStr === '09:27');
+
+        // Case B (遅延): Task A took 15 min instead of 10 min, completed at 09:15
+        const simNowLate = new Date();
+        simNowLate.setHours(9, 15, 0, 0);
+        taskA.actMin = 15;
+        const etaLate = getSectionEta('第2セッション', simNowLate);
+        // 09:15 + 20m = 09:35 (5 min delayed from planned 09:30)
+        const passLate = (etaLate.remainMin === 20 && etaLate.etaTimeStr === '09:35');
+
+        logTest('T5', '前倒し・遅延 (タスク完了で残分0化し見込み時刻が前倒し/遅延に連動)', passEarly && passLate, `Early: ${etaEarly.etaTimeStr}, Late: ${etaLate.etaTimeStr}`);
+      }
+
+      // =========================================================================
+      // T6: status のみ・executionLogs のみの擬似完了
+      // =========================================================================
+      {
+        // 1. Task with status only completed
+        const tStatusOnly = { id: 't6_1', title: 'T Status Only', section: '第2セッション', status: 'completed', estMin: 15, scheduledDate: todayKey };
+        // 2. Task with executionLogs only
+        const tLogsOnly = { id: 't6_2', title: 'T Logs Only', section: '第2セッション', status: 'uncompleted', estMin: 15, scheduledDate: todayKey, executionLogs: [{ dateKey: todayKey, count: 1 }] };
+        // 3. Habit with executionLogs only
+        const hLogsOnly = { id: 'h6_1', name: 'H Logs Only', section: '第2セッション', status: 'uncompleted', targetMin: 10, executionLogs: [{ dateKey: todayKey, count: 1 }] };
+        // 4. Habit with pure mock status: completed
+        const hStatusOnly = { id: 'h6_2', name: 'H Status Only', section: '第2セッション', status: 'completed', targetMin: 10 };
+
+        state.tasks = [tStatusOnly, tLogsOnly];
+        state.habits = [hLogsOnly, hStatusOnly];
+
+        const isT1Done = isTaskDone(tStatusOnly);
+        const isT2Done = isTaskDone(tLogsOnly);
+        const isH1Done = isHabitDone(hLogsOnly);
+        const isH2Done = isHabitDone(hStatusOnly);
+
+        const remT1 = getItemRemainingMinutes(tStatusOnly, 'task');
+        const remT2 = getItemRemainingMinutes(tLogsOnly, 'task');
+        const remH1 = getItemRemainingMinutes(hLogsOnly, 'habit');
+        const remH2 = getItemRemainingMinutes(hStatusOnly, 'habit');
+
+        const sec2Rem = getSectionRemaining('第2セッション');
+
+        const pass = (isT1Done && isT2Done && isH1Done && isH2Done &&
+                      remT1 === 0 && remT2 === 0 && remH1 === 0 && remH2 === 0 &&
+                      sec2Rem.remainMin === 0 && sec2Rem.remainCount === 0);
+
+        logTest('T6', 'statusのみ・executionLogsのみの擬似完了 (全て確実に完了・残分0判定)', pass,
+          `tStatusDone: ${isT1Done}, tLogsDone: ${isT2Done}, hLogsDone: ${isH1Done}, hStatusDone: ${isH2Done}, remain: ${sec2Rem.remainMin}m`);
+      }
+
+      // =========================================================================
+      // T7: フィルター切替で集計不変
+      // =========================================================================
+      {
+        const simNow = new Date();
+        simNow.setHours(9, 0, 0, 0);
+
+        state.tasks = [
+          { id: 't7_1', title: 'Task Done', section: '第2セッション', status: 'completed', estMin: 20, scheduledDate: todayKey },
+          { id: 't7_2', title: 'Task Todo', section: '第2セッション', status: 'uncompleted', estMin: 25, domainMajor: 'PN1', scheduledDate: todayKey }
+        ];
+        state.habits = [
+          { id: 'h7_1', name: 'Habit Todo', section: '第2セッション', status: 'uncompleted', targetMin: 10, domainMajor: 'PN2', executionLogs: [] }
+        ];
+
+        // 1. All filter
+        state.filters = { status: 'all', domain: null, dept: null, proj: null, tagSearch: '' };
+        const etaAll = getSectionEta('第2セッション', simNow);
+
+        // 2. Uncompleted filter
+        state.filters = { status: 'uncompleted', domain: null, dept: null, proj: null, tagSearch: '' };
+        const etaUncomp = getSectionEta('第2セッション', simNow);
+
+        // 3. Completed filter
+        state.filters = { status: 'completed', domain: null, dept: null, proj: null, tagSearch: '' };
+        const etaComp = getSectionEta('第2セッション', simNow);
+
+        // 4. Domain filter
+        state.filters = { status: 'all', domain: 'PN1', dept: null, proj: null, tagSearch: '' };
+        const etaDomain = getSectionEta('第2セッション', simNow);
+
+        const pass = (etaAll.remainMin === 35 &&
+                      etaUncomp.remainMin === 35 &&
+                      etaComp.remainMin === 35 &&
+                      etaDomain.remainMin === 35 &&
+                      etaAll.etaTimeStr === etaUncomp.etaTimeStr &&
+                      etaAll.etaTimeStr === etaComp.etaTimeStr &&
+                      etaAll.etaTimeStr === etaDomain.etaTimeStr);
+
+        logTest('T7', 'フィルター切替で集計不変 (all/uncompleted/completed/domain切替でも残35m・見込不変)', pass,
+          `all: ${etaAll.remainMin}m, uncomp: ${etaUncomp.remainMin}m, comp: ${etaComp.remainMin}m, dom: ${etaDomain.remainMin}m`);
+      }
+
+      // =========================================================================
+      // T8: 全体=セクション合算 (全体の残り = 6セクション残分の合算、見込 = 最終セクション)
+      // =========================================================================
+      {
+        const simNow = new Date();
+        simNow.setHours(9, 0, 0, 0);
+
+        // Put 1 task in each of the 6 sections
+        state.tasks = [
+          { id: 't8_1', title: 'Sec 1', section: '第1セッション', status: 'uncompleted', estMin: 10, scheduledDate: todayKey },
+          { id: 't8_2', title: 'Sec 2', section: '朝オペ', status: 'uncompleted', estMin: 20, scheduledDate: todayKey },
+          { id: 't8_3', title: 'Sec 3', section: '第2セッション', status: 'uncompleted', estMin: 30, scheduledDate: todayKey },
+          { id: 't8_4', title: 'Sec 4', section: '第3セッション', status: 'uncompleted', estMin: 40, scheduledDate: todayKey },
+          { id: 't8_5', title: 'Sec 5', section: '夜オペ', status: 'uncompleted', estMin: 15, scheduledDate: todayKey },
+          { id: 't8_6', title: 'Sec 6', section: '第4セッション', status: 'uncompleted', estMin: 25, scheduledDate: todayKey }
+        ];
+        state.habits = [];
+
+        // Sum = 10 + 20 + 30 + 40 + 15 + 25 = 140 min
+        const dayEta = getDayEta(simNow);
+        const sec4Eta = getSectionEta('第4セッション', simNow);
+
+        const pass = (dayEta.totalDayRemainMin === 140 &&
+                      dayEta.totalDayRemainCount === 6 &&
+                      dayEta.dayEtaTimeStr === sec4Eta.etaTimeStr);
+
+        logTest('T8', '全体=セクション合算 (合計140m、全体見込 = 最終セクション見込)', pass,
+          `totalRemain: ${dayEta.totalDayRemainMin}m (expected 140m), dayEta: ${dayEta.dayEtaTimeStr}, sec4Eta: ${sec4Eta.etaTimeStr}`);
+      }
+
+      // =========================================================================
+      // T9: 食材タグ除外 (TIME_EXCLUDED_HABIT_TAGS = ['食材'])
+      // =========================================================================
+      {
+        state.tasks = [];
+        state.habits = [
+          { id: 'h9_food', name: '食材買い出し', section: '第2セッション', tags: ['食材'], targetMin: 45, status: 'uncompleted', executionLogs: [] },
+          { id: 'h9_normal', name: '英会話', section: '第2セッション', tags: ['英語'], targetMin: 15, status: 'uncompleted', executionLogs: [] }
+        ];
+
+        const sec2Rem = getSectionRemaining('第2セッション');
+        // Only normal habit (15m, 1 count) should be counted!
+        const pass = (sec2Rem.remainMin === 15 && sec2Rem.remainCount === 1 && sec2Rem.totalCount === 1);
+
+        logTest('T9', '食材タグ除外 (45分の食材タグハビットは時間・件数から完全除外)', pass,
+          `remainMin: ${sec2Rem.remainMin}m (expected 15m), count: ${sec2Rem.remainCount} (expected 1)`);
+      }
+
+      // =========================================================================
+      // T10: overdue 判定 (終了時刻超過で赤表示維持)
+      // =========================================================================
+      {
+        // 1. 第2セッション (08:30 - 12:00): 現在11:30、残45分 → 見込12:15 (> 12:00) -> isOverdue: true
+        const simNow1 = new Date();
+        simNow1.setHours(11, 30, 0, 0);
+        state.tasks = [{ id: 't10_1', section: '第2セッション', status: 'uncompleted', estMin: 45, scheduledDate: todayKey }];
+        state.habits = [];
+        const etaOverdue1 = getSectionEta('第2セッション', simNow1);
+
+        // 2. 第2セッション (08:30 - 12:00): 現在12:10 (枠後)、残10分 -> isOverdue: true
+        const simNow2 = new Date();
+        simNow2.setHours(12, 10, 0, 0);
+        state.tasks = [{ id: 't10_2', section: '第2セッション', status: 'uncompleted', estMin: 10, scheduledDate: todayKey }];
+        const etaOverdue2 = getSectionEta('第2セッション', simNow2);
+
+        // 3. 第2セッション (08:30 - 12:00): 現在09:00 (枠内)、残60分 → 見込10:00 (< 12:00) -> isOverdue: false
+        const simNow3 = new Date();
+        simNow3.setHours(9, 0, 0, 0);
+        state.tasks = [{ id: 't10_3', section: '第2セッション', status: 'uncompleted', estMin: 60, scheduledDate: todayKey }];
+        const etaNormal = getSectionEta('第2セッション', simNow3);
+
+        const pass = (etaOverdue1.isOverdue === true &&
+                      etaOverdue2.isOverdue === true &&
+                      etaNormal.isOverdue === false);
+
+        logTest('T10', 'overdue 判定 (枠超え見込及び枠終了後の未完了で確実にtrue、余裕時false)', pass,
+          `case1: ${etaOverdue1.isOverdue}, case2: ${etaOverdue2.isOverdue}, case3: ${etaNormal.isOverdue}`);
+      }
+
+      const allPassed = testLogs.every(t => t.pass);
+      return {
+        allPassed,
+        total: testLogs.length,
+        passed: testLogs.filter(t => t.pass).length,
+        logs: testLogs
+      };
+    }
+
+    window.runAllEtaTests = runAllEtaTests;
+  </script>
+</body>
+</html>

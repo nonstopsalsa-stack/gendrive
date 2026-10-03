@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Falsification Test: Carryover & Quota Shield</title>
+</head>
+<body>
+  <h1>Falsification Test</h1>
+  <div id="results"></div>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/sampleData.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+
+  <script>
+    window.state = {
+      tasks: [],
+      habits: [],
+      filters: {},
+      currentSection: '夜オペ',
+      selectedDateOffset: 0
+    };
+
+    // Dummy UI elements
+    const syncStatus = document.createElement('div');
+    syncStatus.id = 'sync-status';
+    document.body.appendChild(syncStatus);
+
+    const banner = document.createElement('div');
+    banner.id = 'carryover-banner';
+    banner.classList.add('hidden');
+    document.body.appendChild(banner);
+
+    const countEl = document.createElement('span');
+    countEl.id = 'carryover-task-count';
+    document.body.appendChild(countEl);
+
+    const secEl = document.createElement('span');
+    secEl.id = 'carryover-target-sec-name';
+    document.body.appendChild(secEl);
+
+    window.renderApp = function() {};
+    window.updateSidebarBadges = function() {};
+
+    window.runFalsificationTest = function() {
+      const resultsList = [];
+      function assertTest(name, condition) {
+        resultsList.push({ name, pass: Boolean(condition) });
+      }
+
+      // 【反証ケース1: 改修前の10世代保持バグの再現】
+      // 旧コードのようにスナップショットが5件蓄積された状態をシミュレート
+      localStorage.clear();
+      const buggySnapshots = [
+        { id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }
+      ];
+      localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(buggySnapshots));
+      const snaps = JSON.parse(localStorage.getItem(STORAGE_KEYS.SNAPSHOTS) || '[]');
+      // クォータ防御基準（<= 2件）を満たさないため、確実に FAIL すること
+      assertTest('【反証1・旧スナップショット肥大バグ】Snapshot count is clamped to <= 2 (was 10): ' + snaps.length, snaps.length <= 2);
+
+      // 【反証ケース2: 改修前のクラウド巻き戻しバグ（Stale Merge）の再現】
+      // 一括取り込み後にクラウドから過去日付（2026-10-01）のタスクデータが逆流マージされた状況をシミュレート
+      state.tasks = [
+        { id: 'T_past1', title: '過去のタスク1', scheduledDate: getTodayKey(), status: 'uncompleted', timingType: 'section', section: '夜オペ' }
+      ];
+      // 旧挙動: クラウドから届いた過去タスクで上書き巻き戻しが発生
+      const staleCloudTask = { id: 'T_past1', title: '過去のタスク1', scheduledDate: '2026-10-01', status: 'uncompleted', timingType: 'section', section: '第1セッション' };
+      state.tasks = [staleCloudTask]; // 巻き戻り発生
+
+      // 過去タスク残存チェック: 0件であるべきなのに巻き戻って1件残るため、確実に FAIL すること
+      const remainingPast = getPastIncompleteTasks();
+      assertTest('【反証2・旧クラウド巻き戻しバグ】Past incomplete tasks count is now 0 (Got: ' + remainingPast.length + ')', remainingPast.length === 0);
+
+      // 【反証ケース3: 取り込みボタンがQuotaExceededError等で停止し未完了タスクが残存したバグの再現】
+      const task1 = state.tasks.find(t => t.id === 'T_past1');
+      assertTest('【反証3・未完了タスク残存バグ】Task scheduled date is today (Got: ' + (task1 ? task1.scheduledDate : 'none') + ')', task1 && task1.scheduledDate === getTodayKey());
+
+      return {
+        passed: resultsList.every(r => r.pass),
+        results: resultsList
+      };
+    };
+  </script>
+</body>
+</html>
