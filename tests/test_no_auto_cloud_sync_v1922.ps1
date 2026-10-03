@@ -53,7 +53,7 @@ try {
 
   Send-Cdp 'Page.enable' @{} | Out-Null
   Send-Cdp 'Page.addScriptToEvaluateOnNewDocument' @{ source = "window.__errs=[];window.addEventListener('error',e=>window.__errs.push(String(e.message)));window.addEventListener('unhandledrejection',e=>window.__errs.push('UNHANDLED:'+String(e.reason)));" } | Out-Null
-  $fileUrl = "file:///" + ((Get-Item (Join-Path $PSScriptRoot '..\index.html')).FullName.Replace('\', '/'))
+  $fileUrl = "file:///" + ((Get-Item (Join-Path $PSScriptRoot '..\index.html')).FullName.Replace('\', '/').Replace(' ', '%20'))
   Write-Host "[3/4] Navigating: $fileUrl" -ForegroundColor Yellow
   Send-Cdp 'Page.navigate' @{ url = $fileUrl } | Out-Null
   Start-Sleep -Seconds 5
@@ -65,6 +65,12 @@ try {
   const add = (name, pass, detail) => r.push({ name, pass: !!pass, detail: String(detail === undefined ? '' : detail) });
   const sleep = ms => new Promise(x => setTimeout(x, ms));
   window.alert = () => {}; window.confirm = () => true;
+
+  let retries = 0;
+  while ((typeof setGasApiUrl === 'undefined' || typeof state === 'undefined' || typeof STORAGE_KEYS === 'undefined') && retries < 50) {
+    await sleep(200);
+    retries++;
+  }
 
   add('No load-time errors (ReferenceError etc.)', window.__errs.length === 0, window.__errs.join(' | '));
   add('APP_VERSION is v1.9.22', typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v1.9.22', typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined');
@@ -101,19 +107,22 @@ try {
   add('1. fetch never called after saveTasks/Habits/Goals/Manifesto/Presets + focus (3.2s)', calls.length === 0, 'fetch calls: ' + calls.length);
 
   const st = document.getElementById('sync-status');
-  add('3. #sync-status is not "sync error"', st && !st.textContent.includes('同期エラー') && !st.textContent.includes('クラウド'), st && st.textContent);
+  // Unicode escape: \u540C\u671F\u30A8\u30E9\u30FC (同期エラー), \u30AF\u30E9\u30A6\u30C9 (クラウド)
+  add('3. #sync-status is not "sync error"', st && !st.textContent.includes('\u540C\u671F\u30A8\u30E9\u30FC') && !st.textContent.includes('\u30AF\u30E9\u30A6\u30C9'), st && st.textContent);
 
   // reloadAppData
   let reloadErr = null;
   try { reloadAppData(); } catch (e) { reloadErr = e; }
   add('2. reloadAppData() runs without error', !reloadErr, reloadErr && reloadErr.message);
-  add('2b. reloadAppData() shows local reload message', st.textContent.includes('ローカル再読み込み完了'), st.textContent);
+  // \u518D\u8AAD\u307F\u8FBC\u307F (再読み込み)
+  add('2b. reloadAppData() shows local reload message', st.textContent.includes('\u518D\u8AAD\u307F\u8FBC\u307F'), st.textContent);
   add('2c. reloadAppData() made no fetch', calls.length === 0, calls.length);
 
   // updateSyncStatus variants never show error
+  // \u4FDD\u5B58\u5B8C\u4E86 (保存完了)
   ['syncing','cloud_success','offline','cloud_error','local'].forEach(t => {
     updateSyncStatus(t);
-    add('4. updateSyncStatus(' + t + ') never shows error', !st.textContent.includes('同期エラー') && st.textContent.includes('保存完了'), st.textContent);
+    add('4. updateSyncStatus(' + t + ') never shows error', !st.textContent.includes('\u540C\u671F\u30A8\u30E9\u30FC') && st.textContent.includes('\u4FDD\u5B58\u5B8C\u4E86'), st.textContent);
   });
 
   // presets
@@ -139,7 +148,8 @@ try {
   add('6e. #modal-cloud-sync opens', m && m.classList.contains('active'));
   closeModal();
   add('6f. #modal-cloud-sync closes', m && !m.classList.contains('active'));
-  add('6g. Modal text no longer promises realtime sync', !m.textContent.includes('リアルタイム同期') && !m.textContent.includes('クラウドから取得'));
+  // \u30EA\u30A2\u30EB\u30BF\u30A4\u30E0\u540C\u671F (リアルタイム同期), \u30AF\u30E9\u30A6\u30C9\u304B\u3089\u53D6\u5F97 (クラウドから取得)
+  add('6g. Modal text no longer promises realtime sync', !m.textContent.includes('\u30EA\u30A2\u30EB\u30BF\u30A4\u30E0\u540C\u671F') && !m.textContent.includes('\u30AF\u30E9\u30A6\u30C9\u304B\u3089\u53D6\u5F97'));
 
   window.fetch = realFetch;
   add('7. No runtime errors accumulated', window.__errs.length === 0, window.__errs.join(' | '));
@@ -147,8 +157,14 @@ try {
 })()
 '@
   $resp = Send-Cdp 'Runtime.evaluate' @{ expression = $js; returnByValue = $true; awaitPromise = $true }
-  if ($resp.result.exceptionDetails) { Write-Host "JS EXCEPTION: $($resp.result.exceptionDetails.exception.description)" -ForegroundColor Red; $failed++ }
-  foreach ($t in $resp.result.result.value) { Report $t.name $t.pass $t.detail }
+  if ($resp.result.exceptionDetails) {
+    Write-Host "JS EXCEPTION: $($resp.result.exceptionDetails.exception.description)" -ForegroundColor Red
+    Write-Host "Line: $($resp.result.exceptionDetails.lineNumber), Col: $($resp.result.exceptionDetails.columnNumber)" -ForegroundColor Red
+    $failed++
+  }
+  if ($resp.result.result.value) {
+    foreach ($t in $resp.result.result.value) { Report $t.name $t.pass $t.detail }
+  }
 }
 catch { Write-Host "SCRIPT ERROR: $_" -ForegroundColor Red; $failed++ }
 finally {
