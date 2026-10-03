@@ -10,7 +10,7 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.9.21';
+const APP_VERSION = 'v1.9.22';
 const APP_VERSION_NAME = 'TaskChute Unified ETA Engine & Real-Time Remaining Pipeline';
 var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
 

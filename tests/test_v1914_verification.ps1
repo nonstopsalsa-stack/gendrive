@@ -76,7 +76,7 @@ try {
     const r = [];
 
     // Test 1: APP_VERSION is v1.9.14
-    r.push({ name: 'APP_VERSION is v1.9.14', pass: typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v1.9.14', detail: typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined' });
+    r.push({ name: 'APP_VERSION is v1.9.x', pass: typeof APP_VERSION !== 'undefined' && /^v1\.9\.\d+$/.test(APP_VERSION), detail: typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined' });
 
     // Test 2: DELETED_HABITS key exists
     r.push({ name: 'STORAGE_KEYS.DELETED_HABITS exists', pass: typeof STORAGE_KEYS !== 'undefined' && Boolean(STORAGE_KEYS.DELETED_HABITS), detail: STORAGE_KEYS?.DELETED_HABITS });
@@ -148,22 +148,8 @@ try {
     const habitPropertiesPreserved = targetHabit && targetHabit.name === 'MODIFIED HABIT NAME' && targetHabit.section === 'night' && targetHabit.targetMin === 45;
     r.push({ name: 'mergeHabitsDeep adopts all modified attributes (name, section, min) 100%', pass: habitPropertiesPreserved, detail: targetHabit?.name + ' / ' + targetHabit?.section });
 
-    // Test 9: Stale Pull Barrier (pullDataFromCloud blocks overwrite when isLocalDirty = true)
-    isSyncing = false; // ensure not blocked by concurrent initial fetch
-    isLocalDirty = true;
-    let pullBlocked = false;
-    const origLog = console.log;
-    console.log = (...args) => {
-      const msg = args.map(a => String(a)).join(' ');
-      if (msg.includes('isLocalDirty = true') || msg.includes('Cloud pull skipped')) {
-        pullBlocked = true;
-      }
-      origLog(...args);
-    };
-    await pullDataFromCloud(false, false);
-    console.log = origLog;
-    r.push({ name: 'pullDataFromCloud blocks stale cloud pull when isLocalDirty = true', pass: pullBlocked, detail: 'pullBlocked: ' + pullBlocked });
-
+    // Test 9: (v1.9.22) pullDataFromCloud / auto cloud sync engine was removed; local-only save keeps working
+    r.push({ name: 'pullDataFromCloud is removed (auto cloud sync retired in v1.9.22)', pass: typeof pullDataFromCloud === 'undefined' && typeof pushDataToCloud === 'undefined' && typeof triggerCloudSync === 'undefined', detail: typeof pullDataFromCloud });
     return r;
   })()
 '@

@@ -60,7 +60,7 @@
   const storedJson = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRESETS) || '[]');
   assert("Test 4B: localStorage is updated with migrated full presets", storedJson.length >= 11, storedJson.length);
 
-  // Test 5: pullDataFromCloud defense against old cloud presets
+  // Test 5: mergeTaskPresetsDeep defense against old/foreign preset lists (cloud pull itself removed in v1.9.22)
   state.taskPresets = [...localWithCustom];
   localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
 
@@ -78,8 +78,8 @@
   state.taskPresets = mergeTaskPresetsDeep(state.taskPresets, cloudPresets);
   localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
 
-  assert("Test 5A: pullDataFromCloud defends custom preset against old cloud 6", state.taskPresets.some(p => p.id === 'custom_my_deep_work'));
-  assert("Test 5B: pullDataFromCloud maintains all 11 practical presets plus custom", state.taskPresets.length >= 12, state.taskPresets.length);
+  assert("Test 5A: mergeTaskPresetsDeep defends custom preset against old cloud 6", state.taskPresets.some(p => p.id === 'custom_my_deep_work'));
+  assert("Test 5B: mergeTaskPresetsDeep maintains all 11 practical presets plus custom", state.taskPresets.length >= 12, state.taskPresets.length);
 
   // Test 6: UI Interactivity & Preset Modal
   const btnPresets = document.getElementById('btn-task-presets');
