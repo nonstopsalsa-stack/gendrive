@@ -999,65 +999,17 @@ function saveCloudSyncSettings() {
 
   if (newUrl) {
     if (statusEl) {
-      statusEl.textContent = '🔄 クラウドへPCのデータを送信中...';
-      statusEl.style.color = '#38bdf8';
+      statusEl.textContent = '🟢 URLを保存しました（Driveバックアップ用・自動同期は行いません）';
+      statusEl.style.color = '#4ade80';
     }
-    pushDataToCloud().then(() => {
-      if (statusEl) {
-        statusEl.textContent = '🟢 送信成功！PCのデータがクラウドに保存されました';
-        statusEl.style.color = '#4ade80';
-      }
-      setTimeout(() => closeModal(), 1500);
-    }).catch(err => {
-      console.error(err);
-      if (statusEl) {
-        statusEl.textContent = '⚠️ 接続エラー: URLを確認してください';
-        statusEl.style.color = '#f87171';
-      }
-    });
+    setTimeout(() => closeModal(), 1200);
   } else {
     if (statusEl) {
       statusEl.textContent = 'ステータス: URLが解除されました';
       statusEl.style.color = 'var(--text-dim)';
     }
-    updateSyncStatus('local');
   }
-}
-
-function testCloudSyncPull() {
-  const statusEl = document.getElementById('cloud-sync-modal-status');
-  if (!getGasApiUrl()) {
-    alert('先にGASウェブアプリURLを入力してください');
-    return;
-  }
-  if (statusEl) {
-    statusEl.textContent = '📥 クラウドから最新データを取得中...';
-    statusEl.style.color = '#38bdf8';
-  }
-  pullDataFromCloud(true).then(() => {
-    if (statusEl) {
-      statusEl.textContent = '🟢 クラウドから最新データを取得しました！';
-      statusEl.style.color = '#4ade80';
-    }
-  });
-}
-
-function testCloudSyncPush() {
-  const statusEl = document.getElementById('cloud-sync-modal-status');
-  if (!getGasApiUrl()) {
-    alert('先にGASウェブアプリURLを入力してください');
-    return;
-  }
-  if (statusEl) {
-    statusEl.textContent = '📤 クラウドへデータを送信中...';
-    statusEl.style.color = '#38bdf8';
-  }
-  pushDataToCloud().then(() => {
-    if (statusEl) {
-      statusEl.textContent = '🟢 クラウドへ正常に送信完了しました！';
-      statusEl.style.color = '#4ade80';
-    }
-  });
+  updateSyncStatus('local');
 }
 
 function clearCloudSyncSettings() {

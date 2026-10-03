@@ -2988,7 +2988,6 @@
             <h3>プリセットタスク (ワンクリック即時追加・開始)</h3>
           </div>
           <div class="modal-header-actions">
-            <button type="button" class="btn-subtle" id="btn-restore-standard-presets" style="font-size: 11.5px; padding: 5px 12px; gap: 6px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; cursor: pointer;" title="定番実用プリセット（家事リセット、GS休憩、買い物、シャワー、ポスト確認等）を一括追加・復元">🌟 実用プリセット復元</button>
             <button type="button" class="btn-primary" id="btn-toggle-add-preset" style="font-size: 11.5px; padding: 5px 12px; gap: 6px;">➕ 新規プリセット作成 <span class="kbd-sub">N</span></button>
             <button type="button" class="modal-close" id="btn-close-task-presets">✕</button>
           </div>
@@ -3344,8 +3343,8 @@
       </div>
       <div class="modal-body" style="padding: 20px;">
         <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 14px; margin-bottom: 18px; font-size: 13px; line-height: 1.6;">
-          <b style="color: var(--accent-cyan);">⚡ PC ⇔ Androidスマホ 完全自動同期</b><br>
-          Google Apps Script (GAS) の「ウェブアプリURL」を設定すると、タスクやハビットの実行状態がGoogleスプレッドシートを介してスマホ版とリアルタイム同期されます。
+          <b style="color: var(--accent-cyan);">☁️ Driveバックアップ用の設定</b><br>
+          Google Apps Script (GAS) の「ウェブアプリURL」を設定すると、下のGoogle Driveバックアップ（5シート書き出し／復元）が利用できます。PC側の自動クラウド同期は行いません。
         </div>
 
         <div class="form-group" style="margin-bottom: 16px;">
@@ -3355,9 +3354,7 @@
         </div>
 
         <div style="display: flex; gap: 10px; margin-top: 14px;">
-          <button type="button" class="btn-primary" onclick="saveCloudSyncSettings()" style="flex: 2; height: 40px; font-weight: 700;">💾 設定を保存して今すぐ同期</button>
-          <button type="button" class="btn-secondary" onclick="testCloudSyncPull()" style="flex: 1; height: 40px;">📥 クラウドから取得</button>
-          <button type="button" class="btn-secondary" onclick="testCloudSyncPush()" style="flex: 1; height: 40px;">📤 クラウドへ送信</button>
+          <button type="button" class="btn-primary" onclick="saveCloudSyncSettings()" style="flex: 2; height: 40px; font-weight: 700;">💾 設定を保存</button>
         </div>
 
         <!-- Google Drive Time-Machine & 5-Sheet Backup Section -->

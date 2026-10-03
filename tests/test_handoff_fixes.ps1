@@ -269,19 +269,13 @@ try {
   }
 
   // ========================================================
-  // Step 4-D: restoreStandardPresets() practical preset expansion
+  // Step 4-D: restoreStandardPresets 廃止 / 自動補完(mergeTaskPresetsDeep)は健在
   // ========================================================
-  if (typeof restoreStandardPresets === 'function') {
-    state.taskPresets = [{ id: 'p_custom', title: 'Custom Preset' }];
-    restoreStandardPresets();
-    assert("Step 4-D: restoreStandardPresets expanded presets beyond original 6", state.taskPresets.length >= 11, 'Length: ' + state.taskPresets.length);
-    const hasHouseReset = state.taskPresets.some(p => p.id === 'preset_house_reset');
-    const hasBreak = state.taskPresets.some(p => p.id === 'preset_gs_break');
-    assert("Step 4-D: restoreStandardPresets contains house reset and GS break", hasHouseReset && hasBreak);
-  } else {
-    assert("Step 4-D: restoreStandardPresets exists", false, "restoreStandardPresets not defined");
-  }
-
+  assert("Step 4-D: restoreStandardPresets is removed", typeof restoreStandardPresets === 'undefined');
+  assert("Step 4-D: restore button is removed from DOM", !document.getElementById('btn-restore-standard-presets'));
+  const mergedPresets = mergeTaskPresetsDeep([{ id: 'p_custom', title: 'Custom Preset' }], []);
+  assert("Step 4-D: mergeTaskPresetsDeep auto-supplements practical presets", mergedPresets.length >= 11, 'Length: ' + mergedPresets.length);
+  assert("Step 4-D: merged presets contain house reset and GS break", mergedPresets.some(p => p.id === 'preset_house_reset') && mergedPresets.some(p => p.id === 'preset_gs_break'));
   return tests;
 })()
 '@

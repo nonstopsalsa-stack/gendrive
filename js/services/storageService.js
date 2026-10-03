@@ -20,9 +20,6 @@ var STORAGE_KEYS = Object.assign(window.STORAGE_KEYS || {}, {
   DELETED_HABITS: 'gendrive_deleted_habit_ids_v1'
 });
 
-let cloudSyncTimeout = null;
-let isSyncing = false;
-let hasPendingPush = false;
 let isLocalDirty = false; // 逆流防止弁フラグ (ローカル未送信変更あり)
 let lastAutoBackupTime = 0;
 let lastKnownTasksStateMap = new Map();
@@ -219,7 +216,6 @@ function restoreFromSnapshot(snapshotIndex = 0) {
       localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
 
       if (typeof renderApp === 'function') renderApp();
-      if (getGasApiUrl()) pushDataToCloud();
 
       alert(`✅ ${snap.displayTime} の状態に完全復元しました！`);
     }
@@ -287,7 +283,6 @@ function importFullBackupJSON(file) {
         }
 
         if (typeof renderApp === 'function') renderApp();
-        if (getGasApiUrl()) pushDataToCloud();
 
         alert('✅ バックアップファイルからの復元が完了しました！');
       }
@@ -998,9 +993,7 @@ function saveTasks(skipCloudSync = false) {
     updateSidebarBadges();
   }
   updateSyncStatus('local');
-  if (!skipCloudSync) {
-    triggerCloudSync();
-  }
+  // v1.9.20: 自動クラウド同期は廃止。skipCloudSync は後方互換のため引数のみ維持
 }
 
 // =========================================================================
@@ -1045,9 +1038,7 @@ function saveGoals(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(state.goals));
   updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
-  if (!skipCloudSync) {
-    triggerCloudSync();
-  }
+  // v1.9.20: 自動クラウド同期は廃止。skipCloudSync は後方互換のため引数のみ維持
 }
 
 // =========================================================================
@@ -1133,9 +1124,7 @@ function saveTaskPresets(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
   updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
-  if (!skipCloudSync) {
-    triggerCloudSync();
-  }
+  // v1.9.20: 自動クラウド同期は廃止。skipCloudSync は後方互換のため引数のみ維持
 }
 
 // =========================================================================
@@ -1164,9 +1153,7 @@ function saveManifesto(skipCloudSync = false) {
   localStorage.setItem(STORAGE_KEYS.MANIFESTO, JSON.stringify(state.manifesto));
   updateSyncMetadata({ lastUpdatedDevice: 'PC' });
   createAutoBackupSnapshot();
-  if (!skipCloudSync) {
-    triggerCloudSync();
-  }
+  // v1.9.20: 自動クラウド同期は廃止。skipCloudSync は後方互換のため引数のみ維持
 }
 
 // =========================================================================
@@ -1332,11 +1319,6 @@ function loadHabits() {
   if (saved && rawBefore !== JSON.stringify(habits)) {
     try {
       localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(habits));
-      setTimeout(() => {
-        if (typeof pushDataToCloud === 'function' && typeof getGasApiUrl === 'function' && getGasApiUrl()) {
-          pushDataToCloud();
-        }
-      }, 1500);
     } catch (e) {
       console.warn('Auto-persisting healed habits failed:', e);
     }
@@ -1682,9 +1664,7 @@ function saveHabits(skipCloudSync = false) {
   updateSyncMetadata({ lastUpdatedDevice: 'PC', lastUpdatedAt: nowIso });
   createAutoBackupSnapshot();
   updateSyncStatus('local');
-  if (!skipCloudSync) {
-    triggerCloudSync();
-  }
+  // v1.9.20: 自動クラウド同期は廃止。skipCloudSync は後方互換のため引数のみ維持
 }
 
 // Master Permanent Reordering Engine
@@ -1730,309 +1710,6 @@ function saveCustomTags() {
   updateSyncStatus('local');
 }
 
-// =========================================================================
-// 6. Zero-Click Realtime Cloud Sync Engine (Instant Push & 15s Heartbeat)
-// =========================================================================
-
-let heartbeatInterval = null;
-
-function triggerCloudSync() {
-  const gasUrl = getGasApiUrl();
-  if (!gasUrl) return;
-
-  if (isSyncing) {
-    // 送信中の場合は次回バッチ送信フラグを立てる
-    hasPendingPush = true;
-    return;
-  }
-
-  if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
-  // インテリジェント・バッチ同期 (1500ms デバウンス): 短時間の連続操作を1本のリクエストに集約
-  cloudSyncTimeout = setTimeout(() => {
-    pushDataToCloud();
-  }, 1500);
-}
-
-// Fetch with AbortController Timeout to prevent hanging/blocking (20s timeout for realistic GAS payload)
-async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { credentials: 'omit', ...options, signal: controller.signal });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
-  }
-}
-
-async function pushDataToCloud() {
-  const gasUrl = getGasApiUrl();
-  if (!gasUrl) return;
-
-  // テスト環境下で本番GAS URLを誤って叩くことを物理遮断する安全ガード
-  if (typeof window !== 'undefined' && window.__GENDRIVE_TEST_MODE__ === true) {
-    if (gasUrl.includes('script.google.com')) {
-      console.warn('[Safety Interceptor] Test mode active. Push to production GAS URL blocked.');
-      return;
-    }
-  }
-
-  // 送信前にダミーデータを完全にパージ
-  state.tasks = sanitizeTasksDummyFilter(state.tasks);
-  state.habits = sanitizeHabitsDummyFilter(state.habits);
-
-  if (isSyncing) {
-    hasPendingPush = true;
-    return;
-  }
-
-  isSyncing = true;
-  updateSyncStatus('syncing');
-
-  try {
-    const meta = updateSyncMetadata({ lastUpdatedDevice: 'PC' });
-    const deletedMap = loadDeletedTaskMap();
-    const deletedTasksObj = {};
-    deletedMap.forEach((v, k) => { deletedTasksObj[k] = v; });
-
-    const deletedHabitMap = typeof loadDeletedHabitMap === 'function' ? loadDeletedHabitMap() : new Map();
-    const deletedHabitsObj = {};
-    deletedHabitMap.forEach((v, k) => { deletedHabitsObj[k] = v; });
-
-    const payload = {
-      tasks: state.tasks,
-      habits: state.habits,
-      goals: state.goals,
-      manifesto: state.manifesto,
-      taskPresets: mergeTaskPresetsDeep(state.taskPresets, []),
-      metadata: {
-        ...meta,
-        deletedTasks: deletedTasksObj,
-        deletedHabits: deletedHabitsObj
-      }
-    };
-
-    const response = await fetchWithTimeout(gasUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify(payload)
-    }, 20000);
-
-    let isSuccess = false;
-    try {
-      const resJson = await response.json();
-      if (resJson && resJson.status === 'success') {
-        isSuccess = true;
-        if (resJson.lastUpdatedAt) {
-          updateSyncMetadata({
-            lastUpdatedAt: resJson.lastUpdatedAt,
-            lastUpdatedDevice: 'PC'
-          });
-        }
-      }
-    } catch (e) {
-      if (response.ok || response.status === 200 || response.type === 'opaque') {
-        isSuccess = true;
-      }
-    }
-
-    if (isSuccess) {
-      isLocalDirty = false; // クラウド送信成功: ダーティ解除 (最新状態同期完了)
-      updateSyncStatus('cloud_success');
-    } else {
-      updateSyncStatus('cloud_error');
-    }
-  } catch (err) {
-    console.error('Cloud sync push failed (timeout or offline):', err);
-    updateSyncStatus('offline');
-  } finally {
-    isSyncing = false;
-    // 送信中に新たなローカル操作があった場合、100ms後に最新スナップショットを再送
-    if (hasPendingPush) {
-      hasPendingPush = false;
-      setTimeout(() => {
-        pushDataToCloud();
-      }, 100);
-    }
-  }
-}
-
-async function pullDataFromCloud(forceApply = false, isSilent = false) {
-  const gasUrl = getGasApiUrl();
-  if (!gasUrl || isSyncing) return;
-
-  // 【逆流完全防止弁 (Stale Pull Barrier)】
-  // ローカルに未送信の変更がある間は、過去のクラウドデータで画面を上書きしない！
-  if (isLocalDirty && !forceApply) {
-    if (!isSilent) console.log('[Sync] Pending local changes exist (isLocalDirty = true). Cloud pull skipped to prevent overwrite.');
-    triggerCloudSync(); // プルではなく、最新ローカルデータのプッシュを促す
-    return;
-  }
-
-  isSyncing = true;
-  if (!isSilent) {
-    updateSyncStatus('syncing');
-  }
-
-  try {
-    const response = await fetchWithTimeout(`${gasUrl}?t=${Date.now()}`, { credentials: 'omit' }, 20000);
-    const resJson = await response.json();
-
-    if (resJson.status === 'success' && resJson.data) {
-      const cloudData = resJson.data;
-      const cloudMeta = cloudData.metadata || {};
-      const localMeta = getSyncMetadata();
-
-      // クラウド側のタスク Tombstone をローカル台帳へ合流
-      if (cloudMeta.deletedTasks && typeof cloudMeta.deletedTasks === 'object') {
-        const locDeletedMap = loadDeletedTaskMap();
-        let changed = false;
-        Object.keys(cloudMeta.deletedTasks).forEach(id => {
-          const remoteEntry = cloudMeta.deletedTasks[id];
-          if (!remoteEntry) return;
-          const remoteTime = new Date(remoteEntry.deletedAt || remoteEntry).getTime();
-          const localEntry = locDeletedMap.get(String(id));
-          if (!localEntry || remoteTime > new Date(localEntry.deletedAt).getTime()) {
-            locDeletedMap.set(String(id), typeof remoteEntry === 'object' ? remoteEntry : { deletedAt: remoteEntry });
-            changed = true;
-          }
-        });
-        if (changed) {
-          saveDeletedTaskMap(locDeletedMap);
-        }
-      }
-
-      // クラウド側のハビット Tombstone をローカル台帳へ合流
-      if (cloudMeta.deletedHabits && typeof cloudMeta.deletedHabits === 'object') {
-        const locDeletedHabitMap = loadDeletedHabitMap();
-        let habitChanged = false;
-        Object.keys(cloudMeta.deletedHabits).forEach(id => {
-          const remoteEntry = cloudMeta.deletedHabits[id];
-          if (!remoteEntry) return;
-          const remoteTime = new Date(remoteEntry.deletedAt || remoteEntry).getTime();
-          const localEntry = locDeletedHabitMap.get(String(id));
-          if (!localEntry || remoteTime > new Date(localEntry.deletedAt).getTime()) {
-            locDeletedHabitMap.set(String(id), typeof remoteEntry === 'object' ? remoteEntry : { deletedAt: remoteEntry });
-            habitChanged = true;
-          }
-        });
-        if (habitChanged) {
-          saveDeletedHabitMap(locDeletedHabitMap);
-        }
-      }
-
-      // 【引き算: 巻き戻し完全遮断】フェッチ通信中にローカル操作が発生していた場合、
-      // または未送信のローカル変更がある場合は、古いクラウドデータでローカルを上書き・逆流させず即時終了
-      if (hasPendingPush || isLocalDirty) {
-        if (!isSilent) console.log('[Sync] Pending local changes exist during pull. Skipping cloud merge to prevent rollback.');
-        return;
-      }
-
-      const cloudTime = new Date(cloudMeta.lastUpdatedAt || 0).getTime();
-      const localTime = new Date(localMeta.lastUpdatedAt || 0).getTime();
-
-      // 安全化された同期判定:
-      // ローカルが完全に空（0件）の場合は復旧
-      const localIsEmpty = !state.tasks || state.tasks.length === 0;
-      const hasMissingLocalTasks = Array.isArray(cloudData.tasks) && (!state.tasks || state.tasks.length < cloudData.tasks.length);
-
-      // 防衛ガード: localTime > cloudTime の場合、直近でローカル操作（タスク削除等）が行われておりローカルが最新。
-      // hasMissingLocalTasks だけを理由に古いクラウドデータでローカルを強制上書き・逆流させない！
-      const shouldPull = forceApply || cloudTime > localTime || !localMeta.lastUpdatedAt || localIsEmpty || (hasMissingLocalTasks && localTime <= cloudTime);
-
-      if (shouldPull) {
-        if (Array.isArray(cloudData.tasks)) {
-          state.tasks = mergeTasksDeep(state.tasks, cloudData.tasks);
-          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(state.tasks));
-        }
-        if (Array.isArray(cloudData.habits)) {
-          state.habits = mergeHabitsDeep(state.habits, cloudData.habits);
-          localStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(state.habits));
-        }
-        if (cloudData.goals && Object.keys(cloudData.goals).length > 0) {
-          state.goals = cloudData.goals;
-          localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(state.goals));
-        }
-        if (cloudData.manifesto && cloudData.manifesto.body) {
-          state.manifesto = cloudData.manifesto;
-          localStorage.setItem(STORAGE_KEYS.MANIFESTO, JSON.stringify(state.manifesto));
-        }
-        const cloudPresets = Array.isArray(cloudData.taskPresets) ? cloudData.taskPresets : [];
-        const mergedPresets = mergeTaskPresetsDeep(state.taskPresets, cloudPresets);
-        state.taskPresets = mergedPresets;
-        localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
-
-        // クラウド側が古いサンプル（6件以下）または定番実用プリセットが欠落していた場合、
-        // マージ後の完全なプリセットをクラウドへ即座にプッシュバックしてクラウドのマスターを恒久最新化
-        if (cloudPresets.length < mergedPresets.length) {
-          setTimeout(() => {
-            pushDataToCloud();
-          }, 500);
-        }
-
-        updateSyncMetadata({
-          lastUpdatedAt: cloudMeta.lastUpdatedAt || new Date().toISOString(),
-          lastUpdatedDevice: cloudMeta.lastUpdatedDevice || 'CLOUD',
-          lastProcessedDate: cloudMeta.lastProcessedDate || localMeta.lastProcessedDate
-        });
-
-        if (typeof renderApp === 'function') {
-          renderApp();
-        }
-        updateSyncStatus('cloud_success', '☁️ クラウド最新同期完了');
-      } else if (localTime > cloudTime) {
-        // Local is newer, push to cloud
-        pushDataToCloud();
-      } else {
-        updateSyncStatus('cloud_success');
-      }
-    }
-  } catch (err) {
-    if (!isSilent) console.error('Cloud pull failed (offline or network error):', err);
-    updateSyncStatus('offline');
-  } finally {
-    isSyncing = false;
-    if (hasPendingPush) {
-      hasPendingPush = false;
-      setTimeout(() => {
-        pushDataToCloud();
-      }, 100);
-    }
-  }
-}
-
-// 45-Second Silent Heartbeat Sync & Focus Resume Loop (引き算: 過密15sポーリングを緩和しGAS通信詰まりを解消)
-function initRealtimeSyncHeartbeat() {
-  if (heartbeatInterval) clearInterval(heartbeatInterval);
-  heartbeatInterval = setInterval(() => {
-    if (getGasApiUrl() && !isSyncing && !isLocalDirty) {
-      pullDataFromCloud(false, true); // Silent background sync
-    }
-  }, 45000); // Poll every 45s
-
-  window.addEventListener('focus', () => {
-    if (getGasApiUrl() && !isSyncing) {
-      pullDataFromCloud(false, true);
-    }
-  });
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && getGasApiUrl() && !isSyncing) {
-      pullDataFromCloud(false, true);
-    }
-  });
-}
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', () => {
-    initRealtimeSyncHeartbeat();
-  });
-}
-
 /**
  * 哲生さんの全マスターデータ（ハビット・タスク・目標）を一発で完全復元する関数
  */
@@ -2061,11 +1738,6 @@ function restoreDefaultMasterData() {
     renderApp();
   }
 
-  // クラウドにも即時プッシュ
-  if (getGasApiUrl()) {
-    pushDataToCloud();
-  }
-
   alert('⚡ 哲生さんのマスターデータ（全ハビット・タスク・目標）を完全に復元しました！');
 }
 
@@ -2074,46 +1746,20 @@ function updateSyncStatus(type = 'local', customText = null) {
   if (!el) return;
 
   const timeStr = new Date().toLocaleTimeString();
-  const gasConfigured = !!getGasApiUrl();
-
-  if (type === 'syncing') {
-    el.textContent = '🔄 クラウド同期中...';
-    el.style.color = '#38bdf8';
-  } else if (type === 'cloud_success') {
-    el.textContent = customText || `🟢 クラウド同期済 (${timeStr})`;
-    el.style.color = '#4ade80';
-  } else if (type === 'offline') {
-    el.textContent = `🟡 ローカル保存済 (オフライン ${timeStr})`;
-    el.style.color = '#facc15';
-  } else if (type === 'cloud_error') {
-    el.textContent = `⚠️ 同期エラー (${timeStr})`;
-    el.style.color = '#f87171';
-  } else {
-    if (gasConfigured) {
-      el.textContent = `🟢 保存完了 (${timeStr})`;
-      el.style.color = '#4ade80';
-    } else {
-      el.textContent = `💾 ローカル保存 (${timeStr})`;
-      el.style.color = '#94a3b8';
-    }
-  }
+  el.textContent = customText || `💾 保存完了 (${timeStr})`;
+  el.style.color = '#4ade80';
 }
 
-// Instant Data Reload & Re-synchronization Engine (R Key / Quick Reload Button)
+// Instant Data Reload (R Key / Quick Reload Button) - 常にローカル再読込
 function reloadAppData() {
-  const gasUrl = getGasApiUrl();
-  if (gasUrl) {
-    pullDataFromCloud(true);
-  } else {
-    state.habits = loadHabits();
-    state.tasks = loadTasks();
-    state.goals = loadGoals();
-    state.manifesto = loadManifesto();
-    state.taskPresets = loadTaskPresets();
-    state.habits.forEach(recalculateHabitRates);
-    renderApp();
-    updateSyncStatus('local', '🔄 ローカル再読み込み完了');
-  }
+  state.habits = loadHabits();
+  state.tasks = loadTasks();
+  state.goals = loadGoals();
+  state.manifesto = loadManifesto();
+  state.taskPresets = loadTaskPresets();
+  state.habits.forEach(recalculateHabitRates);
+  renderApp();
+  updateSyncStatus('local', '🔄 ローカル再読み込み完了');
 }
 
 // =========================================================================
@@ -2247,14 +1893,10 @@ async function importFromDriveBackup(fileId, fileName = '選択したバック�
     lastUpdatedAt: new Date().toISOString()
   });
 
-  // 4. 再描画 & 通常同期
+  // 4. 再描画
   if (typeof renderApp === 'function') {
     renderApp();
   }
-  if (getGasApiUrl()) {
-    pushDataToCloud();
-  }
-
   return {
     tasksCount: (state.tasks || []).length,
     habitsCount: (state.habits || []).length

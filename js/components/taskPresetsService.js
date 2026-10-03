@@ -633,19 +633,3 @@ function setupTaskPresetsHandlers() {
   if (preProjMaj) preProjMaj.addEventListener('change', () => updateMinorSelectOptions('select-preset-proj-major', 'select-preset-proj-minor', PROJECTS_DATA));
 
 }
-
-function restoreStandardPresets() {
-  if (!confirm('⚡ 定番の実用プリセット（家事リセット、GS休憩、買い物、シャワー/風呂、ポスト確認など）を一括追加／復元しますか？')) {
-    return;
-  }
-  const prevCount = (state.taskPresets || []).length;
-  state.taskPresets = (typeof mergeTaskPresetsDeep === 'function')
-    ? mergeTaskPresetsDeep(state.taskPresets, DEFAULT_TASK_PRESETS)
-    : [...(state.taskPresets || []), ...(DEFAULT_TASK_PRESETS || [])];
-  const addedCount = state.taskPresets.length - prevCount;
-
-  if (typeof saveTaskPresets === 'function') saveTaskPresets();
-  renderTaskPresetsCards();
-  alert(`✨ ${addedCount > 0 ? addedCount + '件の実用プリセットを反映・復元しました！' : '全ての実用プリセットが既に登録・最新化されています！'}`);
-}
-
