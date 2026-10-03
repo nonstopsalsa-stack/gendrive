@@ -40,8 +40,8 @@ function renderAllView() {
   const todayTasks = state.tasks.filter(isTaskForSelectedDate);
   const allHabits = isToday ? state.habits : [];
 
-  const doneTasks = todayTasks.filter(t => t.status === 'completed').length;
-  const doneHabits = allHabits.filter(h => h.status === 'completed').length;
+  const doneTasks = todayTasks.filter(t => (typeof isTaskDone === 'function' ? isTaskDone(t) : t.status === 'completed')).length;
+  const doneHabits = allHabits.filter(h => (typeof isHabitDone === 'function' ? isHabitDone(h) : h.status === 'completed')).length;
 
   const totalAll = todayTasks.length + allHabits.length;
   const totalDoneAll = doneTasks + doneHabits;
@@ -151,7 +151,7 @@ function renderAllView() {
           ${showTasks ? `
             <div class="section-subgroup">
               <div style="font-size: 13px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding-bottom: 6px;">
-                <span>🎯 ${isToday ? '今日の全タスク' : '対象日の全タスク'} (${flatTasks.length}件)</span>
+                <span>🎯 ${isToday ? '今日の全タスク' : '対象日の全タスク'} (${doneTasks}/${todayTasks.length}件${flatTasks.length !== todayTasks.length ? ` · 表示:${flatTasks.length}` : ''})</span>
                 <button class="btn-banner-add btn-banner-add-task" onclick="openAddTaskModal()" style="font-size: 11px; padding: 3px 8px;">＋ タスク追加</button>
               </div>
               <div class="cards-list">
@@ -162,7 +162,7 @@ function renderAllView() {
           ${showHabits ? `
             <div class="section-subgroup">
               <div style="font-size: 13px; font-weight: 700; color: var(--accent-emerald); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(52, 211, 153, 0.2); padding-bottom: 6px;">
-                <span>🌿 今日の全ハビット (${flatHabits.length}件)</span>
+                <span>🌿 今日の全ハビット (${doneHabits}/${allHabits.length}件${flatHabits.length !== allHabits.length ? ` · 表示:${flatHabits.length}` : ''})</span>
                 <button class="btn-banner-add btn-banner-add-habit" onclick="openAddModal()" style="font-size: 11px; padding: 3px 8px;">＋ ハビット追加</button>
               </div>
               <div class="cards-list">
@@ -206,83 +206,54 @@ function renderAllView() {
     }
 
     let secEtaBadgeHtml = '';
+    const secEta = isToday && (typeof getSectionEta === 'function') ? getSectionEta(s.name) : null;
 
     if (isToday) {
-      let secTaskRemainMin = 0;
-      let secTaskRemainCount = 0;
-      secTasksAll.forEach(t => {
-        const st = getTaskStatusForSelectedDate(t);
-        if (st !== 'completed' && st !== 'skipped') {
-          secTaskRemainMin += getItemRemainingMinutes(t, 'task');
-          secTaskRemainCount++;
-        }
-      });
+      const secRemainMin = secEta ? secEta.remainMin : 0;
+      const secRemainCount = secEta ? secEta.remainCount : 0;
+      const secTaskRemainMin = secEta ? secEta.taskRemainMin : 0;
+      const secTaskRemainCount = secEta ? secEta.taskRemainCount : 0;
+      const secHabitRemainMin = secEta ? secEta.habitRemainMin : 0;
+      const secHabitRemainCount = secEta ? secEta.habitRemainCount : 0;
+      const secEtaTimeStr = secEta ? secEta.etaTimeStr : '達成!🎉';
+      const isSecOverdue = secEta ? secEta.isOverdue : false;
 
-      let secHabitRemainMin = 0;
-      let secHabitRemainCount = 0;
-      secHabits.forEach(h => {
-        if (typeof isHabitTimeExcluded === 'function' && isHabitTimeExcluded(h)) return;
-        const st = getHabitStatusForSelectedDate(h);
-        if (st !== 'completed' && st !== 'skipped') {
-          secHabitRemainMin += getItemRemainingMinutes(h, 'habit');
-          secHabitRemainCount++;
-        }
-      });
-
-      const secRemainMin = secTaskRemainMin + secHabitRemainMin;
-      const secRemainCount = secTaskRemainCount + secHabitRemainCount;
-      const now = new Date();
-      const secEtaDate = new Date(now.getTime() + secRemainMin * 60000);
-      const sH = String(secEtaDate.getHours()).padStart(2, '0');
-      const sM = String(secEtaDate.getMinutes()).padStart(2, '0');
-      const secEtaTimeStr = sH + ':' + sM;
-
-      let isSecOverdue = false;
-      if (s && secRemainCount > 0) {
-        const secEndHourDec = s.end;
-        const secEtaHourDec = secEtaDate.getHours() + (secEtaDate.getMinutes() / 60);
-        const curHourDec = now.getHours() + (now.getMinutes() / 60);
-        if (secEtaDate.getDate() !== now.getDate() || secEtaHourDec > secEndHourDec || curHourDec >= secEndHourDec) {
-          isSecOverdue = true;
-        }
-      }
-
-      const secTaskFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secTaskRemainMin) : (secTaskRemainMin + '\u5206');
-      const secHabitFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secHabitRemainMin) : (secHabitRemainMin + '\u5206');
-      const secTotalFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secRemainMin) : (secRemainMin + '\u5206');
+      const secTaskFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secTaskRemainMin) : (secTaskRemainMin + '分');
+      const secHabitFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secHabitRemainMin) : (secHabitRemainMin + '分');
+      const secTotalFormatted = (typeof formatMinsUnified === 'function') ? formatMinsUnified(secRemainMin) : (secRemainMin + '分');
 
       if (secRemainCount > 0) {
         const overdueCls = isSecOverdue ? ' eta-alert-overdue' : '';
-        secEtaBadgeHtml = '<div class="tc-eta-unified-badge tc-eta-compact' + overdueCls + '" title="\u5F53\u30BB\u30AF\u30B7\u30E7\u30F3\u6B8B\u308A\u6642\u9593: ' + secTotalFormatted + ' / \u5B8C\u4E86\u898B\u8FBC\u307F: ' + secEtaTimeStr + '">' +
+        secEtaBadgeHtml = '<div class="tc-eta-unified-badge tc-eta-compact' + overdueCls + '" title="当セクション残り時間: ' + secTotalFormatted + ' / 完了見込み: ' + secEtaTimeStr + '">' +
           '<div class="tc-eta-main-row">' +
             '<div class="tc-eta-item tc-eta-remain-item">' +
               '<span class="tc-eta-icon">&#x23F1;&#xFE0F;</span>' +
-              '<span class="tc-eta-label">\u6B8B:</span>' +
+              '<span class="tc-eta-label">残:</span>' +
               '<b class="tc-eta-val">' + secTotalFormatted + '</b>' +
             '</div>' +
             '<span class="tc-eta-arrow">&#x279C;</span>' +
             '<div class="tc-eta-item tc-eta-finish-item">' +
               '<span class="tc-eta-icon">&#x1F3C1;</span>' +
-              '<span class="tc-eta-label">\u898B\u8FBC:</span>' +
+              '<span class="tc-eta-label">見込:</span>' +
               '<b class="tc-eta-val tc-eta-highlight">' + secEtaTimeStr + '</b>' +
             '</div>' +
           '</div>' +
           '<div class="tc-eta-sub-row">' +
             '<span class="tc-eta-breakdown-item">' +
               '<span class="tc-eta-sub-icon">&#x1F4CB;</span>' +
-              '<span class="tc-eta-sub-label">\u30BF\u30B9\u30AF:</span>' +
+              '<span class="tc-eta-sub-label">タスク:</span>' +
               '<b class="tc-eta-sub-val">' + secTaskFormatted + ' (' + secTaskRemainCount + ')</b>' +
             '</span>' +
             '<span class="tc-eta-divider">|</span>' +
             '<span class="tc-eta-breakdown-item">' +
               '<span class="tc-eta-sub-icon">&#x1F504;</span>' +
-              '<span class="tc-eta-sub-label">\u30CF\u30D3\u30C3\u30C8:</span>' +
+              '<span class="tc-eta-sub-label">ハビット:</span>' +
               '<b class="tc-eta-sub-val">' + secHabitFormatted + ' (' + secHabitRemainCount + ')</b>' +
             '</span>' +
           '</div>' +
         '</div>';
       } else {
-        secEtaBadgeHtml = '<span style="font-size: 10.5px; font-weight: 700; color: #34d399; background: rgba(16, 185, 129, 0.2); padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(52, 211, 153, 0.4);">&#x2714;&#xFE0F; \u5168\u9054\u6210!\uD83C\uDF89</span>';
+        secEtaBadgeHtml = '<span style="font-size: 10.5px; font-weight: 700; color: #34d399; background: rgba(16, 185, 129, 0.2); padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(52, 211, 153, 0.4);">&#x2714;&#xFE0F; 全達成!🎉</span>';
       }
     } else if (isPast) {
       let secTaskActMins = 0;
@@ -403,9 +374,9 @@ function renderAllView() {
               ` : ''}
             </div>
             <span class="section-group-stats">
-              ${showTasks ? `🎯 タスク ${secTasksAll.filter(t=>t.status==='completed').length}/${secTasksAll.length}` : ''}
+              ${showTasks ? `🎯 タスク ${secEta ? secEta.taskDoneCount : secTasksAll.filter(t=>(typeof isTaskDone==='function'?isTaskDone(t):t.status==='completed')).length}/${secEta ? secEta.taskTotalCount : secTasksAll.length}` : ''}
               ${showTasks && showHabits ? ' &nbsp;|&nbsp; ' : ''}
-              ${showHabits ? `🌿 ハビット ${secHabits.filter(h=>h.status==='completed').length}/${secHabits.length}` : ''}
+              ${showHabits ? `🌿 ハビット ${secEta ? secEta.habitDoneCount : secHabits.filter(h=>(typeof isHabitDone==='function'?isHabitDone(h):h.status==='completed')).length}/${secEta ? secEta.habitTotalCount : secHabits.length}` : ''}
             </span>
           </div>
         </div>

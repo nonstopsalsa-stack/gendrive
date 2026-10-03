@@ -24,13 +24,16 @@ function getPastIncompleteTasks() {
 }
 
 // 2. Get Tasks for a Section (with Smart Single Forwarding to Current Active Section on Today)
-function getTasksForSection(sectionName) {
+function getTasksForSection(sectionName, options = null) {
   const normSecName = normalizeSectionName(sectionName);
   const isToday = state.selectedDateOffset === 0;
   const targetSecIndex = SECTIONS_CONFIG.findIndex(s => s.name === normSecName);
 
-  if (!isToday || targetSecIndex === -1) {
-    // Past / Future: Strict section match
+  const nativeOnly = (typeof options === 'boolean') ? options : Boolean(options && options.nativeOnly);
+  const refDate = (options && options.now instanceof Date) ? options.now : (options instanceof Date ? options : null);
+
+  if (nativeOnly || !isToday || targetSecIndex === -1) {
+    // Past / Future or Native only: Strict section match
     return state.tasks.filter(t => {
       if (!isTaskForSelectedDate(t)) return false;
       return normalizeSectionName(t.section) === normSecName;
@@ -38,7 +41,7 @@ function getTasksForSection(sectionName) {
   }
 
   // TODAY:
-  const realCurrentSection = normalizeSectionName(detectCurrentSection());
+  const realCurrentSection = normalizeSectionName(detectCurrentSection(refDate));
   const realCurrentSecIndex = SECTIONS_CONFIG.findIndex(s => s.name === realCurrentSection);
 
   const result = [];

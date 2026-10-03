@@ -150,6 +150,16 @@ function getEstimatedDuration(item, type = 'task') {
 }
 
 function getItemRemainingMinutes(item, type = 'task') {
+  if (!item) return 0;
+  if (type === 'task') {
+    if (typeof isTaskDone === 'function' ? isTaskDone(item) : (item.status === 'completed')) return 0;
+    const st = (typeof getTaskStatusForSelectedDate === 'function') ? getTaskStatusForSelectedDate(item) : item.status;
+    if (st === 'completed' || st === 'skipped') return 0;
+  } else {
+    if (typeof isHabitDone === 'function' ? isHabitDone(item) : (item.status === 'completed')) return 0;
+    const st = (typeof getHabitStatusForSelectedDate === 'function') ? getHabitStatusForSelectedDate(item) : item.status;
+    if (st === 'completed' || st === 'skipped') return 0;
+  }
   if (item.status === 'completed' || item.status === 'skipped') return 0;
 
   const est = getEstimatedDuration(item, type).targetMin;

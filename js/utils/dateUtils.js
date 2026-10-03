@@ -72,8 +72,9 @@ function normalizeSectionName(secName) {
   return secName;
 }
 
-function detectCurrentSection() {
-  const hour = new Date().getHours() + new Date().getMinutes() / 60;
+function detectCurrentSection(targetDate = null) {
+  const d = (targetDate instanceof Date) ? targetDate : new Date();
+  const hour = d.getHours() + d.getMinutes() / 60;
   for (const s of SECTIONS_CONFIG) {
     if (s.start <= s.end) {
       if (hour >= s.start && hour < s.end) return s.name;

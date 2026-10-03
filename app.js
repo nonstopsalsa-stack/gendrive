@@ -717,13 +717,23 @@ function getHabitStatusForSelectedDate(habit) {
     return 'completed';
   }
 
-  // 過去日のレガシー履歴フォールバック（過去日かつ実ログがない場合のみhistoryを許容、今日(selectedDateOffset === 0)は実ログ絶対基準）
-  if (state.selectedDateOffset > 0) {
-    const hasHistoryDone = Array.isArray(habit.history) ? habit.history.includes(k) : Boolean(habit.history && (habit.history[k] === true || habit.history[k]?.done));
-    if (hasHistoryDone) return 'completed';
+  // 4. 完了履歴(history)に当日キーが存在する場合の判定
+  const hasHistoryDone = Array.isArray(habit.history) 
+    ? habit.history.includes(k) 
+    : Boolean(habit.history && (habit.history[k] === true || habit.history[k]?.done));
+  if (hasHistoryDone) return 'completed';
+
+  // 5. 擬似完了データ / 単体ステータス完了対応:
+  // 当日(selectedDateOffset === 0)で過去日のログや履歴を持たず、直接 status === 'completed' が指定されているモックデータへの安全な対応
+  if (habit.status === 'completed') {
+    const hasLogsFromOtherDays = Array.isArray(habit.executionLogs) && habit.executionLogs.some(l => l && l.dateKey && l.dateKey !== k);
+    const hasHistoryFromOtherDays = Array.isArray(habit.history) ? habit.history.some(d => d !== k) : false;
+    if (!hasLogsFromOtherDays && !hasHistoryFromOtherDays) {
+      return 'completed';
+    }
   }
 
-  // 4. 実行中・中断中判定（今日のみ）
+  // 6. 実行中・中断中判定（今日のみ）
   if (state.selectedDateOffset === 0) {
     if (habit.status === 'in_progress') return 'in_progress';
     if (habit.status === 'paused') return 'paused';
@@ -764,7 +774,7 @@ function getTaskStatusForSelectedDate(task) {
       }
     }
     if (Array.isArray(task.executionLogs)) {
-      const hasLog = task.executionLogs.some(l => l && l.dateKey === k);
+      const hasLog = task.executionLogs.some(l => l && (l.dateKey === k || (l.completedAt && l.completedAt.startsWith(k))) && l.status !== 'cancelled');
       if (hasLog) return 'completed';
     }
     if (task.status === 'completed') {
@@ -778,13 +788,32 @@ function getTaskStatusForSelectedDate(task) {
     return 'uncompleted';
   }
 
-  // 4. Single task
+  // 4. Single task: Check execution logs or status
+  if (Array.isArray(task.executionLogs)) {
+    const hasLog = task.executionLogs.some(l => l && (l.dateKey === k || (l.completedAt && l.completedAt.startsWith(k))) && l.status !== 'cancelled');
+    if (hasLog) return 'completed';
+  }
   if (state.selectedDateOffset === 0) {
     return task.status || 'uncompleted';
   }
 
   // 5. Past date: single task scheduled for that date
   return task.status || 'uncompleted';
+}
+
+function isTaskDone(task) {
+  if (!task) return false;
+  return getTaskStatusForSelectedDate(task) === 'completed';
+}
+
+function isHabitDone(habit) {
+  if (!habit) return false;
+  return getHabitStatusForSelectedDate(habit) === 'completed';
+}
+
+if (typeof window !== 'undefined') {
+  window.isTaskDone = isTaskDone;
+  window.isHabitDone = isHabitDone;
 }
 function isTaskForSelectedDate(task, dateObj = null) {
   if (!task || task.isDisabled) return false;
@@ -1951,111 +1980,52 @@ function calculateTaskChuteEstimates() {
   // 1. TODAY: Real-Time Dynamic ETA Mode
   // -------------------------------------------------------------
   if (isToday) {
-    if (dayEtaLabelEl) dayEtaLabelEl.textContent = "\u898B\u8FBC:";
-    if (secEtaLabelEl) secEtaLabelEl.textContent = "\u898B\u8FBC:";
+    if (dayEtaLabelEl) dayEtaLabelEl.textContent = "見込:";
+    if (secEtaLabelEl) secEtaLabelEl.textContent = "見込:";
 
-    // Day calculations
-    let dayTaskRemainMin = 0;
-    let dayTaskRemainCount = 0;
-    selectedDateTasks.forEach(t => {
-      if (t.isRecurringInstance) return;
-      const status = getTaskStatusForSelectedDate(t);
-      if (status !== "completed" && status !== "skipped") {
-        dayTaskRemainMin += getItemRemainingMinutes(t, "task");
-        dayTaskRemainCount++;
-      }
-    });
+    // 1. Day calculations via etaEngine
+    const dayData = (typeof getDayEta === 'function') ? getDayEta(now) : null;
+    const currentSec = state.currentSection || "第2セッション";
+    const currentSecConfig = (typeof SECTIONS_CONFIG !== "undefined") ? SECTIONS_CONFIG.find(s => s.name === currentSec) : null;
+    const secData = (typeof getSectionEta === 'function') ? getSectionEta(currentSec, now) : null;
 
-    let dayHabitRemainMin = 0;
-    let dayHabitRemainCount = 0;
-    selectedDateHabits.forEach(h => {
-      if (typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)) return;
-      const status = getHabitStatusForSelectedDate(h);
-      if (status !== "completed" && status !== "skipped") {
-        dayHabitRemainMin += getItemRemainingMinutes(h, "habit");
-        dayHabitRemainCount++;
-      }
-    });
-
-    const totalDayRemainMin = dayTaskRemainMin + dayHabitRemainMin;
-    const totalDayRemainCount = dayTaskRemainCount + dayHabitRemainCount;
-    const dayEtaDate = new Date(now.getTime() + totalDayRemainMin * 60000);
-
-    const isDayOverdue = totalDayRemainCount > 0 && (
-      dayEtaDate.getDate() !== nowDay ||
-      (dayEtaDate.getTime() - now.getTime()) > ((24 * 60 - (now.getHours() * 60 + now.getMinutes())) * 60000)
-    );
-
-    const dH = String(dayEtaDate.getHours()).padStart(2, "0");
-    const dM = String(dayEtaDate.getMinutes()).padStart(2, "0");
-    let dayEtaTimeStr = dH + ":" + dM;
-    if (isDayOverdue) {
-      dayEtaTimeStr = "\u7FCC " + dayEtaTimeStr;
-    }
+    const totalDayRemainMin = dayData ? dayData.totalDayRemainMin : 0;
+    const totalDayRemainCount = dayData ? dayData.totalDayRemainCount : 0;
+    const dayTaskRemainMin = dayData ? dayData.dayTaskRemainMin : 0;
+    const dayTaskRemainCount = dayData ? dayData.dayTaskRemainCount : 0;
+    const dayHabitRemainMin = dayData ? dayData.dayHabitRemainMin : 0;
+    const dayHabitRemainCount = dayData ? dayData.dayHabitRemainCount : 0;
+    const dayEtaTimeStr = dayData ? dayData.dayEtaTimeStr : '達成!🎉';
+    const isDayOverdue = dayData ? dayData.isDayOverdue : false;
 
     if (dayRemainEl) dayRemainEl.textContent = formatMinsUnified(totalDayRemainMin);
-    if (dayEtaTimeEl) dayEtaTimeEl.textContent = totalDayRemainCount > 0 ? dayEtaTimeStr : "\u9054\u6210!\uD83C\uDF89";
+    if (dayEtaTimeEl) dayEtaTimeEl.textContent = totalDayRemainCount > 0 ? dayEtaTimeStr : "達成!🎉";
     if (dayTaskValEl) dayTaskValEl.textContent = formatMinsUnified(dayTaskRemainMin) + " (" + dayTaskRemainCount + ")";
     if (dayHabitValEl) dayHabitValEl.textContent = formatMinsUnified(dayHabitRemainMin) + " (" + dayHabitRemainCount + ")";
-    if (dayEtaInfoEl) dayEtaInfoEl.textContent = "\u6B8B " + formatMinsUnified(totalDayRemainMin) + " (" + totalDayRemainCount + "\u4EF6)";
+    if (dayEtaInfoEl) dayEtaInfoEl.textContent = "残 " + formatMinsUnified(totalDayRemainMin) + " (" + totalDayRemainCount + "件)";
 
     if (dayEtaBadge) {
       if (isDayOverdue) {
         dayEtaBadge.classList.add("eta-alert-overdue");
-        dayEtaBadge.title = "\u26A0\uFE0F \u5B8C\u4E86\u898B\u8FBC\u307F\u304C\u7FCC\u65E5 (" + dayEtaTimeStr + ") \u306B\u7A81\u5165\u3057\u3066\u3044\u307E\u3059 (\u6B8B: " + formatMinsUnified(totalDayRemainMin) + ")";
+        dayEtaBadge.title = "⚠️ 完了見込みが遅延しています (" + dayEtaTimeStr + ") (残: " + formatMinsUnified(totalDayRemainMin) + ")";
       } else {
         dayEtaBadge.classList.remove("eta-alert-overdue");
-        dayEtaBadge.title = "\u4eca\u65e5\u5168\u4f53\u306e\u6b8b\u308a\u6642\u9593: " + formatMinsUnified(totalDayRemainMin) + " / \u5b8c\u4e86\u898b\u8fbc\u307f: " + dayEtaTimeStr;
+        dayEtaBadge.title = "今日全体の残り時間: " + formatMinsUnified(totalDayRemainMin) + " / 完了見込み: " + dayEtaTimeStr;
       }
     }
 
-    // Section calculations
-    const currentSec = state.currentSection || "\u7B2C2\u30BB\u30AF\u30B7\u30E7\u30F3";
-    const currentSecConfig = (typeof SECTIONS_CONFIG !== "undefined") ? SECTIONS_CONFIG.find(s => s.name === currentSec) : null;
-    const secTasks = getTasksForSection(currentSec);
-    const secHabits = state.habits.filter(isHabitInCurrentTimeWindow);
-
-    let secTaskRemainMin = 0;
-    let secTaskRemainCount = 0;
-    secTasks.forEach(t => {
-      const status = getTaskStatusForSelectedDate(t);
-      if (status !== "completed" && status !== "skipped") {
-        secTaskRemainMin += getItemRemainingMinutes(t, "task");
-        secTaskRemainCount++;
-      }
-    });
-
-    let secHabitRemainMin = 0;
-    let secHabitRemainCount = 0;
-    secHabits.forEach(h => {
-      if (typeof isHabitTimeExcluded === "function" && isHabitTimeExcluded(h)) return;
-      const status = getHabitStatusForSelectedDate(h);
-      if (status !== "completed" && status !== "skipped") {
-        secHabitRemainMin += getItemRemainingMinutes(h, "habit");
-        secHabitRemainCount++;
-      }
-    });
-
-    const secRemainMin = secTaskRemainMin + secHabitRemainMin;
-    const secRemainCount = secTaskRemainCount + secHabitRemainCount;
-    const secEtaDate = new Date(now.getTime() + secRemainMin * 60000);
-
-    const sH = String(secEtaDate.getHours()).padStart(2, "0");
-    const sM = String(secEtaDate.getMinutes()).padStart(2, "0");
-    const secEtaTimeStr = sH + ":" + sM;
-
-    let isSecOverdue = false;
-    if (currentSecConfig && secRemainCount > 0) {
-      const secEndHourDec = currentSecConfig.end;
-      const secEtaHourDec = secEtaDate.getHours() + (secEtaDate.getMinutes() / 60);
-      const curHourDec = now.getHours() + (now.getMinutes() / 60);
-      if (secEtaDate.getDate() !== nowDay || secEtaHourDec > secEndHourDec || curHourDec >= secEndHourDec) {
-        isSecOverdue = true;
-      }
-    }
+    // 2. Section calculations via etaEngine
+    const secRemainMin = secData ? secData.remainMin : 0;
+    const secRemainCount = secData ? secData.remainCount : 0;
+    const secTaskRemainMin = secData ? secData.taskRemainMin : 0;
+    const secTaskRemainCount = secData ? secData.taskRemainCount : 0;
+    const secHabitRemainMin = secData ? secData.habitRemainMin : 0;
+    const secHabitRemainCount = secData ? secData.habitRemainCount : 0;
+    const secEtaTimeStr = secData ? secData.etaTimeStr : '達成!🎉';
+    const isSecOverdue = secData ? secData.isOverdue : false;
 
     if (secRemainMinEl) secRemainMinEl.textContent = formatMinsUnified(secRemainMin);
-    if (secEtaTimeEl) secEtaTimeEl.textContent = secRemainCount > 0 ? secEtaTimeStr : "\u9054\u6210!\uD83C\uDF89";
+    if (secEtaTimeEl) secEtaTimeEl.textContent = secRemainCount > 0 ? secEtaTimeStr : "達成!🎉";
     if (secTaskValEl) secTaskValEl.textContent = formatMinsUnified(secTaskRemainMin) + " (" + secTaskRemainCount + ")";
     if (secHabitValEl) secHabitValEl.textContent = formatMinsUnified(secHabitRemainMin) + " (" + secHabitRemainCount + ")";
 
@@ -2063,10 +2033,10 @@ function calculateTaskChuteEstimates() {
       if (isSecOverdue) {
         const endLabel = currentSecConfig ? currentSecConfig.endStr : "";
         secEtaBadge.classList.add("eta-alert-overdue");
-        secEtaBadge.title = "\u26A0\uFE0F \u30BB\u30AF\u30B7\u30E7\u30F3\u7D42\u4E86\u67A0 (" + endLabel + ") \u3092\u8D85\u904E\u3059\u308B\u898B\u8FBC\u307F\u3067\u3059 (" + secEtaTimeStr + ")";
+        secEtaBadge.title = "⚠️ セクション終了枠 (" + endLabel + ") を超過する見込みです (" + secEtaTimeStr + ")";
       } else {
         secEtaBadge.classList.remove("eta-alert-overdue");
-        secEtaBadge.title = "\u5F53\u30BB\u30AF\u30B7\u30E7\u30F3\u6B8B\u308A\u6642\u9593: " + formatMinsUnified(secRemainMin) + " / \u5B8C\u4E86\u898B\u8FBC\u307F: " + secEtaTimeStr;
+        secEtaBadge.title = "当セクション残り時間: " + formatMinsUnified(secRemainMin) + " / 完了見込み: " + secEtaTimeStr;
       }
     }
 

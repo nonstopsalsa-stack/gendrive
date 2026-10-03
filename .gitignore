@@ -1,2 +1,3 @@
-
 *.bak
+current_gas_*.json
+scratch/
