@@ -109,8 +109,8 @@ function openTagFilterModal() {
     <div style="padding: 10px 4px; font-size: 11px; color: var(--text-muted); line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.06); margin-top: 8px;">
       <b style="color: var(--text-main);">💡 タグの絞り込み方:</b><br>
       タグをクリックするたびに切り替わります：<br>
-      <span style="color: #38bdf8; font-weight: bold;">1回目: ✓ 含む（青）</span><br>
-      <span style="color: #ef4444; font-weight: bold;">2回目: 🚫 除外（赤）</span><br>
+      <span style="color: #ef4444; font-weight: bold;">1回目: 🚫 非表示（赤）</span><br>
+      <span style="color: #38bdf8; font-weight: bold;">2回目: ✓ それのみ表示（青）</span><br>
       <span style="color: #94a3b8;">3回目: ⚪ 解除（指定なし）</span>
     </div>
     <button class="cascade-btn" style="margin-top: 6px; background: rgba(56,189,248,0.2); border-color: #38bdf8; color: #fff; font-weight: 700;" onclick="closeModal()">

@@ -206,15 +206,15 @@ function toggleTagFilter(tag) {
   const isExcluded = state.filters.excludeTags.includes(cleanTag);
 
   if (!isIncluded && !isExcluded) {
-    // 1st click: Include (Blue)
-    state.filters.includeTags.push(cleanTag);
-  } else if (isIncluded) {
-    // 2nd click: Exclude (Red / Strikethrough)
-    state.filters.includeTags = state.filters.includeTags.filter(t => t !== cleanTag);
+    // 1st click: Exclude (Red / Strikethrough - 非表示)
     state.filters.excludeTags.push(cleanTag);
-  } else {
-    // 3rd click: Reset
+  } else if (isExcluded) {
+    // 2nd click: Include (Blue - それのみ表示)
     state.filters.excludeTags = state.filters.excludeTags.filter(t => t !== cleanTag);
+    state.filters.includeTags.push(cleanTag);
+  } else {
+    // 3rd click: Reset (解除)
+    state.filters.includeTags = state.filters.includeTags.filter(t => t !== cleanTag);
   }
 
   renderApp();
@@ -512,14 +512,14 @@ function renderSmartTagBar() {
     const isExc = excludeSet.has(name);
     let stateCls = '';
     let icon = '';
-    let hint = '左クリック: 絞込 / 右クリック: 削除・名前変更';
-    if (isInc) {
-      stateCls = 'include';
-      icon = '<span class="chip-state-icon">笨・/span>';
-      hint = '左クリック: 除外 / 右クリック: 削除・名前変更';
-    } else if (isExc) {
+    let hint = '左クリック: 非表示 / 右クリック: 削除・名前変更';
+    if (isExc) {
       stateCls = 'exclude';
-      icon = '<span class="chip-state-icon">📝</span>';
+      icon = '<span class="chip-state-icon">🚫</span>';
+      hint = '左クリック: それのみ表示 / 右クリック: 削除・名前変更';
+    } else if (isInc) {
+      stateCls = 'include';
+      icon = '<span class="chip-state-icon">✓</span>';
       hint = '左クリック: 解除 / 右クリック: 削除・名前変更';
     }
 
@@ -552,7 +552,7 @@ function renderTagSuggestions(containerId, inputId) {
     const isSelected = currentTags.includes(name);
     return `
       <span class="tag-suggestion-chip ${isSelected ? 'active' : ''}" onclick="toggleTagInInput('${inputId}', '${containerId}', '${name}')">
-        ${isSelected ? '笨・' : '+ '}#${name}
+        ${isSelected ? '✓ ' : '+ '}#${name}
       </span>
     `;
   }).join('');
