@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gendrive - Modal Management & Form Handler Service
  * 哲生 (AI Company OS & Personal OS Engine)
  */
@@ -241,7 +241,7 @@ function openAddTaskModal(sectionName = null, scheduledDate = null, bucket = nul
       }
     }
     const estInput = document.getElementById('add-task-est-min');
-    if (estInput) estInput.value = d.estMin || 15;
+    if (estInput) estInput.value = d.estMin || 30;
 
     const actualBucket = bucket || d.bucket || 'today';
     if (typeof state !== 'undefined' && state) state.selectedAddTaskBucket = actualBucket;
@@ -364,7 +364,7 @@ function openEditTaskModal(taskId) {
     const titleInput = document.getElementById('edit-task-title');
     if (titleInput) titleInput.value = task.title || '';
 
-    const movingAvgMin = (typeof calculateMovingAverageDuration === 'function') ? calculateMovingAverageDuration(task, 'task') : (task.estMin || 15);
+    const movingAvgMin = (typeof calculateMovingAverageDuration === 'function') ? calculateMovingAverageDuration(task, 'task') : (task.estMin || 30);
     const estMinInput = document.getElementById('edit-task-est-min');
     if (estMinInput) estMinInput.value = task.estMin || movingAvgMin;
 

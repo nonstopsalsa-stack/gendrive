@@ -76,7 +76,7 @@ function getObsidianButtonHtml(uri, itemId, itemType) {
 
 function getEstimatedDuration(item, type = 'task') {
   const isHabit = type === 'habit' || (item.id && String(item.id).startsWith('H')) || (!item.title && item.name);
-  const defaultFallback = isHabit ? (item.targetMin || 5) : (item.estMin || 15);
+  const defaultFallback = isHabit ? (item.targetMin || 5) : (item.estMin || 30);
 
   const logs = [];
 

@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.9.22';
-const APP_VERSION_NAME = 'TaskChute Unified ETA Engine & Real-Time Remaining Pipeline';
+const APP_VERSION = 'v1.9.23';
+const APP_VERSION_NAME = 'Task Default 30min & Calendar Month Follow';
 var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
 
 var MAX_TASK_PRESETS = 20;
@@ -148,7 +148,7 @@ const DEFAULT_TASK_DEFAULTS = {
   section: '第2セッション',
   customStart: '13:00',
   customEnd: '15:00',
-  estMin: 15,
+  estMin: 30,
   recType: 'everyday',
   domainMajor: 'PN1',
   domainMinor: 'ビジネス (動画編集制作)',
@@ -190,12 +190,12 @@ let lastHabitDefaults = { ...DEFAULT_HABIT_DEFAULTS };
 /**
  * ハビット・定期タスク・タスクの直近最大10回の実績平均所要時間（分）を自動計算
  * 10回未満（1回〜9回）はその回数分の実績平均値（1回のみならその1回の実績値）を算出
- * 1度も実績がない場合は新規デフォルト値（ハビット: 5分, タスク: 15分）を返す
+ * 1度も実績がない場合は新規デフォルト値（ハビット: 5分, タスク: 30分）を返す
  */
 function calculateMovingAverageDuration(item, itemType = null) {
-  if (!item) return 15;
+  if (!item) return 30;
   const isHabit = itemType === 'habit' || (item.id && String(item.id).startsWith('H')) || (!item.title && item.name);
-  const defaultFallback = isHabit ? 5 : 15;
+  const defaultFallback = isHabit ? 5 : 30;
 
   const durations = [];
 
@@ -258,11 +258,11 @@ function calculateMovingAverageDuration(item, itemType = null) {
     return Math.max(1, Math.round(sum / durations.length));
   }
 
-  // 1回も実績がない場合：ユーザー指定値があればそれ、なければデフォルト（ハビット:5分, タスク:15分）
+  // 1回も実績がない場合：ユーザー指定値があればそれ、なければデフォルト（ハビット:5分, タスク:30分）
   if (isHabit) {
     return item.targetMin || 5;
   } else {
-    return item.estMin || 15;
+    return item.estMin || 30;
   }
 }
 

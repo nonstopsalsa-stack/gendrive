@@ -2233,14 +2233,23 @@ function selectAndToggleHabit(id, index) {
 }
 
 // =========================================================================
-// Date & Section Navigation Functions for Arrow Keys
+// Date & Section Navigation Functions for Arrow Keys & Header Buttons
+function syncCalendarViewToSelectedDate() {
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() - (state.selectedDateOffset || 0));
+  state.calendarViewYear = targetDate.getFullYear();
+  state.calendarViewMonth = targetDate.getMonth();
+}
+
 function nextDay() {
   state.selectedDateOffset--;
+  syncCalendarViewToSelectedDate();
   renderApp();
 }
 
 function prevDay() {
   state.selectedDateOffset++;
+  syncCalendarViewToSelectedDate();
   renderApp();
 }
 
@@ -3121,24 +3130,14 @@ function setupDateNavHandlers() {
   const btnPrev = document.getElementById('btn-date-prev');
   if (btnPrev) {
     btnPrev.addEventListener('click', () => {
-      state.selectedDateOffset++;
-      const targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() - state.selectedDateOffset);
-      state.calendarViewYear = targetDate.getFullYear();
-      state.calendarViewMonth = targetDate.getMonth();
-      renderApp();
+      prevDay();
     });
   }
 
   const btnNext = document.getElementById('btn-date-next');
   if (btnNext) {
     btnNext.addEventListener('click', () => {
-      state.selectedDateOffset--;
-      const targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() - state.selectedDateOffset);
-      state.calendarViewYear = targetDate.getFullYear();
-      state.calendarViewMonth = targetDate.getMonth();
-      renderApp();
+      nextDay();
     });
   }
 
@@ -3499,7 +3498,7 @@ function setupTaskFormHandlers() {
       e.preventDefault();
       const newId = generateNextTaskId();
       const title = document.getElementById('add-task-title').value.trim();
-      const estMin = parseInt(document.getElementById('add-task-est-min').value, 10) || 15;
+      const estMin = parseInt(document.getElementById('add-task-est-min').value, 10) || 30;
       const section = document.getElementById('add-task-section')?.value || state.currentSection || '第2セッション';
       const customStart = document.getElementById('add-task-custom-start')?.value || null;
       const customEnd = document.getElementById('add-task-custom-end')?.value || null;

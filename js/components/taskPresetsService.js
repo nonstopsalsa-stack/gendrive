@@ -481,7 +481,7 @@ function executePresetTask(presetId) {
     section: targetSection,
     customStart: null,
     customEnd: null,
-    estMin: (typeof calculateMovingAverageDuration === 'function') ? calculateMovingAverageDuration(preset, 'task') : (preset.estMin || 15),
+    estMin: (typeof calculateMovingAverageDuration === 'function') ? calculateMovingAverageDuration(preset, 'task') : (preset.estMin || 30),
     actStart: null,
     actEnd: null,
     actMin: 0,
