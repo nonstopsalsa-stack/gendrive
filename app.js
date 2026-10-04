@@ -1095,8 +1095,8 @@ function startHabit(id) {
     console.warn('[Optimistic DOM Mutation] Non-fatal error:', domErr);
   }
 
-  // Automatically promote started habit to the top of its section
-  moveHabitToTopOfSection(targetId);
+  // [v1.9.23 改修]: ハビット一覧の並び順（sortOrder）恒久保護のため自動先頭移動は撤廃
+  // moveHabitToTopOfSection(targetId);
 
   // Auto-pause any other in-progress habit
   state.habits.forEach(h => {

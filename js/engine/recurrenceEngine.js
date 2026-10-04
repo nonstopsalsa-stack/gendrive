@@ -185,11 +185,8 @@ function getHabitDayCount(habit, dateKey = null) {
     }
   }
 
-  // 4. フォールバック: habit.todayCount キャッシュ
-  if (typeof habit.todayCount === 'number' && habit.todayCount > 0) {
-    return Math.min(habit.todayCount, targetTimes);
-  }
-
+  // [v1.9.23 改修]: 日付不問の孤立キャッシュ habit.todayCount へのフォールバックは完全撤廃。
+  // 指定日付（dKey）の executionLogs 実ログ、および history[dKey] のみを真実として算出。
   return 0;
 }
 

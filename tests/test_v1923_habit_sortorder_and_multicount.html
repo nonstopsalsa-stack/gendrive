@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>v1.9.23 Habit SortOrder & Multi-Count Integrity Test</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body class="mode-section">
+  <!-- Minimal DOM for Gendrive rendering -->
+  <div id="app-version-badge"></div>
+  <div id="current-time-display"></div>
+  <div id="current-section-name"></div>
+  <div id="section-title"></div>
+  <div id="section-desc"></div>
+  <div id="section-progress-bar"></div>
+  <div id="section-habit-progress"></div>
+  <div id="count-section-habits"></div>
+  <div id="section-task-progress"></div>
+  <div id="count-section-tasks"></div>
+  <div id="anytime-task-list"></div>
+  <div id="anytime-task-count"></div>
+  <div id="anytime-daily-list"></div>
+  <div id="anytime-daily-count"></div>
+  <div id="section-task-list"></div>
+  <div id="section-habit-list"></div>
+  <div id="toast-container"></div>
+
+  <!-- Dependencies -->
+  <script src="../js/config.js"></script>
+  <script src="../js/services/profileMasterService.js"></script>
+  <script src="../js/sampleData.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+  <script src="../js/engine/statsEngine.js"></script>
+  <script src="../js/engine/matrixEngine.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+  <script src="../js/engine/keyboardShortcuts.js"></script>
+  <script src="../js/services/undoService.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/services/resumeNoteService.js"></script>
+  <script src="../js/services/taskCloneHelper.js"></script>
+  <script src="../js/services/taskTimerService.js"></script>
+  <script src="../js/components/cardRenderers.js"></script>
+  <script src="../js/components/modalService.js"></script>
+  <script src="../js/components/taskPresetsService.js"></script>
+  <script src="../js/components/dragAndDropService.js"></script>
+  <script src="../js/views/calendarView.js"></script>
+  <script src="../js/views/sectionView.js"></script>
+  <script src="../js/views/focusView.js"></script>
+  <script src="../js/views/allView.js"></script>
+  <script src="../js/views/tableView.js"></script>
+  <script src="../js/views/bucketView.js"></script>
+  <script src="../js/views/goalsView.js"></script>
+  <script src="../js/views/timerView.js"></script>
+  <script src="../app.js"></script>
+
+  <script>
+    window.updateFilterPillsUI = function() {};
+    window.updateSidebarBadges = function() {};
+    window.renderSidebarCalendar = function() {};
+    window.updateCarryoverBanner = function() {};
+    window.updateHeaderAndStatus = function() {};
+    window.renderDailyTimesHeaderNotice = function() {};
+
+    function runV1923Tests() {
+      const results = [];
+      function assert(name, condition, extra = '') {
+        const passed = Boolean(condition);
+        results.push({ name, passed, extra });
+        console.log(`[${passed ? 'PASS' : 'FAIL'}] ${name} ${extra ? '(' + extra + ')' : ''}`);
+      }
+
+      try {
+        state.currentMode = 'section';
+        state.selectedDateOffset = 0;
+        state.tasks = [];
+        const todayKey = getTodayKey();
+
+        // =============================================================
+        // Suite 1: ハビット一覧の並び順（sortOrder）の恒久保護テスト
+        // =============================================================
+        console.log("=== Suite 1: sortOrder Protection Tests ===");
+
+        // テストデータ: 異なる並び順のハビット
+        state.habits = [
+          {
+            id: 'h_test_sort_a',
+            name: 'ハビットA (3番目)',
+            section: '第1セッション',
+            displayType: 'section',
+            status: 'uncompleted',
+            sortOrder: 3,
+            recurrence: { type: 'everyday' }
+          },
+          {
+            id: 'h_test_sort_b',
+            name: 'ハビットB (1番目)',
+            section: '第1セッション',
+            displayType: 'section',
+            status: 'uncompleted',
+            sortOrder: 1,
+            recurrence: { type: 'everyday' }
+          },
+          {
+            id: 'h_test_sort_c',
+            name: 'ハビットC (2番目)',
+            section: '第1セッション',
+            displayType: 'section',
+            status: 'uncompleted',
+            sortOrder: 2,
+            recurrence: { type: 'everyday' }
+          },
+          {
+            id: 'h_test_sort_d_null',
+            name: 'ハビットD (未設定)',
+            section: '第1セッション',
+            displayType: 'section',
+            status: 'uncompleted',
+            sortOrder: null,
+            recurrence: { type: 'everyday' }
+          }
+        ];
+
+        // 1. saveHabits() を呼んでも既存の sortOrder が配列インデックスで上書きされないこと
+        saveHabits();
+
+        assert("1-1. Habit A keeps sortOrder = 3", state.habits[0].sortOrder === 3, `Actual: ${state.habits[0].sortOrder}`);
+        assert("1-2. Habit B keeps sortOrder = 1", state.habits[1].sortOrder === 1, `Actual: ${state.habits[1].sortOrder}`);
+        assert("1-3. Habit C keeps sortOrder = 2", state.habits[2].sortOrder === 2, `Actual: ${state.habits[2].sortOrder}`);
+        assert("1-4. Habit D (null) was assigned fallback sortOrder = 4", state.habits[3].sortOrder === 4, `Actual: ${state.habits[3].sortOrder}`);
+
+        // 2. startHabit を呼んでも moveHabitToTopOfSection が呼ばれず、配列順序が破壊されないこと
+        const originalFirstId = state.habits[0].id;
+        startHabit('h_test_sort_c'); // 3番目(index 2)のハビットを開始
+
+        assert("1-5. After startHabit: first habit in array is still original Habit A", state.habits[0].id === originalFirstId, `Actual first: ${state.habits[0].id}`);
+        assert("1-6. After startHabit: Habit C index is still 2", state.habits.findIndex(h => h.id === 'h_test_sort_c') === 2);
+        assert("1-7. After startHabit: Habit C sortOrder remains 2", state.habits.find(h => h.id === 'h_test_sort_c').sortOrder === 2);
+
+        // 3. 再度 saveHabits() を呼んでも sortOrder が恒久維持されること
+        saveHabits();
+        assert("1-8. Post-start saveHabits: Habit A is still sortOrder = 3", state.habits[0].sortOrder === 3);
+        assert("1-9. Post-start saveHabits: Habit B is still sortOrder = 1", state.habits[1].sortOrder === 1);
+        assert("1-10. Post-start saveHabits: Habit C is still sortOrder = 2", state.habits[2].sortOrder === 2);
+
+        // =============================================================
+        // Suite 2: 1日n回ハビットのカウント誤表示・孤立キャッシュ排除テスト
+        // =============================================================
+        console.log("=== Suite 2: 1-Day N-Times Habit Count Integrity Tests ===");
+
+        // テストデータ: 前日実行され todayCount = 2 が残っているが、当日の実行ログ・履歴はゼロのハビット
+        const habit2TimesOrphan = {
+          id: 'h_test_coffee_orphan',
+          name: 'コーヒー休憩(2回)',
+          section: '第1セッション',
+          displayType: 'section',
+          timingType: 'anytime',
+          status: 'uncompleted',
+          dailyTimes: 2,
+          recurrence: { type: 'everyday' },
+          todayCount: 2, // 前日残存孤立キャッシュ
+          history: {
+            '2026-10-04': { done: true, count: 2 } // 前日記録のみ
+          },
+          executionLogs: [
+            {
+              id: 'hlog_prev_day',
+              dateKey: '2026-10-04',
+              completedAt: '2026-10-04T05:00:00.000Z', // JST 14:00 (確実に前日)
+              count: 2
+            }
+          ]
+        };
+
+        // 1. migrateHabit で孤立 todayCount が安全に破棄されること
+        migrateHabit(habit2TimesOrphan);
+        assert("2-1. migrateHabit deleted orphan todayCount", habit2TimesOrphan.todayCount === undefined, `Actual: ${habit2TimesOrphan.todayCount}`);
+
+        // 2. getHabitDayCount が当日ログなし・当日履歴なしで 0 を返すこと（2/2回にならない）
+        const dayCountAtMorning = getHabitDayCount(habit2TimesOrphan, todayKey);
+        assert("2-2. Morning initial count is 0 (NOT 2)", dayCountAtMorning === 0, `Actual: ${dayCountAtMorning}`);
+
+        // Progress HTML のバッジ表示が 0/2回 であること
+        const progressHtml = getHabitCompletionProgressHtml(habit2TimesOrphan, todayKey);
+        assert("2-3. Progress HTML shows 0/2回", progressHtml.includes('0/2回'), `Actual: ${progressHtml}`);
+
+        // 3. state.habits に登録して 1回目完了のライフサイクル検証
+        state.currentSection = '第1セッション';
+        state.habits = [habit2TimesOrphan];
+        renderApp();
+
+        // 1回目開始 & 完了
+        startHabit('h_test_coffee_orphan');
+        completeHabit('h_test_coffee_orphan');
+
+        const countAfter1st = getHabitDayCount(habit2TimesOrphan, todayKey);
+        assert("2-4. After 1st completion: getHabitDayCount returns 1", countAfter1st === 1, `Actual: ${countAfter1st}`);
+        assert("2-5. After 1st completion: status is STILL uncompleted", habit2TimesOrphan.status === 'uncompleted', `Actual: ${habit2TimesOrphan.status}`);
+        
+        const card1 = document.querySelector('.habit-card[data-id="h_test_coffee_orphan"]');
+        assert("2-5-b. Card exists in DOM", Boolean(card1), card1 ? 'card-found' : 'card-NOT-found');
+        const badge1 = card1 ? card1.querySelector('.badge-daily-times') : null;
+        assert("2-6. After 1st completion: card badge shows 1/2回", badge1 ? badge1.textContent.includes('1/2回') : false, `Actual text: ${badge1 ? badge1.textContent : 'null'}`);
+
+        // 4. 2回目開始 & 完了（目標達成）
+        startHabit('h_test_coffee_orphan');
+        completeHabit('h_test_coffee_orphan');
+
+        const countAfter2nd = getHabitDayCount(habit2TimesOrphan, todayKey);
+        assert("2-7. After 2nd completion: getHabitDayCount returns 2", countAfter2nd === 2, `Actual: ${countAfter2nd}`);
+        assert("2-8. After 2nd completion: status is completed", habit2TimesOrphan.status === 'completed', `Actual: ${habit2TimesOrphan.status}`);
+        assert("2-9. After 2nd completion: history contains todayKey", habit2TimesOrphan.history.includes(todayKey), `Actual history: ${JSON.stringify(habit2TimesOrphan.history)}`);
+
+        // 5. 日付跨ぎ検証: 翌日キーを指定するとカウント 0 になること
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+        const countTomorrow = getHabitDayCount(habit2TimesOrphan, tomorrowKey);
+        assert("2-10. Tomorrow key returns 0 count", countTomorrow === 0, `Actual: ${countTomorrow}`);
+
+      } catch (err) {
+        assert("Exception during test execution", false, err.toString() + "\n" + err.stack);
+      }
+
+      return results;
+    }
+
+    window.runV1923Tests = runV1923Tests;
+  </script>
+</body>
+</html>

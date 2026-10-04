@@ -2,6 +2,16 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
+## [v1.9.25] - 2026-10-05
+### Fixed (Habit SortOrder Protection & Multi-Count Integrity Fix)
+- **ハビット一覧の並び順（sortOrder）の恒久保護**:
+  - `app.js` の `startHabit` 内で無条件に呼び出されていた `moveHabitToTopOfSection` を完全撤廃。ハビット開始時にもマスター一覧の並び順を崩さない安全な設計へ改修。
+  - `storageService.js` の `saveHabits` において、配列インデックスによる `h.sortOrder = idx + 1` の自動再採番・一括上書きを撤廃。欠損時のフォールバック採番のみに限定し、マスター画面およびD&Dで設定された恒久的な `sortOrder` を不可逆的に保護。
+- **1日n回ハビットのカウント誤表示の修正**:
+  - `recurrenceEngine.js` の `getHabitDayCount` から、日付を持たない孤立キャッシュ `habit.todayCount` へのフォールバックを完全撤廃。指定日付（`dateKey`）の実ログ（`executionLogs`）および `history[dateKey]` のみを真実として算出。
+  - `storageService.js` の `migrateHabit` において、日付変更時や当日実ログ不在時に前日の孤立 `todayCount` を安全に破棄。
+  - 未実施時は 0/n回、1回実施で 1/n回、n回実施で達成・完了となるよう一貫性を確立。
+
 ## [v1.9.22] - 2026-10-04
 ### Removed (PC auto cloud sync & practical-preset restore button)
 - **自動クラウド同期の廃止**: `triggerCloudSync` / `pushDataToCloud` / `pullDataFromCloud` / 45秒ハートビートを削除。右下の「同期エラー」が出なくなり、保存時・フォーカス時の GAS 通信が発生しません。

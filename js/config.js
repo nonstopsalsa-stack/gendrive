@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.9.24';
-const APP_VERSION_NAME = 'Tag Bar 3-State Transition & Mojibake Fix';
+const APP_VERSION = 'v1.9.25';
+const APP_VERSION_NAME = 'Habit SortOrder Protection & Multi-Count Integrity Fix';
 var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
 
 var MAX_TASK_PRESETS = 20;

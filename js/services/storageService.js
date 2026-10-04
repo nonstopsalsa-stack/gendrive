@@ -1260,6 +1260,13 @@ function migrateHabit(h, index = 0) {
     ? Math.max(...todayLogs.map(l => l.count || 1))
     : 0;
 
+  // [v1.9.23 改修]: 前日の孤立 todayCount を破棄し、実ログに基づき整合化
+  if (curTodayLogCount === 0) {
+    delete h.todayCount;
+  } else {
+    h.todayCount = curTodayLogCount;
+  }
+
   const hasLegitTodayCompletion = curTodayLogCount >= targetTimes && targetTimes > 0;
   const isRecentLocal = h._localUpdatedAt && (Date.now() - h._localUpdatedAt < 120000);
 
@@ -1283,6 +1290,7 @@ function migrateHabit(h, index = 0) {
       h.actStart = null;
       h.actEnd = null;
       h.actMin = 0;
+      delete h.todayCount;
       if (h.history && h.history[todayKey]) {
         delete h.history[todayKey];
       }
@@ -1607,10 +1615,15 @@ function saveHabits(skipCloudSync = false) {
   const nowIso = new Date().toISOString();
 
   if (Array.isArray(state.habits)) {
-    // 実行時配列の最新並び順（moveHabitToTopOfSection等）を尊重し、現在の順序で連続したsortOrderを再採番
+    // [v1.9.23 改修]: ハビット一覧の並び順（sortOrder）恒久保護
+    // 配列インデックスによる sortOrder の自動再採番・上書きを完全撤廃。
+    // sortOrder はマスター一覧およびD&Dでのユーザー明示操作時のみ更新される。
+    // 欠損時（未定義またはNaN）のみフォールバックとして採番。
     state.habits.forEach((h, idx) => {
-      h.sortOrder = idx + 1;
       if (!h || !h.id) return;
+      if (typeof h.sortOrder !== 'number' || isNaN(h.sortOrder)) {
+        h.sortOrder = idx + 1;
+      }
       const strId = String(h.id);
       const snapshot = JSON.stringify({
         name: h.name,
