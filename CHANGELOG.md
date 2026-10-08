@@ -2,7 +2,16 @@
 
 All notable changes to Gendrive project will be documented in this file.
 
-## [v1.9.25] - 2026-10-05
+## [v1.9.26] - 2026-10-09
+### Fixed (Rate & Streak Integrity Engine: 朝未完了の是正・ストリーク100%完全一致・90日フォールバック＆タスク分母欠陥是正)
+- **朝の未完了による達成度低下の是正**:
+  - `statsEngine.js`（`recalculateHabitRates`）および `tableView.js`（`getTaskPeriodRate`）において、当日未完了の場合は今日を含めずに「昨日」を起点（`startOffset = 1`）として直近3日/7日/30日達成度を計算（当日完了した場合は今日を起点 `startOffset = 0`）。朝一番にスコアボードを開いた際に、前日までの継続実績があるにもかかわらず達成度が 100% から 97% や 86% に不当低下する現象を完全解消。
+  - `maxAvailableDays` を配備し、昨日起算時に作成日（運用開始日）より過去の日付まで遡って未完了判定される境界欠陥を数学的に防御。
+- **ストリークと達成度の完全一致**:
+  - 対象期間の日数（3日/7日/30日）が現在の確定ストリーク日数以下である場合（例: 43日連続のハビットの30日達成度、7日連続の7日達成度）、無条件に達成度を 100% として算出。
+- **90日達成度のフォールバックとタスク計算バグ修正**:
+  - 運用開始90日未満のハビット・タスクについては、90日達成度に30日達成度と同一の値を自動表示（`statsEngine.js`, `tableView.js`）。
+  - `tableView.js` の `getTaskPeriodRate` において、分母が固定90（または固定日数）で割られていた欠陥を解消し、`effectiveDays`（運用経過日数と対象期間の最小値）で正しく算出するよう是正。
 ### Fixed (Habit SortOrder Protection & Multi-Count Integrity Fix)
 - **ハビット一覧の並び順（sortOrder）の恒久保護**:
   - `app.js` の `startHabit` 内で無条件に呼び出されていた `moveHabitToTopOfSection` を完全撤廃。ハビット開始時にもマスター一覧の並び順を崩さない安全な設計へ改修。

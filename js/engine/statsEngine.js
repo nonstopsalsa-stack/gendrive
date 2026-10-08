@@ -186,14 +186,25 @@ function recalculateHabitRates(habit) {
     return false;
   };
 
+  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : getLocalDateString(new Date());
+  const isTodayDone = isEntryDone(todayKey);
+  const startOffset = isTodayDone ? 0 : 1;
+  const maxAvailableDays = startOffset === 1 ? Math.max(1, elapsedDays - 1) : elapsedDays;
+  const currentStreak = typeof getHabitCurrentStreak === 'function'
+    ? getHabitCurrentStreak(habit)
+    : (typeof calculateStreak === 'function' ? calculateStreak(habit.history, { item: habit }) : 0);
+
   // 1. Weekly Goal Rate Calculation (週N回目標)
   if (rec.type === 'weekly_goal') {
     const timesPerWeek = Math.max(1, Number(rec.timesPerWeek) || 3);
 
     const calcWeeklyRate = (daysWindow) => {
-      const effectiveDays = Math.max(1, Math.min(daysWindow, elapsedDays));
+      const effectiveDays = Math.max(1, Math.min(daysWindow, maxAvailableDays));
+      // ストリーク日数が対象期間または有効日数以上であれば無条件で100%
+      if (currentStreak >= daysWindow || currentStreak >= effectiveDays) return 100;
+
       let totalCompleted = 0;
-      for (let i = 0; i < effectiveDays; i++) {
+      for (let i = startOffset; i < startOffset + effectiveDays; i++) {
         const key = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : shiftDateKey(getLocalDateString(new Date()), -i);
         if (isEntryDone(key)) {
           totalCompleted++;
@@ -206,7 +217,7 @@ function recalculateHabitRates(habit) {
     const r3 = calcWeeklyRate(3);
     const r7 = calcWeeklyRate(7);
     const r30 = calcWeeklyRate(30);
-    const r90 = calcWeeklyRate(90);
+    const r90 = elapsedDays < 90 ? r30 : calcWeeklyRate(90);
 
     habit.stats.d3 = r3 / 100;
     habit.stats.d7 = r7 / 100;
@@ -218,11 +229,14 @@ function recalculateHabitRates(habit) {
   } else {
     // 2. Standard Schedule Rate Calculation (毎日 / 曜日指定 / 間隔など)
     const calcPeriodRate = (daysWindow) => {
-      const effectiveDays = Math.max(1, Math.min(daysWindow, elapsedDays));
+      const effectiveDays = Math.max(1, Math.min(daysWindow, maxAvailableDays));
+      // ストリーク日数が対象期間または有効日数以上であれば無条件で100%
+      if (currentStreak >= daysWindow || currentStreak >= effectiveDays) return 100;
+
       let completedCount = 0;
       let scheduledDays = 0;
 
-      for (let i = 0; i < effectiveDays; i++) {
+      for (let i = startOffset; i < startOffset + effectiveDays; i++) {
         const d = new Date();
         d.setDate(d.getDate() - i);
 
@@ -242,7 +256,7 @@ function recalculateHabitRates(habit) {
     const r3 = calcPeriodRate(3);
     const r7 = calcPeriodRate(7);
     const r30 = calcPeriodRate(30);
-    const r90 = calcPeriodRate(90);
+    const r90 = elapsedDays < 90 ? r30 : calcPeriodRate(90);
 
     habit.stats.d3 = r3 / 100;
     habit.stats.d7 = r7 / 100;
@@ -266,6 +280,12 @@ function recalculateHabitRates(habit) {
 // 達成度取得関数 (常に最新のstats値を返却)
 function getHabitRate(habit, days) {
   if (!habit || !habit.stats) return 0;
+  if (days === 90) {
+    const elapsedDays = getHabitElapsedDays(habit);
+    if (elapsedDays < 90 && habit.stats.d30 !== undefined) {
+      return Math.round(habit.stats.d30 * 100);
+    }
+  }
   const key = `d${days}`;
   if (habit.stats[key] !== undefined) {
     return Math.round(habit.stats[key] * 100);

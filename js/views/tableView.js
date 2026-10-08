@@ -2305,19 +2305,65 @@ if (typeof window !== 'undefined') {
   window.getTaskCompletedDatesSet = getTaskCompletedDatesSet;
 }
 
+function getTaskElapsedDays(task) {
+  if (!task) return 1;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  let createdDate = task.createdAt ? new Date(task.createdAt) : null;
+  if (!createdDate || isNaN(createdDate.getTime())) {
+    createdDate = new Date('2026-08-18T00:00:00.000Z');
+  }
+  createdDate.setHours(0, 0, 0, 0);
+
+  const diffMs = now.getTime() - createdDate.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.max(1, diffDays + 1);
+}
+
 function getTaskPeriodRate(task, days) {
   if (!task) return 0;
+
+  // 1. 運用開始からの経過日数を算出
+  const elapsedDays = getTaskElapsedDays(task);
+
+  // 2. 90日未満の運用期間の場合は30日達成度にフォールバック
+  if (days === 90 && elapsedDays < 90) {
+    return getTaskPeriodRate(task, 30);
+  }
+
+  // 3. 当日完了判定と起点オフセット（未完了なら昨日から、完了なら今日から）
+  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : (typeof getDateKeyOffset === 'function' ? getDateKeyOffset(0) : getLocalDateString(new Date()));
+  const isTodayDone = isTaskDoneOnDate(task, todayKey);
+  const startOffset = isTodayDone ? 0 : 1;
+
+  // 4. 分母の決定（昨日起算の場合は昨日までの経過日数を上限とする）
+  const maxAvailableDays = startOffset === 1 ? Math.max(1, elapsedDays - 1) : elapsedDays;
+  const effectiveDays = Math.max(1, Math.min(days, maxAvailableDays));
+
+  // 5. ストリーク日数が対象期間または有効日数以上であれば無条件で100%
+  const streak = typeof getTaskCurrentStreak === 'function' ? getTaskCurrentStreak(task) : 0;
+  if (streak >= days || streak >= effectiveDays) {
+    return 100;
+  }
+
   let completedDays = 0;
-  for (let i = 0; i < days; i++) {
+  for (let i = startOffset; i < startOffset + effectiveDays; i++) {
     const key = typeof getDateKeyOffset === 'function' ? getDateKeyOffset(i) : null;
     if (key && isTaskDoneOnDate(task, key)) {
       completedDays++;
     }
   }
+
   if (completedDays === 0 && task.status === 'completed' && (!task.history || (Array.isArray(task.history) && task.history.length === 0))) {
     return 100;
   }
-  return Math.min(100, Math.round((completedDays / days) * 100));
+  return Math.min(100, Math.round((completedDays / effectiveDays) * 100));
+}
+
+if (typeof window !== 'undefined') {
+  window.getTaskElapsedDays = getTaskElapsedDays;
+  window.getTaskPeriodRate = getTaskPeriodRate;
 }
 
   function handleAnalyticsHeaderSort(key) {
