@@ -2625,6 +2625,92 @@ function getNextWeekdayDateKey(baseDateKey = null) {
   return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
 }
 
+function moveTaskToCurrentSection(taskId) {
+  const task = (state.tasks || []).find(t => String(t.id) === String(taskId));
+  if (!task) return;
+
+  const curSec = typeof detectCurrentSection === 'function' ? detectCurrentSection() : '第1セッション';
+  const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().split('T')[0];
+
+  // 完全なUndoのためのスナップショット保持
+  const prevTasksSnapshot = [...state.tasks];
+  const prevScheduledDate = task.scheduledDate;
+  const prevBucket = task.bucket;
+  const prevSection = task.section;
+  const prevTimingType = task.timingType;
+  const prevStatus = task.status;
+  const prevSkippedDateKey = task.skippedDateKey;
+  const prevSkippedDates = Array.isArray(task.skippedDates) ? [...task.skippedDates] : task.skippedDates;
+
+  // 1. プロパティ更新
+  task.scheduledDate = todayKey;
+  task.bucket = 'today';
+  task.section = curSec;
+  task.timingType = 'section';
+
+  // 2. スキップ状態の場合は未完了に復帰
+  if (task.status === 'skipped') {
+    task.status = 'uncompleted';
+  }
+  if (Array.isArray(task.skippedDates)) {
+    task.skippedDates = task.skippedDates.filter(d => d !== todayKey);
+  }
+  if (task.skippedDateKey === todayKey) {
+    task.skippedDateKey = (task.skippedDates && task.skippedDates.length > 0) ? task.skippedDates[task.skippedDates.length - 1] : null;
+  }
+
+  // 3. セクション末尾へ再配置
+  const sourceIdx = state.tasks.findIndex(t => String(t.id) === String(taskId));
+  if (sourceIdx !== -1) {
+    state.tasks.splice(sourceIdx, 1);
+  }
+
+  const normCurSec = typeof normalizeSectionName === 'function' ? normalizeSectionName(curSec) : curSec;
+  let lastSectionTaskIdx = -1;
+  for (let i = state.tasks.length - 1; i >= 0; i--) {
+    const t = state.tasks[i];
+    const tSec = typeof normalizeSectionName === 'function' ? normalizeSectionName(t.section) : t.section;
+    const isToday = (!t.scheduledDate || t.scheduledDate === todayKey) && t.bucket !== 'inbox';
+    if (tSec === normCurSec && isToday) {
+      lastSectionTaskIdx = i;
+      break;
+    }
+  }
+
+  if (lastSectionTaskIdx !== -1) {
+    state.tasks.splice(lastSectionTaskIdx + 1, 0, task);
+  } else {
+    state.tasks.push(task);
+  }
+
+  // 4. 保存と描画
+  saveTasks();
+  renderApp();
+
+  // 5. 完全なUndoの実装
+  const undoAction = {
+    description: `⚡ 「${task.title}」を今日の現在のセクション (${curSec}) に移動しました`,
+    undo: () => {
+      state.tasks = prevTasksSnapshot;
+      task.scheduledDate = prevScheduledDate;
+      task.bucket = prevBucket;
+      task.section = prevSection;
+      task.timingType = prevTimingType;
+      task.status = prevStatus;
+      task.skippedDateKey = prevSkippedDateKey;
+      task.skippedDates = prevSkippedDates;
+      saveTasks();
+      renderApp();
+    }
+  };
+
+  if (typeof pushUndoAction === 'function') {
+    pushUndoAction(undoAction);
+  } else if (typeof showUndoToast === 'function') {
+    showUndoToast(undoAction.description, undoAction.undo);
+  }
+}
+
 function deferTask(taskId, targetDateKey, targetBucket = 'today', actionLabel = '') {
   const task = state.tasks.find(t => t.id === taskId);
   if (!task) return;
@@ -2775,6 +2861,27 @@ function showTaskContextMenu(e, taskId) {
     nextWeekdayLabel.textContent = `次の平日 (${parseInt(m, 10)}/${parseInt(d, 10)}) へ移動`;
   }
 
+  // Dynamic "Move to Current Section" label and visibility
+  const curSec = typeof detectCurrentSection === 'function' ? detectCurrentSection() : '第1セッション';
+  const btnMoveCurSec = document.getElementById('ctx-task-move-current-section');
+  const lblMoveCurSec = document.getElementById('ctx-task-move-current-section-text') || (btnMoveCurSec && btnMoveCurSec.querySelector('span:not(.ctx-icon)'));
+  if (btnMoveCurSec) {
+    if (lblMoveCurSec) {
+      lblMoveCurSec.textContent = `今日の現在のセクション (${curSec}) に移動`;
+    }
+    const todayKey = typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().split('T')[0];
+    const normTaskSec = typeof normalizeSectionName === 'function' ? normalizeSectionName(task.section) : task.section;
+    const normCurSec = typeof normalizeSectionName === 'function' ? normalizeSectionName(curSec) : curSec;
+    const isToday = (task.scheduledDate === todayKey || (!task.scheduledDate && task.bucket === 'today')) && task.bucket !== 'inbox';
+    const isTimingSection = task.timingType === 'section';
+
+    if (isToday && normTaskSec === normCurSec && isTimingSection) {
+      btnMoveCurSec.style.display = 'none';
+    } else {
+      btnMoveCurSec.style.display = 'flex';
+    }
+  }
+
   // Toggle "Remove from Bucket" item visibility based on whether task has a bucket
   const btnRemoveBucket = document.getElementById('ctx-task-remove-bucket');
   if (btnRemoveBucket) {
@@ -2803,7 +2910,7 @@ function showTaskContextMenu(e, taskId) {
 
   menu.classList.add('active');
   const menuWidth = 250;
-  const menuHeight = 320;
+  const menuHeight = 360;
   let x = e.clientX;
   let y = e.clientY;
 
@@ -2933,6 +3040,17 @@ function setupContextMenuHandlers() {
   // ==========================================
   // Task Context Menu Actions (Quick Defer / Reschedule / Inbox)
   // ==========================================
+
+  // 0. Move to Current Section
+  const btnMoveCurSec = document.getElementById('ctx-task-move-current-section');
+  if (btnMoveCurSec) {
+    btnMoveCurSec.addEventListener('click', () => {
+      const tid = state.contextMenuTaskId;
+      hideAllContextMenus();
+      if (!tid) return;
+      moveTaskToCurrentSection(tid);
+    });
+  }
 
   // 1. Defer to Tomorrow
   const btnTaskTomorrow = document.getElementById('ctx-task-defer-tomorrow');
