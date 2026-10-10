@@ -11395,8 +11395,8 @@ body[data-mode="focus"] .focus-board-layout {
 }
 
 .soul-quote-text {
-  display: inline-block;
-  width: fit-content;
+  display: block;
+  width: 100%;
   max-width: 100%;
   margin: 0 auto;
   font-family: 'Inter', 'Shippori Mincho', sans-serif;
@@ -11411,6 +11411,39 @@ body[data-mode="focus"] .focus-board-layout {
   -webkit-text-fill-color: transparent;
   text-shadow: 0 0 35px rgba(250, 204, 21, 0.35);
   word-break: break-word;
+  transition: opacity 0.2s ease;
+}
+
+/* Dynamic Typography: Single line centered, Multi line left-aligned */
+.soul-quote-text.is-single-line {
+  text-align: center;
+}
+
+.soul-quote-text.is-multi-line {
+  text-align: left;
+}
+
+/* Soul Quote Action Dock (Bottom-Right, above status bar) */
+.focus-soul-quote-dock {
+  position: fixed;
+  right: 24px;
+  bottom: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: opacity 0.2s ease;
+}
+
+#view-focus:not(.active) .focus-soul-quote-dock {
+  display: none !important;
 }
 
 .soul-quote-action-wrap {
@@ -11456,6 +11489,12 @@ body[data-mode="focus"] .focus-board-layout {
   .soul-quote-text {
     font-size: 20px;
     line-height: 1.55;
+  }
+  .focus-soul-quote-dock {
+    right: 12px;
+    bottom: 50px;
+    padding: 3px 6px;
+    gap: 6px;
   }
   .soul-quote-action-wrap {
     margin-left: 8px;

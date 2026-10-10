@@ -643,7 +643,7 @@ const SOUL_QUOTES = [
 // =========================================================================
 
 const SOUL_QUOTES_STORAGE_KEY = 'gendrive_custom_soul_quotes_v1';
-const OBSIDIAN_QUOTES_PATH = 'リスト/鼓舞フレーズ集.md';
+const OBSIDIAN_QUOTES_PATH = '093_Operation/Gendrive/鼓舞フレーズ集.md';
 
 let currentSoulQuote = '';
 
@@ -973,17 +973,46 @@ function renderSoulQuoteBanner() {
   quoteTextEl.textContent = currentQuote;
   quoteContainer.style.display = 'flex';
 
-  if (!document.getElementById('soul-quote-action-wrap')) {
-    const actionWrap = document.createElement('div');
-    actionWrap.id = 'soul-quote-action-wrap';
-    actionWrap.className = 'soul-quote-action-wrap';
-    actionWrap.innerHTML = `
+  // Dynamic Typography: Single-line (Centered) vs Multi-line (Left-aligned from container edge)
+  quoteTextEl.classList.remove('is-single-line', 'is-multi-line');
+  const hasExplicitNewline = currentQuote.includes('\n');
+  if (hasExplicitNewline) {
+    quoteTextEl.classList.add('is-multi-line');
+  } else {
+    quoteTextEl.classList.add('is-single-line');
+    // If screen is narrow and the text wraps into multiple lines, adaptively switch to is-multi-line
+    if (quoteTextEl.clientHeight > 0) {
+      const computed = window.getComputedStyle(quoteTextEl);
+      const lineHeight = parseFloat(computed.lineHeight) || 40;
+      if (quoteTextEl.clientHeight > lineHeight * 1.5) {
+        quoteTextEl.classList.remove('is-single-line');
+        quoteTextEl.classList.add('is-multi-line');
+      }
+    }
+  }
+
+  // Remove legacy inline action wrap from inside the quote container if present
+  const oldActionWrap = document.getElementById('soul-quote-action-wrap');
+  if (oldActionWrap) {
+    oldActionWrap.remove();
+  }
+
+  // Ensure isolated bottom-right dock exists on focus view
+  let dock = document.getElementById('focus-soul-quote-dock');
+  if (!dock) {
+    dock = document.createElement('div');
+    dock.id = 'focus-soul-quote-dock';
+    dock.className = 'focus-soul-quote-dock';
+    dock.innerHTML = `
       <button type="button" class="btn-quote-op" title="現在の全フレーズを .md ファイルとして書き出し (Obsidian保管・バックアップ用)" onclick="exportSoulQuotesToMarkdown(event)">📥</button>
-      <button type="button" class="btn-quote-op" title="Obsidianでノートを開く [リスト/鼓舞フレーズ集.md]" onclick="openSoulQuotesInObsidian(event)">📝</button>
+      <button type="button" class="btn-quote-op" title="Obsidianでノートを開く [${OBSIDIAN_QUOTES_PATH}]" onclick="openSoulQuotesInObsidian(event)">📝</button>
       <button type="button" class="btn-quote-op" title="Obsidianで編集した .md ファイルを選択して取り込み" onclick="event.stopPropagation(); document.getElementById('input-soul-quote-file').click();">🔄</button>
       <input type="file" id="input-soul-quote-file" accept=".md,.markdown,.txt" style="display: none;" onchange="importSoulQuotesFromMarkdownFile(this.files[0])" />
     `;
-    quoteContainer.appendChild(actionWrap);
+    const focusView = document.getElementById('view-focus') || quoteContainer.parentElement;
+    if (focusView) {
+      focusView.appendChild(dock);
+    }
   }
 }
 window.renderSoulQuoteBanner = renderSoulQuoteBanner;

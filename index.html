@@ -548,6 +548,14 @@
               <div class="focus-page-indicator" id="focus-page-indicator">1 / 1</div>
               <div class="focus-nav-btn next" id="btn-focus-task-next" onclick="navigateFocusTask(1)" title="次の候補 (J / →)">次へ → <span class="kbd-hint">J</span></div>
             </div>
+
+            <!-- Soul Quote Action Dock (Bottom-Right, above status bar) -->
+            <div class="focus-soul-quote-dock" id="focus-soul-quote-dock">
+              <button type="button" class="btn-quote-op" title="現在の全フレーズを .md ファイルとして書き出し (Obsidian保管・バックアップ用)" onclick="exportSoulQuotesToMarkdown(event)">📥</button>
+              <button type="button" class="btn-quote-op" title="Obsidianでノートを開く [093_Operation/Gendrive/鼓舞フレーズ集.md]" onclick="openSoulQuotesInObsidian(event)">📝</button>
+              <button type="button" class="btn-quote-op" title="Obsidianで編集した .md ファイルを選択して取り込み" onclick="event.stopPropagation(); document.getElementById('input-soul-quote-file').click();">🔄</button>
+              <input type="file" id="input-soul-quote-file" accept=".md,.markdown,.txt" style="display: none;" onchange="importSoulQuotesFromMarkdownFile(this.files[0])" />
+            </div>
           </div>
         </section>
 

@@ -334,11 +334,28 @@
       renderFocusView(false);
       assert('Soul quote element updates to quote2 after rotation', quoteEl.textContent === quote2);
 
-      // Verify Typography Alignment & Fit-Content Styling (Natural Left-Aligned Hybrid Layout)
+      // Verify Typography Alignment & Dynamic Typography (Single-line centered, Multi-line left-aligned)
       document.getElementById('view-focus').style.display = 'block';
-      const quoteComputed = window.getComputedStyle(quoteEl);
-      assert('Soul quote typography text-align is left', quoteComputed.textAlign === 'left');
       assert('Soul quote container centers the quote banner', window.getComputedStyle(document.getElementById('focus-soul-quote-container')).justifyContent === 'center');
+
+      // Test Single-line phrase dynamic typography
+      currentSoulQuote = '集中こそが最大の武器である。';
+      renderSoulQuoteBanner();
+      assert('Single-line soul quote has is-single-line class', quoteEl.classList.contains('is-single-line'));
+      assert('Single-line soul quote text-align is center', window.getComputedStyle(quoteEl).textAlign === 'center');
+
+      // Test Multi-line phrase dynamic typography
+      currentSoulQuote = '一日一生。\n今日この瞬間を生き切る。';
+      renderSoulQuoteBanner();
+      assert('Multi-line soul quote has is-multi-line class', quoteEl.classList.contains('is-multi-line'));
+      assert('Multi-line soul quote text-align is left', window.getComputedStyle(quoteEl).textAlign === 'left');
+
+      // Test Isolated Dock & Buttons
+      const dockEl = document.getElementById('focus-soul-quote-dock');
+      assert('Soul quote dock element exists', dockEl !== null);
+      assert('Soul quote dock is isolated outside phrase container', !document.getElementById('focus-soul-quote-container').contains(dockEl));
+      assert('Soul quote dock contains 3 operation buttons', dockEl.querySelectorAll('.btn-quote-op').length === 3);
+      assert('Soul quote Obsidian path is updated to 093_Operation/Gendrive/鼓舞フレーズ集.md', OBSIDIAN_QUOTES_PATH === '093_Operation/Gendrive/鼓舞フレーズ集.md');
 
       // -------------------------------------------------------------
       // All passed check
