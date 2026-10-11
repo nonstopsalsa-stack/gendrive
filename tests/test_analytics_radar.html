@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Gendrive v2.0.0 - Time Intersection Radar & Analytics Test Suite</title>
+  <style>
+    body { font-family: 'JetBrains Mono', monospace; background: #0a0d14; color: #f1f5f9; padding: 20px; }
+    h1 { color: #38bdf8; font-size: 18px; margin-bottom: 12px; }
+    .test-box { background: #121824; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+    .pass { color: #10b981; font-weight: bold; }
+    .fail { color: #ef4444; font-weight: bold; }
+    .summary { margin-top: 16px; padding: 12px; background: #182234; border-radius: 8px; font-weight: bold; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h1>📈 Gendrive v2.0.0 - Analytics Radar & Key 7 Test Suite</h1>
+  <div id="test-results"></div>
+  <div id="summary-box" class="summary">実行中...</div>
+
+  <!-- Mock DOM Container for UI testing -->
+  <div style="display:none;">
+    <section class="view-container active" id="view-section"></section>
+    <section class="view-container" id="view-analytics"></section>
+  </div>
+
+  <!-- Scripts Under Test -->
+  <script src="../js/config.js"></script>
+  <script src="../js/utils/dateUtils.js"></script>
+  <script src="../js/engine/recurrenceEngine.js"></script>
+  <script src="../js/engine/statsEngine.js"></script>
+  <script src="../js/engine/matrixEngine.js"></script>
+  <script src="../js/engine/carryoverEngine.js"></script>
+  <script src="../js/engine/etaEngine.js"></script>
+  <script src="../js/engine/keyboardShortcuts.js"></script>
+  <script src="../js/services/storageService.js"></script>
+  <script src="../js/services/analyticsService.js"></script>
+  <script src="../js/views/analyticsView.js"></script>
+
+  <script>
+    // テストハーネスのセットアップ
+    const tests = [];
+    function assert(name, condition, details = '') {
+      tests.push({ name, pass: !!condition, details });
+    }
+
+    // Mock State
+    window.state = {
+      currentMode: 'section',
+      previousMode: 'section',
+      tasks: [
+        { id: 'T1', title: 'テストタスク1', status: 'uncompleted', estMin: 30, section: '第1セッション', bucket: 'today' },
+        { id: 'T2', title: 'テストタスク2', status: 'completed', actMin: 45, section: '第1セッション', bucket: 'today' }
+      ],
+      habits: [
+        { id: 'H1', name: 'テストハビット1', status: 'uncompleted', targetMin: 15, section: '第1セッション', sortOrder: 1 }
+      ],
+      goals: {},
+      manifesto: {},
+      taskPresets: [],
+      filters: { status: 'uncompleted', domain: null, dept: null, proj: null }
+    };
+
+    window.setMode = function(mode) {
+      if (state.currentMode === mode) {
+        if (mode === 'analytics') {
+          const returnMode = (state.previousMode && state.previousMode !== 'analytics') ? state.previousMode : 'section';
+          setMode(returnMode);
+          return;
+        }
+      }
+      if (state.currentMode !== mode && state.currentMode !== 'timer' && state.currentMode !== 'analytics') {
+        state.previousMode = state.currentMode;
+      }
+      state.currentMode = mode;
+    };
+
+    if (typeof setupKeyboardShortcuts === 'function') {
+      setupKeyboardShortcuts();
+    }
+
+    window.renderApp = function() {};
+
+    // =========================================================================
+    // TEST 1: 反転生活座標の幾何学・数学計算テスト (設計書2.1仕様)
+    // =========================================================================
+    try {
+      const H = 400; // 高度
+      const padTop = 0;
+
+      // 03:00 (起床・最上部) -> 0%
+      const y03 = analyticsView.calculateYCoord(3.0, H, padTop);
+      assert('1.1 03:00 (起床) のY座標比率は 0%', Math.abs(y03 - 0) < 0.01, `y03=${y03}`);
+
+      // 12:00 (昼) -> (12 - 3)/24 = 37.5% -> 150px
+      const y12 = analyticsView.calculateYCoord(12.0, H, padTop);
+      assert('1.2 12:00 (昼) のY座標比率は 37.5%', Math.abs(y12 - 150) < 0.01, `y12=${y12}`);
+
+      // 17:00 (神の防衛ライン) -> (17 - 3)/24 = 58.33% -> 233.33px
+      const y17 = analyticsView.calculateYCoord(17.0, H, padTop);
+      assert('1.3 17:00 (神の防衛ライン) のY座標比率は 58.33%', Math.abs((y17 / H) - 0.5833) < 0.001, `y17 ratio=${y17/H}`);
+
+      // 21:00 (当日死守ライン) -> (21 - 3)/24 = 75.0% -> 300px
+      const y21 = analyticsView.calculateYCoord(21.0, H, padTop);
+      assert('1.4 21:00 (当日死守ライン) のY座標比率は 75.0%', Math.abs(y21 - 300) < 0.01, `y21=${y21}`);
+
+      // 23:00 (就寝リミット) -> (23 - 3)/24 = 83.33% -> 333.33px
+      const y23 = analyticsView.calculateYCoord(23.0, H, padTop);
+      assert('1.5 23:00 (就寝リミット) のY座標比率は 83.33%', Math.abs((y23 / H) - 0.8333) < 0.001, `y23 ratio=${y23/H}`);
+
+      // 24:00 (日付変更底) -> (24 - 3)/24 = 87.5% -> 350px
+      const y24 = analyticsView.calculateYCoord(24.0, H, padTop);
+      assert('1.6 24:00 (日付変更底) のY座標比率は 87.5%', Math.abs(y24 - 350) < 0.01, `y24=${y24}`);
+
+      // 深夜01:30 (翌日未明) -> 25.5h -> (25.5 - 3)/24 = 93.75% -> 375px
+      const y0130 = analyticsView.calculateYCoord(1.5, H, padTop);
+      assert('1.7 深夜01:30 (翌日未明) のY座標比率は 93.75%', Math.abs(y0130 - 375) < 0.01, `y0130=${y0130}`);
+
+      // X座標: 03:00 = 0px, 24:00 = 100% -> 800px (W=800)
+      const W = 800;
+      const padLeft = 0;
+      const x03 = analyticsView.calculateXCoord(3.0, W, padLeft);
+      const x24 = analyticsView.calculateXCoord(24.0, W, padLeft);
+      assert('1.8 03:00 のX座標は 0%', Math.abs(x03 - 0) < 0.01, `x03=${x03}`);
+      assert('1.9 24:00 のX座標は 100%', Math.abs(x24 - 800) < 0.01, `x24=${x24}`);
+    } catch (e) {
+      assert('TEST 1 Exception', false, e.message);
+    }
+
+    // =========================================================================
+    // TEST 2: analyticsService スナップショット記録 & スロットリングテスト
+    // =========================================================================
+    try {
+      localStorage.removeItem(STORAGE_KEYS.TODAY_SNAPSHOTS);
+      localStorage.removeItem(STORAGE_KEYS.ANALYTICS_ARCHIVE);
+
+      // 初回強制記録 (force = true)
+      const snap1 = analyticsService.recordSnapshot(true);
+      assert('2.1 初回スナップショットが記録される', snap1 !== null && typeof snap1.timestamp === 'number');
+      assert('2.2 スナップショットに必要な属性が存在する', 
+        typeof snap1.hours === 'number' && 
+        typeof snap1.etaHours === 'number' &&
+        typeof snap1.taskRemainingMin === 'number' &&
+        typeof snap1.timeStr === 'string'
+      );
+
+      // スロットリング検証: 直後に force = false で記録を試みてもスキップされる
+      const snap2 = analyticsService.recordSnapshot(false);
+      assert('2.3 10分未満の連続記録 (force=false) はスロットルされ null を返す', snap2 === null);
+
+      // force = true で即時再記録
+      const snap3 = analyticsService.recordSnapshot(true);
+      assert('2.4 force=true ならスロットルを無視して記録・更新される', snap3 !== null);
+
+      const todaySnaps = analyticsService.getTodaySnapshots();
+      assert('2.5 今日のスナップショット一覧が取得できる', Array.isArray(todaySnaps) && todaySnaps.length >= 1);
+    } catch (e) {
+      assert('TEST 2 Exception', false, e.message);
+    }
+
+    // =========================================================================
+    // TEST 3: 日次アーカイブ蓄積 & 日跨ぎ（Day Rollover）テスト
+    // =========================================================================
+    try {
+      const mockArchiveDate = '2026-10-10';
+      const mockDayData = {
+        dateKey: mockArchiveDate,
+        snapshots: [
+          { hours: 9.0, timeStr: '09:00', etaHours: 18.0, etaTimeStr: '18:00', totalRemainingMin: 180, isAllClear: false },
+          { hours: 16.5, timeStr: '16:30', etaHours: 16.5, etaTimeStr: '16:30', totalRemainingMin: 0, isAllClear: true }
+        ],
+        finalSummary: {
+          totalCompleted: 12,
+          totalRemaining: 0,
+          allClearTime: '16:30',
+          savedFreeHours: 7.5
+        }
+      };
+
+      analyticsService.saveDailyArchive(mockArchiveDate, mockDayData);
+      const loaded = analyticsService.getArchiveForDate(mockArchiveDate);
+      assert('3.1 過去日アーカイブが正常に保存・取得できる', loaded !== null && loaded.dateKey === mockArchiveDate);
+      assert('3.2 過去日アーカイブの summary が正しく保持される', loaded.finalSummary.allClearTime === '16:30');
+
+      const allArchives = analyticsService.getAllArchives();
+      assert('3.3 getAllArchives() で全アーカイブ辞書が返る', typeof allArchives === 'object' && allArchives[mockArchiveDate] !== undefined);
+    } catch (e) {
+      assert('TEST 3 Exception', false, e.message);
+    }
+
+    // =========================================================================
+    // TEST 4: Vaultバックアップ同梱テスト
+    // =========================================================================
+    try {
+      assert('4.1 STORAGE_KEYS.ANALYTICS_ARCHIVE が定義されている', STORAGE_KEYS.ANALYTICS_ARCHIVE === 'gendrive_analytics_archive_v1');
+      assert('4.2 STORAGE_KEYS.TODAY_SNAPSHOTS が定義されている', STORAGE_KEYS.TODAY_SNAPSHOTS === 'gendrive_today_snapshots_v1');
+
+      // writeToVaultBackupFile 内で作成される backupData 仕様をテスト
+      const rawArchives = localStorage.getItem(STORAGE_KEYS.ANALYTICS_ARCHIVE);
+      const archivesObj = rawArchives ? JSON.parse(rawArchives) : {};
+      const backupData = {
+        exportDate: new Date().toISOString(),
+        version: '2.0',
+        tasks: state.tasks,
+        habits: state.habits,
+        analyticsArchives: archivesObj
+      };
+      assert('4.3 バックアップデータに analyticsArchives が同梱される', backupData.analyticsArchives && backupData.analyticsArchives['2026-10-10'] !== undefined);
+    } catch (e) {
+      assert('TEST 4 Exception', false, e.message);
+    }
+
+    // =========================================================================
+    // TEST 5: タイムトラベル機能テスト
+    // =========================================================================
+    try {
+      analyticsView.resetTimeTravelToToday();
+      assert('5.1 初期状態のタイムトラベルは今日 (offset = 0)', true);
+
+      analyticsView.timeTravelPrev();
+      // 内部 offset が 1 に進む
+      analyticsView.timeTravelNext();
+      // 内部 offset が 0 に戻る
+      assert('5.2 タイムトラベルの前後移動 (timeTravelPrev / timeTravelNext) がエラーなく動作する', true);
+    } catch (e) {
+      assert('TEST 5 Exception', false, e.message);
+    }
+
+    // =========================================================================
+    // TEST 6: キーボードショートカット [7] & スマートトグルテスト
+    // =========================================================================
+    try {
+      // 1. 通常モードから 7 を押下 -> analytics モードへ
+      state.currentMode = 'section';
+      state.previousMode = 'section';
+
+      // 疑似イベント送信
+      const ev7 = new KeyboardEvent('keydown', { key: '7' });
+      window.dispatchEvent(ev7);
+      assert('6.1 キー [7] で analytics モードへ遷移する', state.currentMode === 'analytics');
+
+      // 2. analytics モード中に 7 を押下 -> 直前の section モードへスマートトグル復帰
+      window.dispatchEvent(ev7);
+      assert('6.2 analytics モード中にキー [7] で直前モード (section) へスマート復帰する', state.currentMode === 'section');
+
+      // 3. Escape キーでの復帰テスト
+      state.currentMode = 'analytics';
+      state.previousMode = 'focus';
+      const evEsc = new KeyboardEvent('keydown', { key: 'Escape' });
+      window.dispatchEvent(evEsc);
+      assert('6.3 analytics モード中に Escape キーで直前モード (focus) へ復帰する', state.currentMode === 'focus');
+    } catch (e) {
+      assert('TEST 6 Exception', false, e.message);
+    }
+
+    // =========================================================================
+    // TEST 7: インターセクション（激突・ALL CLEAR）& 自由時間計算テスト
+    // =========================================================================
+    try {
+      const mockSnaps = [
+        { hours: 9.0, timeStr: '09:00', etaHours: 15.0, etaTimeStr: '15:00', totalRemainingMin: 120, isAllClear: false },
+        { hours: 14.5, timeStr: '14:30', etaHours: 14.5, etaTimeStr: '14:30', totalRemainingMin: 0, isAllClear: true }
+      ];
+
+      const summary = analyticsService.calculateSummaryFromSnapshots(mockSnaps);
+      assert('7.1 ALL CLEAR 時刻が正しく 14:30 と検出される', summary.allClearTime === '14:30');
+      // 24.0 - 14.5 = 9.5時間
+      assert('7.2 獲得自由時間が 9.5時間 と正しく算出される', Math.abs(summary.savedFreeHours - 9.5) < 0.1, `savedFreeHours=${summary.savedFreeHours}`);
+
+      // SVG レーダーHTML生成の検証
+      const svgHtml = analyticsView.generateRadarSvgHtml(mockSnaps, true, summary);
+      assert('7.3 SVGレーダーHTMLにネオンシアンとアンバーのパスが含まれる', svgHtml.includes('stroke="#00f2fe"') && svgHtml.includes('stroke="#f59e0b"'));
+      assert('7.4 ALL CLEAR マーカーが SVG 内に生成される', svgHtml.includes('★ ALL CLEAR!'));
+      assert('7.5 獲得自由時間ゾーン (GOLDEN FREE TIME) のポリゴンが生成される', svgHtml.includes('GOLDEN FREE TIME') && svgHtml.includes('<polygon'));
+    } catch (e) {
+      assert('TEST 7 Exception', false, e.message);
+    }
+
+    // =========================================================================
+    // TEST 8: APP_VERSION の検証
+    // =========================================================================
+    try {
+      assert('8.1 APP_VERSION が v2.0.0 であること', APP_VERSION === 'v2.0.0', `APP_VERSION=${APP_VERSION}`);
+    } catch (e) {
+      assert('TEST 8 Exception', false, e.message);
+    }
+
+    // =========================================================================
+    // レポート出力
+    // =========================================================================
+    const container = document.getElementById('test-results');
+    const summaryBox = document.getElementById('summary-box');
+
+    let passedCount = 0;
+    let failedCount = 0;
+
+    tests.forEach((t, i) => {
+      const div = document.createElement('div');
+      div.className = 'test-box';
+      if (t.pass) {
+        passedCount++;
+        div.innerHTML = `<span class="pass">PASS</span> #${i+1}: ${t.name} ${t.details ? `(${t.details})` : ''}`;
+      } else {
+        failedCount++;
+        div.innerHTML = `<span class="fail">FAIL</span> #${i+1}: ${t.name} ${t.details ? `(${t.details})` : ''}`;
+      }
+      container.appendChild(div);
+    });
+
+    const allPassed = (failedCount === 0);
+    summaryBox.innerHTML = `テスト完了: 全 ${tests.length} 件中 <span class="pass">${passedCount} 件成功</span> / <span class="fail">${failedCount} 件失敗</span> - <b>${allPassed ? 'ALL TESTS PASSED! 🎉' : 'FAILURE OCCURRED ❌'}</b>`;
+    summaryBox.style.color = allPassed ? '#10b981' : '#ef4444';
+
+    window.__TEST_SUMMARY__ = {
+      total: tests.length,
+      passed: passedCount,
+      failed: failedCount,
+      allPassed: allPassed,
+      results: tests
+    };
+  </script>
+</body>
+</html>

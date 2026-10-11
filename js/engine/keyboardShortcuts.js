@@ -164,6 +164,11 @@ function setupKeyboardShortcuts() {
             // 6: Do nothing while already in timer view
             return;
           }
+          if (e.key === '7') {
+            e.preventDefault();
+            if (typeof setMode === 'function') setMode('analytics');
+            return;
+          }
 
           // Active Timer Controls
           if (e.key === ' ' || e.key === 'p' || e.key === 'P') {
@@ -304,16 +309,33 @@ function setupKeyboardShortcuts() {
       case '6':
         if (typeof setMode === 'function') setMode('timer');
         break;
+      case '7':
+        e.preventDefault();
+        if (state.currentMode === 'analytics') {
+          const returnMode = (state.previousMode && state.previousMode !== 'analytics') ? state.previousMode : 'section';
+          if (typeof setMode === 'function') setMode(returnMode);
+        } else {
+          if (typeof setMode === 'function') setMode('analytics');
+        }
+        break;
 
       // Arrow Keys Navigation
       case 'ArrowLeft':
         e.preventDefault();
-        if (typeof prevDay === 'function') prevDay();
+        if (state.currentMode === 'analytics' && typeof analyticsView !== 'undefined' && typeof analyticsView.timeTravelPrev === 'function') {
+          analyticsView.timeTravelPrev();
+        } else if (typeof prevDay === 'function') {
+          prevDay();
+        }
         break;
 
       case 'ArrowRight':
         e.preventDefault();
-        if (typeof nextDay === 'function') nextDay();
+        if (state.currentMode === 'analytics' && typeof analyticsView !== 'undefined' && typeof analyticsView.timeTravelNext === 'function') {
+          analyticsView.timeTravelNext();
+        } else if (typeof nextDay === 'function') {
+          nextDay();
+        }
         break;
 
       case 'ArrowUp':
@@ -510,6 +532,15 @@ function handleGlobalEscape(e) {
         : 'section';
       if (typeof setMode === 'function') setMode(returnMode);
     }
+    return;
+  }
+
+  // 3.5. Inside Analytics Mode
+  if (state.currentMode === 'analytics') {
+    const returnMode = (typeof state !== 'undefined' && state.previousMode && state.previousMode !== 'analytics') 
+      ? state.previousMode 
+      : 'section';
+    if (typeof setMode === 'function') setMode(returnMode);
     return;
   }
 

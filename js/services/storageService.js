@@ -17,7 +17,9 @@ var STORAGE_KEYS = Object.assign(window.STORAGE_KEYS || {}, {
   SNAPSHOTS: 'gendrive_snapshots_v1',
   DAILY_HABIT_ORDER: 'gendrive_daily_habit_order_v1',
   DELETED_TASKS: 'gendrive_deleted_task_ids_v1',
-  DELETED_HABITS: 'gendrive_deleted_habit_ids_v1'
+  DELETED_HABITS: 'gendrive_deleted_habit_ids_v1',
+  ANALYTICS_ARCHIVE: 'gendrive_analytics_archive_v1',
+  TODAY_SNAPSHOTS: 'gendrive_today_snapshots_v1'
 });
 
 let isLocalDirty = false; // 逆流防止弁フラグ (ローカル未送信変更あり)
@@ -103,15 +105,26 @@ async function writeToVaultBackupFile() {
   if (!vaultFileHandle) return;
 
   try {
+    let analyticsArchives = {};
+    if (typeof analyticsService !== 'undefined' && typeof analyticsService.getAllArchives === 'function') {
+      analyticsArchives = analyticsService.getAllArchives();
+    } else {
+      const raw = localStorage.getItem(STORAGE_KEYS.ANALYTICS_ARCHIVE);
+      if (raw) {
+        try { analyticsArchives = JSON.parse(raw); } catch (err) {}
+      }
+    }
+
     const backupData = {
       exportDate: new Date().toISOString(),
       displayDate: new Date().toLocaleString(),
-      version: '1.0',
+      version: '2.0',
       tasks: state.tasks || [],
       habits: state.habits || [],
       goals: state.goals || {},
       manifesto: state.manifesto || {},
-      taskPresets: state.taskPresets || []
+      taskPresets: state.taskPresets || [],
+      analyticsArchives: analyticsArchives
     };
 
     const writable = await vaultFileHandle.createWritable();
@@ -225,14 +238,25 @@ function restoreFromSnapshot(snapshotIndex = 0) {
 }
 
 function exportFullBackupJSON() {
+  let analyticsArchives = {};
+  if (typeof analyticsService !== 'undefined' && typeof analyticsService.getAllArchives === 'function') {
+    analyticsArchives = analyticsService.getAllArchives();
+  } else {
+    const raw = localStorage.getItem(STORAGE_KEYS.ANALYTICS_ARCHIVE);
+    if (raw) {
+      try { analyticsArchives = JSON.parse(raw); } catch (err) {}
+    }
+  }
+
   const backupData = {
     exportDate: new Date().toISOString(),
-    version: '1.0',
+    version: '2.0',
     tasks: state.tasks,
     habits: state.habits,
     goals: state.goals,
     manifesto: state.manifesto,
-    taskPresets: state.taskPresets
+    taskPresets: state.taskPresets,
+    analyticsArchives: analyticsArchives
   };
 
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -280,6 +304,9 @@ function importFullBackupJSON(file) {
         if (Array.isArray(data.taskPresets)) {
           state.taskPresets = mergeTaskPresetsDeep(state.taskPresets, data.taskPresets);
           localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(state.taskPresets));
+        }
+        if (data.analyticsArchives && typeof data.analyticsArchives === 'object') {
+          localStorage.setItem(STORAGE_KEYS.ANALYTICS_ARCHIVE, JSON.stringify(data.analyticsArchives));
         }
 
         if (typeof renderApp === 'function') renderApp();
@@ -989,6 +1016,9 @@ function saveTasks(skipCloudSync = false) {
   isLocalDirty = true; // 逆流完全防止弁フラグ (未送信のローカル変更あり)
   updateSyncMetadata({ lastUpdatedDevice: 'PC', lastUpdatedAt: nowIso });
   createAutoBackupSnapshot();
+  if (typeof analyticsService !== 'undefined' && typeof analyticsService.recordSnapshot === 'function') {
+    analyticsService.recordSnapshot(true);
+  }
   if (typeof updateSidebarBadges === 'function') {
     updateSidebarBadges();
   }
@@ -1676,6 +1706,9 @@ function saveHabits(skipCloudSync = false) {
   isLocalDirty = true; // 逆流完全防止弁フラグ (未送信のローカル変更あり)
   updateSyncMetadata({ lastUpdatedDevice: 'PC', lastUpdatedAt: nowIso });
   createAutoBackupSnapshot();
+  if (typeof analyticsService !== 'undefined' && typeof analyticsService.recordSnapshot === 'function') {
+    analyticsService.recordSnapshot(true);
+  }
   updateSyncStatus('local');
   // v1.9.20: 自動クラウド同期は廃止。skipCloudSync は後方互換のため引数のみ維持
 }

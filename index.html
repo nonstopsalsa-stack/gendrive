@@ -237,6 +237,10 @@
             <span class="mode-num">6</span>
             <span class="mode-name">タイマー</span>
           </button>
+          <button class="mode-tab" data-mode="analytics" id="mode-analytics">
+            <span class="mode-num">7</span>
+            <span class="mode-name">分析</span>
+          </button>
         </div>
 
         <!-- Single-Click View Target Filter (All / Tasks Only / Habits Only) -->
@@ -1261,6 +1265,11 @@
             </div>
           </div>
         </section>
+
+        <!-- 8. Analytics & Time Intersection Radar Board (v2.0) -->
+        <section class="view-container" id="view-analytics">
+          <!-- Dynamically populated by analyticsView.js -->
+        </section>
       </main>
     </div>
 
@@ -1273,7 +1282,7 @@
         </span>
       </div>
       <div class="status-center">
-        <span class="hint-text"><kbd>Space</kbd> 終了 &nbsp;|&nbsp; <kbd>Shift+Space</kbd> 中断 &nbsp;|&nbsp; <kbd>J</kbd>/<kbd>K</kbd> 移動 &nbsp;|&nbsp; <kbd>1</kbd>〜<kbd>5</kbd> ビュー &nbsp;|&nbsp; <kbd>←</kbd>/<kbd>→</kbd> 日付 &nbsp;|&nbsp; <kbd>↑</kbd>/<kbd>↓</kbd> セクション</span>
+        <span class="hint-text"><kbd>Space</kbd> 終了 &nbsp;|&nbsp; <kbd>Shift+Space</kbd> 中断 &nbsp;|&nbsp; <kbd>J</kbd>/<kbd>K</kbd> 移動 &nbsp;|&nbsp; <kbd>1</kbd>〜<kbd>7</kbd> ビュー &nbsp;|&nbsp; <kbd>←</kbd>/<kbd>→</kbd> 日付 &nbsp;|&nbsp; <kbd>↑</kbd>/<kbd>↓</kbd> セクション</span>
       </div>
       <div class="status-right">
         <span class="sync-status" id="sync-status">🟢 ローカル同期完了</span>
@@ -1295,6 +1304,8 @@
           <div class="shortcut-item"><kbd>3</kbd><span>デイリー（連打で状態トグル: 未完⇄全件⇄完了）</span></div>
           <div class="shortcut-item"><kbd>4</kbd><span>マスター（連打で台帳トグル: ハビット⇄定期タスク / 広々全幅）</span></div>
           <div class="shortcut-item"><kbd>5</kbd><span><b>ビジョン（5キーでトグル: 4大目標 ⇄ 🔥 魂の宣誓マニフェスト）</b></span></div>
+          <div class="shortcut-item"><kbd>6</kbd><span><b>タイマー（ポモドーロ＆クイックタイマー甲板）</b></span></div>
+          <div class="shortcut-item"><kbd>7</kbd><span><b>分析（7キーでトグル: 📈 タイム・インターセクション・レーダー）</b></span></div>
           <div class="shortcut-item"><kbd>[</kbd> / <kbd>]</kbd><span><b>サイドバーの表示 ⇄ 非表示トグル</b></span></div>
           <div class="shortcut-item"><kbd>Ctrl+Enter</kbd><span><b>全ダイアログの入力確定・即時保存</b></span></div>
           <div class="shortcut-item"><kbd>0</kbd> / <kbd>Home</kbd><span><b>今日の日付へ瞬時に戻る</b></span></div>
@@ -3525,7 +3536,8 @@
   <script src="js/engine/keyboardShortcuts.js?v=1.9.22"></script>
   <script src="js/services/undoService.js?v=1.9.22"></script>
   <script src="js/services/backupRestoreService.js?v=1.9.22"></script>
-  <script src="js/services/storageService.js?v=1.9.22"></script>
+  <script src="js/services/storageService.js?v=2.0.0"></script>
+  <script src="js/services/analyticsService.js?v=2.0.0"></script>
   <script src="js/services/resumeNoteService.js?v=1.9.22"></script>
   <script src="js/services/taskCloneHelper.js?v=1.9.22"></script>
   <script src="js/services/taskTimerService.js?v=1.9.22"></script>
@@ -3541,7 +3553,8 @@
   <script src="js/views/bucketView.js?v=1.9.22"></script>
   <script src="js/views/goalsView.js?v=1.9.22"></script>
   <script src="js/views/timerView.js?v=1.9.22"></script>
-  <script src="app.js?v=1.9.22"></script>
+  <script src="js/views/analyticsView.js?v=2.0.0"></script>
+  <script src="app.js?v=2.0.0"></script>
 </body>
 </html>
 

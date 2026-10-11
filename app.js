@@ -1631,6 +1631,8 @@ function renderApp() {
     renderGoalsView();
   } else if (state.currentMode === 'timer') {
     if (typeof renderTimerView === 'function') renderTimerView();
+  } else if (state.currentMode === 'analytics') {
+    if (typeof renderAnalyticsView === 'function') renderAnalyticsView();
   }
 }
 
@@ -2340,6 +2342,12 @@ function setMode(mode, isReverse = false) {
       // 6: Already in timer mode -> maintain current view
       return;
     }
+    if (mode === 'analytics') {
+      // 7: Toggle back to previous mode!
+      const returnMode = (state.previousMode && state.previousMode !== 'analytics') ? state.previousMode : 'section';
+      setMode(returnMode);
+      return;
+    }
   }
 
   // Switching to new mode
@@ -2347,7 +2355,7 @@ function setMode(mode, isReverse = false) {
     state.masterSubtab = 'analytics'; // 他ボードから4で入ったときは必ず「継続スコアボード」が一番最初に開く
   }
   const isEnteringFocus = (state.currentMode !== 'focus' && mode === 'focus');
-  if (state.currentMode !== mode && state.currentMode !== 'timer') {
+  if (state.currentMode !== mode && state.currentMode !== 'timer' && state.currentMode !== 'analytics') {
     state.previousMode = state.currentMode;
   }
   state.currentMode = mode;
@@ -4340,6 +4348,11 @@ window.addEventListener('focus', checkDayRolloverWakeup);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkDayRolloverWakeup();
 });
+
+// v2.0.0: Analytics Radar & Daily Snapshot Engine Initialization
+if (typeof analyticsService !== 'undefined' && typeof analyticsService.initAnalyticsService === 'function') {
+  analyticsService.initAnalyticsService();
+}
 
 
 

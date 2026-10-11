@@ -11556,4 +11556,430 @@ body[data-mode="focus"] .focus-board-layout {
   background: rgba(16, 185, 129, 0.15);
 }
 
+/* ==========================================================================
+   Gendrive v2.0.0 - Analytics View & Time Intersection Radar
+   ========================================================================== */
+
+#view-analytics {
+  display: none;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 28px;
+  box-sizing: border-box;
+}
+
+#view-analytics.active {
+  display: block;
+}
+
+.analytics-view-wrapper {
+  max-width: 1300px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 1. Analytics Header */
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.analytics-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.analytics-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.analytics-icon {
+  font-size: 26px;
+  filter: drop-shadow(0 0 8px rgba(0, 242, 254, 0.4));
+}
+
+.analytics-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #ffffff 0%, #38bdf8 60%, #00f2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+}
+
+.analytics-subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  display: block;
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+/* Time Travel Date Selector */
+.analytics-date-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 14, 23, 0.85);
+  padding: 5px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.btn-time-travel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-time-travel:hover:not(.disabled) {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.btn-time-travel.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.time-travel-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.time-travel-badge.live-today {
+  background: rgba(0, 242, 254, 0.1);
+  border: 1px solid rgba(0, 242, 254, 0.35);
+  color: #00f2fe;
+}
+
+.time-travel-badge.live-today .tt-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #00f2fe;
+  box-shadow: 0 0 8px #00f2fe;
+  animation: pulseLiveDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseLiveDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.3); }
+}
+
+.time-travel-badge.past-archive {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+}
+
+.time-travel-badge.past-archive .tt-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+.btn-tt-reset {
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+  border: none;
+  color: #fff;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-tt-reset:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.btn-analytics-close {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-analytics-close:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+/* 2. HUD Row */
+.analytics-hud-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.analytics-hud-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(18, 24, 38, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  transition: var(--transition-smooth);
+}
+
+.analytics-hud-card:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  transform: translateY(-2px);
+}
+
+.hud-card-icon {
+  font-size: 24px;
+}
+
+.hud-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hud-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.hud-card-value {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-main);
+  font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.hud-unit {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.hud-sub-val {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.hud-card-value.eta-val {
+  color: #f59e0b;
+}
+
+.hud-card-value.eta-val.all-clear {
+  color: #10b981;
+}
+
+.hud-card-value.gold-val {
+  color: #eab308;
+}
+
+.analytics-hud-card.status-safe {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.analytics-hud-card.status-safe .status-text {
+  color: #10b981;
+  font-size: 14px;
+}
+
+.analytics-hud-card.status-warning {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.analytics-hud-card.status-warning .status-text {
+  color: #ef4444;
+  font-size: 14px;
+}
+
+/* 3. Radar Stage */
+.analytics-radar-stage {
+  background: rgba(12, 17, 28, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 18px 24px 22px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.radar-legend-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legend-line.line-current {
+  background: #00f2fe;
+  box-shadow: 0 0 8px #00f2fe;
+}
+
+.legend-line.line-eta {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+.legend-badge.badge-free-time {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.7), rgba(245, 158, 11, 0.5));
+}
+
+.radar-canvas-container {
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.radar-svg-canvas {
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  display: block;
+}
+
+.radar-dot {
+  cursor: pointer;
+  transition: transform 0.2s ease, r 0.2s ease;
+}
+
+.radar-dot:hover {
+  transform: scale(1.4);
+}
+
+.radar-pulse-ring {
+  animation: pulseRing 2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.6); opacity: 0.2; }
+  100% { transform: scale(1); opacity: 0.8; }
+}
+
+/* 4. Footer */
+.analytics-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+}
+
+.tactical-advice-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-main);
+}
+
+.advice-icon {
+  font-size: 18px;
+  color: #f59e0b;
+}
+
+.advice-content b {
+  color: #38bdf8;
+  margin-right: 4px;
+}
+
+.radar-quick-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.radar-quick-shortcuts .hint-key {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.radar-quick-shortcuts kbd {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+}
+
+
 

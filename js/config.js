@@ -10,8 +10,8 @@
 // =========================================================================
 // 0. Application Version (Single Source of Truth)
 // =========================================================================
-const APP_VERSION = 'v1.9.28';
-const APP_VERSION_NAME = 'Soul Quotes Dock Isolation & Adaptive Dynamic Typography Engine';
+const APP_VERSION = 'v2.0.0';
+const APP_VERSION_NAME = 'Time Intersection Radar & Key 7 Analytics Board Engine';
 var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyeT-kJdPj0bhtdZEOxWeWZAS250NeJd1NQAO4iUPytAJxh_r4iqm2jnmapODlc9eDbRA/exec';
 
 var MAX_TASK_PRESETS = 20;
